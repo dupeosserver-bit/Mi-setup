@@ -1,0 +1,13 @@
+# Caddy: único servicio expuesto (80/443). HTTPS automático con Let's Encrypt.
+# Los hosts vienen de APP_HOST y NTFY_HOST (docker-compose.yml).
+
+{$APP_HOST} {
+	encode zstd gzip
+	header -Server
+	reverse_proxy core:3000
+}
+
+{$NTFY_HOST} {
+	header -Server
+	reverse_proxy ntfy:80
+}

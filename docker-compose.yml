@@ -1,0 +1,127 @@
+# Mi Setup — despliegue en el VPS.
+# El script del VPS ejecuta:
+#   docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans
+# Solo Caddy publica puertos (80/443). Postgres, core y ntfy viven en redes internas.
+
+name: mi-setup
+
+services:
+  misetup-db:
+    image: postgres:16-alpine
+    container_name: misetup-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-misetup}
+      POSTGRES_DB: ${POSTGRES_DB:-misetup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta configurar POSTGRES_PASSWORD}
+    volumes:
+      - misetup_pgdata:/var/lib/postgresql/data
+    networks:
+      - datos
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  core:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: misetup-core
+    restart: unless-stopped
+    depends_on:
+      misetup-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DOMAIN: ${DOMAIN:-mexicanland.net}
+      APP_HOST: ${APP_HOST:-setup.mexicanland.net}
+      NTFY_HOST: ${NTFY_HOST:-ntfy.mexicanland.net}
+      RD_HOST: ${RD_HOST:-rd.mexicanland.net}
+      POSTGRES_HOST: misetup-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-misetup}
+      POSTGRES_DB: ${POSTGRES_DB:-misetup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta configurar POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Falta configurar JWT_SECRET}
+      SERVER_ENC_KEY: ${SERVER_ENC_KEY:?Falta configurar SERVER_ENC_KEY}
+      MAIL_INBOUND_SECRET: ${MAIL_INBOUND_SECRET:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-sonnet-5-5}
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-10}
+      PTERO_URL: ${PTERO_URL:-https://panel.mexicanland.org}
+      PTERO_CLIENT_KEY: ${PTERO_CLIENT_KEY:-}
+      PTERO_APP_KEY: ${PTERO_APP_KEY:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      X_CLIENT_ID: ${X_CLIENT_ID:-}
+      X_CLIENT_SECRET: ${X_CLIENT_SECRET:-}
+      X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      KICK_CLIENT_ID: ${KICK_CLIENT_ID:-}
+      KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
+    volumes:
+      - misetup_uploads:/data/uploads
+    networks:
+      - datos
+      - web
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.11.0
+    container_name: misetup-ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: https://${NTFY_HOST:-ntfy.mexicanland.net}
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_LISTEN_HTTP: ":80"
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      NTFY_CACHE_DURATION: 24h
+      NTFY_ENABLE_SIGNUP: "false"
+      NTFY_ENABLE_LOGIN: "false"
+      NTFY_WEB_ROOT: disable
+    volumes:
+      - misetup_ntfy:/var/cache/ntfy
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: misetup-caddy
+    restart: unless-stopped
+    depends_on:
+      - core
+      - ntfy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_HOST: ${APP_HOST:-setup.mexicanland.net}
+      NTFY_HOST: ${NTFY_HOST:-ntfy.mexicanland.net}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - misetup_caddy_data:/data
+      - misetup_caddy_config:/config
+    networks:
+      - web
+
+networks:
+  # Red sin salida a internet: solo core y la base de datos.
+  datos:
+    internal: true
+  web: {}
+
+volumes:
+  misetup_pgdata:
+  misetup_uploads:
+  misetup_ntfy:
+  misetup_caddy_data:
+  misetup_caddy_config:

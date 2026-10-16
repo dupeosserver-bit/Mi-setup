@@ -1,0 +1,20 @@
+# Solo para desarrollo local: Postgres accesible únicamente desde esta PC (127.0.0.1).
+# Uso: docker compose -f docker-compose.dev.yml up -d
+# No lo uses en el VPS.
+
+name: mi-setup-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-misetup}
+      POSTGRES_DB: ${POSTGRES_DB:-misetup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-misetup-dev}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - misetup_dev_pgdata:/var/lib/postgresql/data
+
+volumes:
+  misetup_dev_pgdata:
