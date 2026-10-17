@@ -9,10 +9,13 @@ import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, History, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
+import { ClipboardPaste, History, KeyRound, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Punto, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Desbloqueo } from "../components/Desbloqueo";
 import { api, ApiError } from "../lib/api";
+import { useElementos } from "../lib/boveda/estado";
+import { codigoTotp, type CuentaTotp } from "../lib/boveda/totp";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
@@ -51,15 +54,25 @@ function anotar(servidorId: string, comando: string) {
     .catch(() => undefined);
 }
 
+/** Pestañas que el usuario cerró con la X: esas sí cierran la sesión SSH; las demás solo se sueltan. */
+const cierresExplicitos = new Set<string>();
+
 function Consola({
+  clave,
   servidor,
+  sesionInicial,
   visible,
   registrar,
+  alId,
 }: {
+  clave: string;
   servidor: Servidor;
+  /** Sesión que ya existe en el servidor (se retoma en vez de abrir otra). */
+  sesionInicial?: string;
   visible: boolean;
   /** Entrega al padre una función para escribir en esta sesión (barra de comandos). */
   registrar: (enviar: ((texto: string) => void) | null) => void;
+  alId: (id: string) => void;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const ajuste = useRef<FitAddon | null>(null);
@@ -120,10 +133,21 @@ function Consola({
         term.writeln("\x1b[31mSin conexión en tiempo real. Reintenta en unos segundos.\x1b[0m");
       }
     };
+    // Retomar una sesión que sigue viva en el servidor (al volver a Terminal o tras perder la conexión).
+    const reanudar = () => {
+      if (id) tiempoReal.enviar({ tipo: "terminal.reanudar", id, cols: term.cols, rows: term.rows });
+    };
     const offs = [
       tiempoReal.on("terminal.abierta", (m) => {
-        if (m.ref === ref) id = m.id;
+        if (m.ref !== ref) return;
+        id = m.id;
+        alId(m.id);
       }),
+      tiempoReal.on("terminal.reanudada", (m) => {
+        if (m.id === id) term.writeln("\x1b[90m[sesión retomada]\x1b[0m");
+      }),
+      // El socket se reconectó (cambio de app, sin señal): se vuelve a enganchar la sesión.
+      tiempoReal.on("auth.ok", () => reanudar()),
       tiempoReal.on("terminal.datos", (m) => {
         if (m.id === id) term.write(base64aBytes(m.datos));
       }),
@@ -171,11 +195,16 @@ function Consola({
     });
     const observador = new ResizeObserver(() => fit.fit());
     observador.observe(contenedor);
-    abrir();
+    if (sesionInicial) {
+      id = sesionInicial;
+      reanudar();
+    } else abrir();
 
     return () => {
       registrar(null);
-      if (id) tiempoReal.enviar({ tipo: "terminal.cerrar", id });
+      // Cerrar con la X termina la sesión; cambiar de pantalla solo la suelta (sigue viva 30 min).
+      if (id) tiempoReal.enviar(cierresExplicitos.has(clave) ? { tipo: "terminal.cerrar", id } : { tipo: "terminal.soltar", id });
+      cierresExplicitos.delete(clave);
       offs.forEach((off) => off());
       contenedor.removeEventListener("contextmenu", menu);
       entrada.dispose();
@@ -201,6 +230,38 @@ function Consola({
   }, [visible]);
 
   return <div ref={caja} className={cx("h-full w-full p-1", !visible && "hidden")} style={{ background: opciones.theme.background }} />;
+}
+
+/** Tus cuentas 2FA: tocar una escribe su código actual en la terminal (para scripts que piden autenticación). */
+function CodigosParaTerminal({ alElegir }: { alElegir: (codigo: string) => void }) {
+  const { data, isLoading } = useElementos<CuentaTotp>("2fa");
+  const [codigos, setCodigos] = useState<Record<string, { codigo: string; restante: number }>>({});
+  useEffect(() => {
+    if (!data) return;
+    const calcular = () =>
+      void Promise.all(data.map(async (e) => [e.id, await codigoTotp(e.valor)] as const)).then((pares) => setCodigos(Object.fromEntries(pares)));
+    calcular();
+    const t = setInterval(calcular, 1000);
+    return () => clearInterval(t);
+  }, [data]);
+  if (isLoading) return <Cargando texto="Descifrando…" />;
+  if (!data?.length) return <Vacio texto="No tienes cuentas en el Autenticador 2FA." />;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-tenue">Toca la cuenta: su código se escribe en la terminal y se pulsa Enter.</p>
+      {data.map((e) => (
+        <button key={e.id} type="button" onClick={() => codigos[e.id] && alElegir(codigos[e.id]!.codigo)} className="flex w-full items-center justify-between rounded-xl bg-fondo p-3 text-left hover:bg-tarjeta">
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium">{e.valor.emisor || e.valor.cuenta}</span>
+            <span className="block truncate text-xs text-tenue">{e.valor.cuenta}</span>
+          </span>
+          <span className="font-mono text-lg">
+            {codigos[e.id]?.codigo ?? "······"} <span className="text-xs text-tenue">{codigos[e.id]?.restante ?? ""}s</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 const normalizar = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-");
@@ -387,7 +448,35 @@ function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null;
 export default function VpsTerminal() {
   const { data, isLoading, error } = useServidores();
   const esAdmin = usePuede("vps_terminal", "administrar");
-  const [pestanas, setPestanas] = useState<{ clave: string; servidor: Servidor }[]>([]);
+  const [pestanas, setPestanas] = useState<{ clave: string; servidor: Servidor; sesion?: string }[]>([]);
+  const [verCodigos, setVerCodigos] = useState(false);
+  /** ids de sesión ya mostradas en una pestaña (para no duplicarlas al retomar). */
+  const conocidas = useRef(new Set<string>());
+
+  // Al entrar a Terminal se piden las sesiones que siguen abiertas en el servidor y se retoman.
+  useEffect(() => {
+    const pedir = () => tiempoReal.enviar({ tipo: "terminal.lista" });
+    pedir();
+    const offs = [
+      tiempoReal.on("auth.ok", pedir),
+      tiempoReal.on("terminal.sesiones", (m) => {
+        const nuevas = m.sesiones.filter((s) => !conocidas.current.has(s.id));
+        if (!nuevas.length) return;
+        setPestanas((p) => {
+          const agregar = nuevas
+            .map((s) => ({ s, servidor: data?.find((x) => x.id === s.servidorId) }))
+            .filter((x): x is { s: (typeof nuevas)[number]; servidor: Servidor } => Boolean(x.servidor))
+            .map(({ s, servidor }) => {
+              conocidas.current.add(s.id);
+              return { clave: crypto.randomUUID(), servidor, sesion: s.id };
+            });
+          if (agregar.length) setActiva((a) => a ?? agregar[0]!.clave);
+          return [...p, ...agregar];
+        });
+      }),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [data]);
   const [activa, setActiva] = useState<string | null>(null);
   const [editando, setEditando] = useState<Servidor | null | "nuevo">(null);
   const [texto, setTexto] = useState("");
@@ -415,6 +504,8 @@ export default function VpsTerminal() {
     setActiva(clave);
   };
   const cerrar = (clave: string) => {
+    // La X sí termina la sesión SSH (cambiar de pantalla solo la deja en pausa).
+    cierresExplicitos.add(clave);
     registros.current.delete(clave);
     setPestanas((p) => {
       const resto = p.filter((x) => x.clave !== clave);
@@ -509,15 +600,27 @@ export default function VpsTerminal() {
             ))}
             {pestanas.length === 0 ? <span className="px-3 py-1.5 text-xs text-tenue">Sin sesiones abiertas</span> : null}
             {enviarActiva ? (
-              <Boton tamano="sm" variante="fantasma" icono={ClipboardPaste} className="ml-auto" onClick={() => void pegar()}>
-                Pegar
-              </Boton>
+              <>
+                <Boton tamano="sm" variante="fantasma" icono={KeyRound} className="ml-auto" onClick={() => setVerCodigos(true)}>
+                  2FA
+                </Boton>
+                <Boton tamano="sm" variante="fantasma" icono={ClipboardPaste} onClick={() => void pegar()}>
+                  Pegar
+                </Boton>
+              </>
             ) : null}
           </div>
           <div className="relative min-h-0 flex-1">
             {pestanas.map((p) => (
               <div key={p.clave} className={cx("absolute inset-0", activa !== p.clave && "pointer-events-none opacity-0")}>
-                <Consola servidor={p.servidor} visible={activa === p.clave} registrar={registroDe(p.clave)} />
+                <Consola
+                  clave={p.clave}
+                  servidor={p.servidor}
+                  {...(p.sesion ? { sesionInicial: p.sesion } : {})}
+                  visible={activa === p.clave}
+                  registrar={registroDe(p.clave)}
+                  alId={(id) => conocidas.current.add(id)}
+                />
               </div>
             ))}
             {pestanas.length === 0 ? <Vacio icono={TerminalSquare} texto="Elige un servidor y pulsa Abrir." /> : null}
@@ -525,6 +628,19 @@ export default function VpsTerminal() {
           <BarraComandos enviar={enviarActiva} servidorId={pestanaActiva?.servidor.id ?? null} texto={texto} setTexto={setTexto} />
         </div>
       </div>
+      <Modal abierto={verCodigos} titulo="Escribir un código 2FA en la terminal" alCerrar={() => setVerCodigos(false)}>
+        {verCodigos ? (
+          <Desbloqueo>
+            <CodigosParaTerminal
+              alElegir={(codigo) => {
+                enviarActiva?.(`${codigo}\r`);
+                setVerCodigos(false);
+                avisar("Código enviado a la terminal", "info");
+              }}
+            />
+          </Desbloqueo>
+        ) : null}
+      </Modal>
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo servidor" : "Editar servidor"} alCerrar={() => setEditando(null)}>
         {editando !== null ? <FormularioServidor inicial={editando === "nuevo" ? null : editando} alTerminar={() => setEditando(null)} /> : null}
       </Modal>

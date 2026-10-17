@@ -60,6 +60,10 @@ export const clienteMensajeSchema = z.discriminatedUnion("tipo", [
     rows: z.number().int().min(5).max(300),
   }),
   z.object({ tipo: z.literal("terminal.cerrar"), id: z.string().max(64) }),
+  /** Deja la sesión abierta en el servidor (al cambiar de pantalla); se retoma con terminal.reanudar. */
+  z.object({ tipo: z.literal("terminal.soltar"), id: z.string().max(64) }),
+  z.object({ tipo: z.literal("terminal.reanudar"), id: z.string().max(64), cols: z.number().int().min(10).max(500), rows: z.number().int().min(5).max(300) }),
+  z.object({ tipo: z.literal("terminal.lista") }),
 ]);
 export type ClienteMensaje = z.infer<typeof clienteMensajeSchema>;
 
@@ -72,7 +76,10 @@ export type ServidorMensaje =
   | { tipo: "pong" }
   | { tipo: "terminal.abierta"; ref: string; id: string }
   | { tipo: "terminal.datos"; id: string; datos: string }
-  | { tipo: "terminal.cerrada"; id: string; motivo?: string };
+  | { tipo: "terminal.cerrada"; id: string; motivo?: string }
+  /** Sesiones abiertas de la cuenta (para retomarlas al volver a Terminal). */
+  | { tipo: "terminal.sesiones"; sesiones: { id: string; servidorId: string; servidor: string }[] }
+  | { tipo: "terminal.reanudada"; id: string };
 
 /** Temas conocidos (prefijos). */
 export const temas = {
