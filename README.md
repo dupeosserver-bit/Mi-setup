@@ -2,7 +2,7 @@
 
 App personal (no pública) para PC (Windows) y celular (Android), vinculadas y con todo en la nube (VPS propio), para operar el hosting **MexicanLand**.
 
-> Estado: **Plan 12 — Completa** (Planes 1 a 12). Pendiente solo lo que depende de tu VPS y de tus cuentas: variables del `.env`, logo y firma del APK.
+> Estado: **Versión 0.2.0** — Planes 1 a 12 más la versión 2 (Ajustes con temas y claves, roles, terminal mejorada, IA con archivos y voz, noticias, cripto, inversiones y divisas). Ver `docs/USO.md`.
 
 ## Qué incluye
 

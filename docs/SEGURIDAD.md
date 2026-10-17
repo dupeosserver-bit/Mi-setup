@@ -126,3 +126,11 @@ Revisado en el Plan 12. `[x]` = verificado en código y con prueba automática; 
 - Contraseñas de RustDesk cifradas; solo se entregan con reautenticación fuerte y quedan auditadas (`control_remoto_abierto`).
 - Cuentas: solo la maestra; permisos solo-maestra no otorgables; desactivar revoca sesiones al momento; cambios con reautenticación fuerte.
 - Auditoría inmutable (triggers); exportar CSV pide reautenticación y escapa fórmulas.
+
+## Cambios de la versión 2
+
+- Claves de servicios editables desde Ajustes: solo la maestra, reautenticación fuerte, cifradas, nunca se devuelven completas, auditadas (`clave_configurada`, `clave_borrada`).
+- Roles: nunca otorgan módulos solo-maestra; cambios con reautenticación fuerte y auditoría.
+- Historial de terminal cifrado; historial de contraseñas generadas cifrado de extremo a extremo.
+- Adjuntos a la IA: tipos y tamaños limitados; el texto adjunto se marca como no confiable.
+- Noticias y vigilante de precios descargan con protección SSRF; las demás APIs externas son direcciones fijas.

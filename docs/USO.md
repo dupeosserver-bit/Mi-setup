@@ -212,3 +212,16 @@ Solo la cuenta maestra. **Seguridad → Cuentas y permisos → Nueva cuenta**: c
 ## Navegador privado
 
 En la app de PC: **Seguridad → Navegador privado** (o menú Ver / bandeja). Ventana aislada en memoria: al cerrarla se borra todo. Bloquea rastreadores conocidos y niega cámara, micrófono, ubicación y notificaciones. No oculta tu IP: usa la VPN para eso.
+
+## Versión 2: qué hay de nuevo y dónde
+
+- **Ajustes** (pestañas): Cuenta (nombre, foto, contraseña), Apariencia (tema, fuente, zoom, fondo), Terminal (tema, letra), Voz e IA (modelo y voz), Seguridad, y **Servicios y claves** para poner las claves de API sin tocar el VPS (solo la cuenta maestra).
+- **Terminal**: pega con Ctrl+V o clic derecho; escribe `/nombre` en la barra de abajo para un comando guardado; historial a la izquierda.
+- **Gestor de contraseñas**: pestañas Mis contraseñas, Generador (no necesita abrir la bóveda) e Historial (últimas 10 contraseñas generadas, cifradas).
+- **Cuentas y permisos → Roles**: roles tipo Discord (Fundador y Dev ya creados) con color y permisos.
+- **IA**: adjunta fotos, PDF o archivos de texto; dicta con el micrófono; elige el modelo abajo del chat; la voz se configura en Ajustes.
+- **Novedades**: clima con "Usar mi ubicación" y modo tiempo real, buscar juegos en tiendas (Steam, Epic, Eneba, G2A…), juegos gratis, y vigilante de RAM con guía y precio objetivo.
+- **Nuevos apartados**: Noticias, Cripto, Inversiones y Cambio de monedas.
+- **Discord**: tarjetas con vista previa, leer/editar/borrar/fijar mensajes, reacciones y lista de servidores. Para leer el texto de los mensajes activa *Message Content Intent* en discord.com/developers → tu app → Bot.
+- **Inicio**: "Este equipo" con las características de la PC o del celular y su uso en vivo.
+- Cada apartado tiene el botón **¿Cómo se usa?** arriba a la derecha.
