@@ -23,10 +23,16 @@ function escribir(texto: string): void {
 async function preguntarOculto(rl: Interface, pregunta: string): Promise<string> {
   const salida = rl as unknown as { _writeToOutput: (s: string) => void };
   const original = salida._writeToOutput;
-  stdout.write(pregunta);
-  salida._writeToOutput = () => {};
+  // La pregunta se escribe por readline (si se escribe antes, readline la borra al redibujar la línea);
+  // después se silencia solo el eco de lo que se teclea.
+  let silencio = false;
+  salida._writeToOutput = (s: string) => {
+    if (!silencio) original.call(rl, s);
+  };
   try {
-    return await rl.question("");
+    const respuesta = rl.question(pregunta);
+    silencio = true;
+    return await respuesta;
   } finally {
     salida._writeToOutput = original;
     stdout.write("\n");
