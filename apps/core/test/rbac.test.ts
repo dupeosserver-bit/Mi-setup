@@ -12,9 +12,9 @@ async function token(ctx: Ctx, email: string, password: string, totp?: string): 
 
 function rutasDePrueba(ctx: Ctx) {
   const ok = async () => ({ ok: true });
-  ctx.app.get("/api/notas", { config: { acceso: { modulo: "notas", nivel: "lectura" } } }, ok);
-  ctx.app.post("/api/notas", { config: { acceso: { modulo: "notas", nivel: "escritura" } } }, ok);
-  ctx.app.get("/api/boveda", { config: { acceso: { modulo: "boveda", nivel: "lectura" } } }, ok);
+  ctx.app.get("/api/prueba/notas", { config: { acceso: { modulo: "notas", nivel: "lectura" } } }, ok);
+  ctx.app.post("/api/prueba/notas", { config: { acceso: { modulo: "notas", nivel: "escritura" } } }, ok);
+  ctx.app.get("/api/prueba/boveda", { config: { acceso: { modulo: "boveda", nivel: "lectura" } } }, ok);
 }
 
 describe("RBAC activo en todas las rutas", () => {
@@ -29,8 +29,8 @@ describe("RBAC activo en todas las rutas", () => {
   it("sin sesión responde 401", async () => {
     ctx = await createTestContext();
     rutasDePrueba(ctx);
-    expect((await ctx.app.inject({ method: "GET", url: "/api/notas" })).statusCode).toBe(401);
-    const falso = await ctx.app.inject({ method: "GET", url: "/api/notas", headers: bearer("no.es.valido") });
+    expect((await ctx.app.inject({ method: "GET", url: "/api/prueba/notas" })).statusCode).toBe(401);
+    const falso = await ctx.app.inject({ method: "GET", url: "/api/prueba/notas", headers: bearer("no.es.valido") });
     expect(falso.statusCode).toBe(401);
   });
 
@@ -44,12 +44,12 @@ describe("RBAC activo en todas las rutas", () => {
     });
     const headers = bearer(await token(ctx, "lector@x.test", "clave-de-lector-123"));
 
-    expect((await ctx.app.inject({ method: "GET", url: "/api/notas", headers })).statusCode).toBe(200);
-    const escribir = await ctx.app.inject({ method: "POST", url: "/api/notas", headers });
+    expect((await ctx.app.inject({ method: "GET", url: "/api/prueba/notas", headers })).statusCode).toBe(200);
+    const escribir = await ctx.app.inject({ method: "POST", url: "/api/prueba/notas", headers });
     expect(escribir.statusCode).toBe(403);
     expect(escribir.json()).toMatchObject({ codigo: "sin_permiso" });
     // La bóveda es solo-maestra aunque haya una asignación guardada.
-    expect((await ctx.app.inject({ method: "GET", url: "/api/boveda", headers })).statusCode).toBe(403);
+    expect((await ctx.app.inject({ method: "GET", url: "/api/prueba/boveda", headers })).statusCode).toBe(403);
 
     const denegados = (await auditRows(ctx.db)).filter((r) => r.action === "acceso_denegado");
     expect(denegados).toHaveLength(2);
@@ -62,6 +62,6 @@ describe("RBAC activo en todas las rutas", () => {
     const secret = generateTotpSecret();
     await seedUser(ctx.db, { email: "m@x.test", password: "clave-maestra-123", role: "maestra", totpSecret: secret });
     const headers = bearer(await token(ctx, "m@x.test", "clave-maestra-123", totpAt(secret, ctx.clock.now)));
-    expect((await ctx.app.inject({ method: "GET", url: "/api/boveda", headers })).statusCode).toBe(200);
+    expect((await ctx.app.inject({ method: "GET", url: "/api/prueba/boveda", headers })).statusCode).toBe(200);
   });
 });
