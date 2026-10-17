@@ -217,13 +217,35 @@ export function limpiarCacheDiscord(): void {
   cacheCanales = null;
 }
 
-export async function enviarDiscord(deps: ModuleDeps, user: AuthUser, canalId: string, texto: string) {
+export interface EmbedDiscord {
+  titulo?: string;
+  descripcion?: string;
+  color?: string;
+  imagen?: string;
+  url?: string;
+}
+
+async function canalDelBot(deps: ModuleDeps, canalId: string) {
   const canal = (await canalesDiscord(deps)).find((c) => c.id === canalId);
   if (!canal) throw new HttpError(404, "El bot no tiene acceso a ese canal");
+  return canal;
+}
+
+export async function enviarDiscord(deps: ModuleDeps, user: AuthUser, canalId: string, texto: string, embed?: EmbedDiscord) {
+  const canal = await canalDelBot(deps, canalId);
+  const tarjeta = embed && (embed.titulo || embed.descripcion || embed.imagen)
+    ? {
+        ...(embed.titulo ? { title: embed.titulo } : {}),
+        ...(embed.descripcion ? { description: embed.descripcion } : {}),
+        ...(embed.url ? { url: embed.url } : {}),
+        ...(embed.imagen ? { image: { url: embed.imagen } } : {}),
+        color: Number.parseInt((embed.color ?? "#5865f2").slice(1), 16),
+      }
+    : null;
   const r = await discord<{ id: string }>(deps, `/channels/${canalId}/messages`, {
     method: "POST",
     // Sin menciones masivas (@everyone, roles) aunque el texto las incluya.
-    body: JSON.stringify({ content: texto, allowed_mentions: { parse: [] } }),
+    body: JSON.stringify({ ...(texto ? { content: texto } : {}), ...(tarjeta ? { embeds: [tarjeta] } : {}), allowed_mentions: { parse: [] } }),
   });
   await deps.audit.record({
     actorType: "usuario",
@@ -332,9 +354,99 @@ export function redesModule(deps: ModuleDeps) {
       if (!deps.config.env.DISCORD_BOT_TOKEN) return { configurado: false, canales: [] };
       return { configurado: true, canales: await canalesDiscord(deps) };
     });
-    app.post("/api/discord/enviar", { config: { acceso: { modulo: "discord", nivel: "escritura" } } }, async (request) => {
-      const { canalId, texto } = z.object({ canalId: z.string().regex(/^\d{5,25}$/, "Canal inválido"), texto: textoDiscord }).parse(request.body);
-      return enviarDiscord(deps, currentUser(request), canalId, texto);
+    const embedSchema = z
+      .object({
+        titulo: z.string().trim().max(256).optional(),
+        descripcion: z.string().trim().max(4000).optional(),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        imagen: z.string().url().max(1000).refine((u) => u.startsWith("https://"), "La imagen debe ser https").optional(),
+        url: z.string().url().max(1000).optional(),
+      })
+      .optional();
+    const snowflake = z.string().regex(/^\d{5,25}$/, "Identificador inválido");
+    const leerDiscord = { config: { acceso: { modulo: "discord" as const, nivel: "lectura" as const } } };
+    const escribirDiscord = { config: { acceso: { modulo: "discord" as const, nivel: "escritura" as const } } };
+
+    app.post("/api/discord/enviar", escribirDiscord, async (request) => {
+      const d = z
+        .object({ canalId: snowflake, texto: z.string().trim().max(2000).default(""), embed: embedSchema })
+        .refine((x) => x.texto || x.embed?.titulo || x.embed?.descripcion || x.embed?.imagen, "Escribe un mensaje o arma la tarjeta")
+        .parse(request.body);
+      return enviarDiscord(deps, currentUser(request), d.canalId, d.texto, d.embed);
+    });
+
+    /** Servidores del bot con número de miembros y conectados. */
+    app.get("/api/discord/servidores", leerDiscord, async () => {
+      if (!deps.config.env.DISCORD_BOT_TOKEN) return [];
+      const lista = await discord<{ id: string; name: string }[]>(deps, "/users/@me/guilds");
+      return Promise.all(
+        lista.slice(0, 20).map(async (s) => {
+          const g = await discord<{ id: string; name: string; icon: string | null; approximate_member_count?: number; approximate_presence_count?: number }>(
+            deps,
+            `/guilds/${s.id}?with_counts=true`,
+          ).catch(() => null);
+          return {
+            id: s.id,
+            nombre: s.name,
+            icono: g?.icon ? `https://cdn.discordapp.com/icons/${s.id}/${g.icon}.png?size=64` : null,
+            miembros: g?.approximate_member_count ?? null,
+            conectados: g?.approximate_presence_count ?? null,
+          };
+        }),
+      );
+    });
+
+    /** Últimos mensajes de un canal (requiere activar "Message Content Intent" en el portal de Discord para ver el texto). */
+    app.get("/api/discord/canales/:canalId/mensajes", leerDiscord, async (request) => {
+      const { canalId } = z.object({ canalId: snowflake }).parse(request.params);
+      await canalDelBot(deps, canalId);
+      const yo = await discord<{ id: string }>(deps, "/users/@me");
+      const lista = await discord<
+        { id: string; content: string; timestamp: string; pinned: boolean; author: { id: string; username: string; global_name?: string | null }; attachments: unknown[]; embeds: { title?: string }[] }[]
+      >(deps, `/channels/${canalId}/messages?limit=30`);
+      return lista.map((m) => ({
+        id: m.id,
+        texto: m.content,
+        fecha: m.timestamp,
+        fijado: m.pinned,
+        autor: m.author.global_name || m.author.username,
+        delBot: m.author.id === yo.id,
+        adjuntos: m.attachments.length,
+        tarjeta: m.embeds[0]?.title ?? null,
+      }));
+    });
+
+    app.patch("/api/discord/canales/:canalId/mensajes/:mensajeId", escribirDiscord, async (request) => {
+      const { canalId, mensajeId } = z.object({ canalId: snowflake, mensajeId: snowflake }).parse(request.params);
+      const { texto } = z.object({ texto: textoDiscord }).parse(request.body);
+      const canal = await canalDelBot(deps, canalId);
+      await discord(deps, `/channels/${canalId}/messages/${mensajeId}`, { method: "PATCH", body: JSON.stringify({ content: texto, allowed_mentions: { parse: [] } }) });
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "discord_editado", module: "discord", target: `${canal.servidor} #${canal.nombre}`, outcome: "ok" });
+      return { ok: true };
+    });
+
+    app.delete("/api/discord/canales/:canalId/mensajes/:mensajeId", escribirDiscord, async (request) => {
+      const { canalId, mensajeId } = z.object({ canalId: snowflake, mensajeId: snowflake }).parse(request.params);
+      const canal = await canalDelBot(deps, canalId);
+      await discord(deps, `/channels/${canalId}/messages/${mensajeId}`, { method: "DELETE" });
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "discord_borrado", module: "discord", target: `${canal.servidor} #${canal.nombre}`, outcome: "ok" });
+      return { ok: true };
+    });
+
+    app.post("/api/discord/canales/:canalId/mensajes/:mensajeId/fijar", escribirDiscord, async (request) => {
+      const { canalId, mensajeId } = z.object({ canalId: snowflake, mensajeId: snowflake }).parse(request.params);
+      const { fijar } = z.object({ fijar: z.boolean() }).parse(request.body);
+      await canalDelBot(deps, canalId);
+      await discord(deps, `/channels/${canalId}/pins/${mensajeId}`, { method: fijar ? "PUT" : "DELETE" });
+      return { ok: true };
+    });
+
+    app.post("/api/discord/canales/:canalId/mensajes/:mensajeId/reaccion", escribirDiscord, async (request) => {
+      const { canalId, mensajeId } = z.object({ canalId: snowflake, mensajeId: snowflake }).parse(request.params);
+      const { emoji } = z.object({ emoji: z.string().min(1).max(16) }).parse(request.body);
+      await canalDelBot(deps, canalId);
+      await discord(deps, `/channels/${canalId}/messages/${mensajeId}/reactions/${encodeURIComponent(emoji)}/@me`, { method: "PUT" });
+      return { ok: true };
     });
   }
 

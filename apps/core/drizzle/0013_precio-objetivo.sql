@@ -1,0 +1,1 @@
+ALTER TABLE "price_watches" ADD COLUMN "target_price" numeric(14, 2);

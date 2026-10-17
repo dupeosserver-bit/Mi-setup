@@ -455,6 +455,8 @@ export const priceWatches = pgTable("price_watches", {
   selector: text("selector").notNull(),
   active: boolean("active").notNull().default(true),
   lastPrice: numeric("last_price", { precision: 14, scale: 2 }),
+  /** Avisar cuando el precio baje a este valor o menos (opcional). */
+  targetPrice: numeric("target_price", { precision: 14, scale: 2 }),
   lastText: text("last_text"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
   lastError: text("last_error"),

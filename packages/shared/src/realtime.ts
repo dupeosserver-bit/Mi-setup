@@ -21,8 +21,22 @@ export const metricasSchema = z.object({
   bateria: z.object({ nivel: z.number().min(0).max(100), cargando: z.boolean() }).optional(),
   conexion: z.string().max(40).optional(),
   uptime: z.number().nonnegative().optional(),
+  /** Uso de la tarjeta de video (%), si el equipo lo informa. */
+  gpu: z.number().min(0).max(100).optional(),
 });
 export type MetricasDispositivo = z.infer<typeof metricasSchema>;
+
+/** Datos fijos del equipo (pantalla "Este equipo" de Inicio). */
+export interface InfoEquipo {
+  sistema: string;
+  procesador: string;
+  nucleos: number;
+  graficos: string[];
+  memoria: number;
+  almacenamiento: number;
+  so: string;
+  nombreEquipo: string;
+}
 
 export const clienteMensajeSchema = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("auth"), token: z.string().min(10).max(4096), dispositivoId: z.string().uuid().optional() }),

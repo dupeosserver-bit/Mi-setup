@@ -5,12 +5,13 @@
  * - Web: navegador normal.
  */
 import { Capacitor } from "@capacitor/core";
-import type { MetricasDispositivo } from "@mi-setup/shared";
+import type { InfoEquipo, MetricasDispositivo } from "@mi-setup/shared";
 
 export interface PuenteEscritorio {
   readonly plataforma: "pc";
   readonly version: string;
   metricas(): Promise<MetricasDispositivo>;
+  sistema(): Promise<InfoEquipo>;
   abrirNavegadorPrivado(url?: string): void;
   abrirPanel(url: string): void;
   abrirExterno(url: string): void;
@@ -70,4 +71,48 @@ export async function leerMetricas(): Promise<MetricasDispositivo> {
     return m;
   }
   return {};
+}
+
+/** Nombre de la tarjeta gráfica que ve el navegador (WebGL), si lo expone. */
+function graficaWebGl(): string | null {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+    return gl && ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Datos fijos del equipo actual: PC (systeminformation), celular (Capacitor) o navegador. */
+export async function leerSistema(): Promise<InfoEquipo> {
+  const pc = escritorio();
+  if (pc) return pc.sistema();
+  const nucleos = navigator.hardwareConcurrency || 0;
+  const memoriaAprox = ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 0) * 1024 ** 3;
+  const grafica = graficaWebGl();
+  if (esMovil()) {
+    const { Device } = await import("@capacitor/device");
+    const info = await Device.getInfo();
+    return {
+      sistema: [info.manufacturer, info.model].filter(Boolean).join(" ") || "Celular",
+      procesador: nucleos ? `${nucleos} núcleos` : "—",
+      nucleos,
+      graficos: grafica ? [grafica] : [],
+      memoria: memoriaAprox,
+      almacenamiento: info.realDiskTotal ?? info.diskTotal ?? 0,
+      so: `${info.operatingSystem === "android" ? "Android" : info.operatingSystem} ${info.osVersion}`,
+      nombreEquipo: info.name ?? "",
+    };
+  }
+  return {
+    sistema: "Navegador web",
+    procesador: nucleos ? `${nucleos} núcleos` : "—",
+    nucleos,
+    graficos: grafica ? [grafica] : [],
+    memoria: memoriaAprox,
+    almacenamiento: 0,
+    so: navigator.userAgent.includes("Windows") ? "Windows" : navigator.userAgent.includes("Android") ? "Android" : "—",
+    nombreEquipo: "",
+  };
 }

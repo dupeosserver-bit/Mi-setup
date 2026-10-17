@@ -19,7 +19,7 @@ import {
   type IpcMainEvent,
   type MenuItemConstructorOptions,
 } from "electron";
-import { leerMetricas } from "./metricas";
+import { leerMetricas, leerSistema } from "./metricas";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
 const DEV = process.argv.includes("--dev");
@@ -245,6 +245,7 @@ function registrarIpc(): void {
     e.returnValue = app.getVersion();
   });
   ipcMain.handle("metricas", (e) => (deLaApp(e) ? leerMetricas() : null));
+  ipcMain.handle("sistema", (e) => (deLaApp(e) ? leerSistema() : null));
   ipcMain.on("notificar", (e, titulo: unknown, cuerpo: unknown) => {
     if (!deLaApp(e) || !Notification.isSupported()) return;
     new Notification({ title: String(titulo).slice(0, 200), body: String(cuerpo).slice(0, 500) }).show();

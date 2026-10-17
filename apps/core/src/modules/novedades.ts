@@ -18,7 +18,7 @@ import { descargarTextoSeguro } from "./red-segura.js";
 // ---------------------------------------------------------------- caché simple en memoria
 
 const cache = new Map<string, { hasta: number; valor: unknown }>();
-async function conCache<T>(clave: string, ms: number, fn: () => Promise<T>): Promise<T> {
+export async function conCache<T>(clave: string, ms: number, fn: () => Promise<T>): Promise<T> {
   const c = cache.get(clave);
   if (c && c.hasta > Date.now()) return c.valor as T;
   const valor = await fn();
@@ -72,6 +72,7 @@ function vigilanteDto(w: typeof priceWatches.$inferSelect) {
     selector: w.selector,
     activo: w.active,
     precio: w.lastPrice === null ? null : Number(w.lastPrice),
+    objetivo: w.targetPrice === null ? null : Number(w.targetPrice),
     texto: w.lastText,
     revisado: w.lastCheckedAt?.toISOString() ?? null,
     error: w.lastError,
@@ -102,6 +103,12 @@ async function revisarUno(deps: ModuleDeps, w: typeof priceWatches.$inferSelect)
       });
       if (w.createdBy) deps.hub.publicar(`usuario:${w.createdBy}`, { recurso: "novedades", aviso: { titulo: w.name, cuerpo: `${anterior} → ${precio}` } });
     }
+    // Precio objetivo: se avisa al cruzarlo (no en cada revisión mientras siga abajo).
+    const objetivo = w.targetPrice === null ? null : Number(w.targetPrice);
+    if (objetivo !== null && precio <= objetivo && (anterior === null || anterior > objetivo)) {
+      await deps.notifier.send({ title: `¡Llegó a tu precio! ${w.name}`, message: `Ahora cuesta ${precio} (tu objetivo: ${objetivo})`, priority: 5, tags: ["moneybag"] });
+      if (w.createdBy) deps.hub.publicar(`usuario:${w.createdBy}`, { recurso: "novedades", aviso: { titulo: `¡Precio objetivo! ${w.name}`, cuerpo: `Ahora: ${precio}` } });
+    }
     return act ?? w;
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : "Error al revisar";
@@ -127,13 +134,31 @@ const vigilanteSchema = z.object({
   url: z.string().trim().url("URL inválida").max(2000).refine((u) => /^https?:\/\//i.test(u), "Solo http o https"),
   selector: z.string().trim().min(1).max(300),
   activo: z.boolean().default(true),
+  /** Precio al que quieres comprar: avisa cuando baje a ese valor o menos. */
+  objetivo: z.number().positive().max(10_000_000).nullable().default(null),
 });
 
 const ubicacionSchema = z.object({
   nombre: z.string().trim().min(1).max(120),
   lat: z.number().min(-90).max(90),
   lon: z.number().min(-180).max(180),
+  /** Detectar la ubicación cada vez que se abre Clima (GPS o, si no hay, por IP). */
+  auto: z.boolean().default(false),
 });
+
+/** Tiendas para buscar juegos (las de claves de terceros se marcan como mercado). */
+export const TIENDAS_JUEGOS = [
+  { id: "steam", nombre: "Steam", tipo: "oficial", url: "https://store.steampowered.com/search/?term=" },
+  { id: "epic", nombre: "Epic Games", tipo: "oficial", url: "https://store.epicgames.com/es-MX/browse?q=" },
+  { id: "gog", nombre: "GOG", tipo: "oficial", url: "https://www.gog.com/es/games?query=" },
+  { id: "humble", nombre: "Humble Bundle", tipo: "autorizada", url: "https://www.humblebundle.com/store/search?search=" },
+  { id: "fanatical", nombre: "Fanatical", tipo: "autorizada", url: "https://www.fanatical.com/es/search?search=" },
+  { id: "gmg", nombre: "Green Man Gaming", tipo: "autorizada", url: "https://www.greenmangaming.com/search/?query=" },
+  { id: "instant", nombre: "Instant Gaming", tipo: "revendedor", url: "https://www.instant-gaming.com/es/busquedas/?q=" },
+  { id: "eneba", nombre: "Eneba", tipo: "mercado", url: "https://www.eneba.com/mx/store?text=" },
+  { id: "g2a", nombre: "G2A", tipo: "mercado", url: "https://www.g2a.com/es/search?query=" },
+  { id: "kinguin", nombre: "Kinguin", tipo: "mercado", url: "https://www.kinguin.net/listing?phrase=" },
+] as const;
 
 export function novedadesRoutes(deps: ModuleDeps) {
   const leer = { config: { acceso: { modulo: "novedades" as const, nivel: "lectura" as const } } };
@@ -151,6 +176,61 @@ export function novedadesRoutes(deps: ModuleDeps) {
       );
       return (r.results ?? []).map((c) => ({ nombre: [c.name, c.admin1, c.country].filter(Boolean).join(", "), lat: c.latitude, lon: c.longitude }));
     });
+
+    /** Nombre del lugar para unas coordenadas (GPS del dispositivo). OpenStreetMap / Nominatim. */
+    app.get("/api/novedades/lugar", leer, async (request) => {
+      const { lat, lon } = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }).parse(request.query);
+      const r = await conCache(`lugar:${lat.toFixed(2)}:${lon.toFixed(2)}`, 24 * 60 * 60_000, () =>
+        pedirJson<{ address?: { city?: string; town?: string; village?: string; municipality?: string; state?: string; country?: string } }>(
+          "OpenStreetMap",
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=es&lat=${lat}&lon=${lon}`,
+        ).catch(() => ({ address: undefined })),
+      );
+      const a = r.address;
+      const ciudad = a?.city ?? a?.town ?? a?.village ?? a?.municipality;
+      return { nombre: [ciudad, a?.state, a?.country].filter(Boolean).join(", ") || `Mi ubicación (${lat.toFixed(2)}, ${lon.toFixed(2)})`, lat, lon };
+    });
+
+    /** Ubicación aproximada por la IP pública de quien pregunta (cuando el dispositivo no da GPS). */
+    app.get("/api/novedades/ip-ubicacion", leer, async (request) => {
+      const ip = request.ip;
+      if (!ip || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1|fc|fd|fe80)/i.test(ip)) {
+        throw new HttpError(422, "No se pudo ubicar por IP desde una red local; busca tu ciudad o permite la ubicación del dispositivo.");
+      }
+      const r = await pedirJson<{ success: boolean; city?: string; region?: string; country?: string; latitude?: number; longitude?: number }>(
+        "ipwho.is",
+        `https://ipwho.is/${encodeURIComponent(ip)}?lang=es`,
+      );
+      if (!r.success || r.latitude === undefined || r.longitude === undefined) throw new HttpError(502, "No se pudo ubicar por IP");
+      return { nombre: [r.city, r.region, r.country].filter(Boolean).join(", "), lat: r.latitude, lon: r.longitude };
+    });
+
+    // -------- juegos gratis (GamerPower: Epic, Steam, GOG…) y tiendas para buscar
+    app.get("/api/novedades/juegos-gratis", leer, async (request) => {
+      const { plataforma } = z.object({ plataforma: z.enum(["todas", "pc", "epic-games-store", "steam", "gog", "ps5", "xbox-series-xs", "switch", "android"]).default("todas") }).parse(request.query);
+      const url = `https://www.gamerpower.com/api/giveaways?type=game&sort-by=date${plataforma === "todas" ? "" : `&platform=${plataforma}`}`;
+      const r = await conCache(`gratis:${plataforma}`, 30 * 60_000, async () => {
+        const lista = await pedirJson<
+          { id: number; title: string; worth: string; image: string; description: string; open_giveaway_url: string; platforms: string; end_date: string; status: string }[] | { status: number }
+        >("GamerPower", url).catch(() => []);
+        return Array.isArray(lista) ? lista : [];
+      });
+      return r
+        .filter((g) => g.status === "Active")
+        .slice(0, 40)
+        .map((g) => ({
+          id: g.id,
+          titulo: g.title,
+          valor: g.worth === "N/A" ? null : g.worth,
+          imagen: g.image,
+          descripcion: g.description.slice(0, 300),
+          url: g.open_giveaway_url,
+          plataformas: g.platforms,
+          termina: g.end_date === "N/A" ? null : g.end_date,
+        }));
+    });
+
+    app.get("/api/novedades/tiendas-juegos", leer, async () => TIENDAS_JUEGOS);
 
     app.get("/api/novedades/clima/ubicacion", leer, async (request) => {
       const user = currentUser(request);
@@ -228,7 +308,7 @@ export function novedadesRoutes(deps: ModuleDeps) {
       const d = vigilanteSchema.parse(request.body);
       const [w] = await deps.db
         .insert(priceWatches)
-        .values({ name: d.nombre, url: d.url, selector: d.selector, active: d.activo, createdBy: user.id })
+        .values({ name: d.nombre, url: d.url, selector: d.selector, active: d.activo, targetPrice: d.objetivo === null ? null : d.objetivo.toFixed(2), createdBy: user.id })
         .returning();
       if (!w) throw new HttpError(500, "No se pudo guardar");
       return vigilanteDto(await revisarUno(deps, w));
@@ -244,6 +324,7 @@ export function novedadesRoutes(deps: ModuleDeps) {
           ...(d.url !== undefined ? { url: d.url } : {}),
           ...(d.selector !== undefined ? { selector: d.selector } : {}),
           ...(d.activo !== undefined ? { active: d.activo } : {}),
+          ...(d.objetivo !== undefined ? { targetPrice: d.objetivo === null ? null : d.objetivo.toFixed(2) } : {}),
         })
         .where(eq(priceWatches.id, id))
         .returning();

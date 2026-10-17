@@ -67,6 +67,10 @@ export const MODULES = {
 
   // Novedades
   novedades: { label: "Novedades", category: "novedades", masterOnly: false },
+  noticias: { label: "Noticias", category: "novedades", masterOnly: false },
+  cripto: { label: "Cripto", category: "novedades", masterOnly: false },
+  inversiones: { label: "Inversiones", category: "novedades", masterOnly: false },
+  divisas: { label: "Cambio de monedas", category: "novedades", masterOnly: false },
 
   // Control remoto
   control_remoto: { label: "Control remoto", category: "control_remoto", masterOnly: true },

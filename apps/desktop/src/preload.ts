@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("miSetup", {
   plataforma: "pc",
   version: String(ipcRenderer.sendSync("version")),
   metricas: () => ipcRenderer.invoke("metricas"),
+  sistema: () => ipcRenderer.invoke("sistema"),
   abrirNavegadorPrivado: (url?: string) => ipcRenderer.send("privado", url),
   abrirPanel: (url: string) => ipcRenderer.send("panel", url),
   abrirExterno: (url: string) => ipcRenderer.send("externo", url),
