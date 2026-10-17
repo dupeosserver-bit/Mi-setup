@@ -6,7 +6,33 @@ import type { LoginResponse, ReauthRequirement } from "@mi-setup/shared";
 import { pedirReauth } from "./reauth";
 import { useSesion } from "./sesion";
 
-export const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const CLAVE_SERVIDOR = "mi-setup.servidor";
+/** Servidor con el que se compiló la app (vacío en la versión web: usa el mismo sitio). */
+export const SERVIDOR_PREDETERMINADO = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+/** Las apps de PC y celular pueden conectarse a otro servidor de Mi Setup (p. ej. el de un familiar). */
+export const PUEDE_CAMBIAR_SERVIDOR = Boolean(SERVIDOR_PREDETERMINADO);
+
+function servidorGuardado(): string | null {
+  try {
+    return localStorage.getItem(CLAVE_SERVIDOR);
+  } catch {
+    return null;
+  }
+}
+
+export const API_BASE = ((PUEDE_CAMBIAR_SERVIDOR && servidorGuardado()) || SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
+
+/** Cambia el servidor (null = el predeterminado), cierra la sesión y recarga la app. */
+export function cambiarServidor(url: string | null): void {
+  try {
+    if (url && url.replace(/\/$/, "") !== SERVIDOR_PREDETERMINADO) localStorage.setItem(CLAVE_SERVIDOR, url.replace(/\/$/, ""));
+    else localStorage.removeItem(CLAVE_SERVIDOR);
+  } catch {
+    // Sin almacenamiento local no se puede recordar otro servidor.
+  }
+  useSesion.getState().salir();
+  window.location.reload();
+}
 
 export class ApiError extends Error {
   constructor(

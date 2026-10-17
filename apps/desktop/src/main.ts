@@ -4,11 +4,13 @@
  * la bandeja al cerrar la ventana y entrega las métricas de la PC a la UI, que
  * las envía como latido por el WebSocket.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -23,7 +25,20 @@ import { leerMetricas, leerSistema } from "./metricas";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
 const DEV = process.argv.includes("--dev");
-const URL_APP = process.env["MI_SETUP_URL"] ?? (DEV ? "http://localhost:5173" : "https://setup.mexicanland.net");
+const SERVIDOR_PREDETERMINADO = "https://setup.mexicanland.net";
+/** Servidor elegido en Archivo → Cambiar servidor (para usar la app con otra instalación de Mi Setup). */
+const ARCHIVO_SERVIDOR = join(app.getPath("userData"), "servidor.json");
+
+function leerServidor(): string | null {
+  try {
+    const { url } = JSON.parse(readFileSync(ARCHIVO_SERVIDOR, "utf8")) as { url?: string };
+    return url && new URL(url).protocol === "https:" ? new URL(url).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+const URL_APP = process.env["MI_SETUP_URL"] ?? (DEV ? "http://localhost:5173" : (leerServidor() ?? SERVIDOR_PREDETERMINADO));
 const ORIGEN = new URL(URL_APP).origin;
 
 let ventana: BrowserWindow | null = null;
@@ -164,6 +179,35 @@ function salir(): void {
   app.quit();
 }
 
+/**
+ * Cambia la instalación de Mi Setup que abre la app (p. ej. la de un familiar).
+ * La dirección se toma del portapapeles para no depender de cuadros de texto.
+ */
+async function cambiarServidor(): Promise<void> {
+  const copiado = clipboard.readText().trim();
+  let nuevo: string | null = null;
+  try {
+    const u = new URL(copiado);
+    if (u.protocol === "https:") nuevo = u.origin;
+  } catch {
+    nuevo = null;
+  }
+  const opciones = { type: "question" as const, title: "Cambiar servidor", message: `Servidor actual: ${new URL(URL_APP).host}` };
+  const { response } = await dialog.showMessageBox({
+    ...opciones,
+    detail: nuevo
+      ? `¿Usar ${nuevo}? (es la dirección que tienes copiada). Tendrás que iniciar sesión en ese servidor.`
+      : "Copia la dirección del otro servidor (por ejemplo https://setup.tudominio.com) y vuelve a abrir esta opción.",
+    buttons: nuevo ? [`Usar ${new URL(nuevo).host}`, "Volver al predeterminado", "Cancelar"] : ["Volver al predeterminado", "Cancelar"],
+    cancelId: nuevo ? 2 : 1,
+  });
+  const elegido = nuevo ? [nuevo, SERVIDOR_PREDETERMINADO, null][response] : [SERVIDOR_PREDETERMINADO, null][response];
+  if (!elegido || elegido === new URL(URL_APP).origin) return;
+  writeFileSync(ARCHIVO_SERVIDOR, JSON.stringify({ url: elegido }));
+  app.relaunch();
+  app.exit(0);
+}
+
 function construirMenu(): void {
   const plantilla: MenuItemConstructorOptions[] = [
     {
@@ -173,6 +217,7 @@ function construirMenu(): void {
         { label: "Nuevo recordatorio", click: () => navegar("/recordatorios?nuevo=1") },
         { type: "separator" },
         { label: "Ajustes", accelerator: "Ctrl+,", click: () => navegar("/ajustes") },
+        { label: "Cambiar servidor…", click: () => void cambiarServidor() },
         { type: "separator" },
         { label: "Salir", accelerator: "Ctrl+Q", click: salir },
       ],

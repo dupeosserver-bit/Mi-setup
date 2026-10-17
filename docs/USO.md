@@ -225,3 +225,36 @@ En la app de PC: **Seguridad → Navegador privado** (o menú Ver / bandeja). Ve
 - **Discord**: tarjetas con vista previa, leer/editar/borrar/fijar mensajes, reacciones y lista de servidores. Para leer el texto de los mensajes activa *Message Content Intent* en discord.com/developers → tu app → Bot.
 - **Inicio**: "Este equipo" con las características de la PC o del celular y su uso en vivo.
 - Cada apartado tiene el botón **¿Cómo se usa?** arriba a la derecha.
+
+## Versión 0.3: qué hay de nuevo
+
+- **Terminal que no se corta**: si cambias de pantalla, de app o pierdes señal, el comando sigue corriendo en el servidor (hasta 30 minutos sin nadie mirando) y se retoma solo al volver, con lo último que salió. Botón **2FA** en la barra de pestañas: abre tus códigos de la bóveda y, al tocar uno, lo escribe en la terminal (útil cuando un script como `mexicanland-vault.sh` pide el código).
+- **Chat**: botón **Privado** (elige otra cuenta y hablan solo ustedes dos) y **Grupo** (nombre y miembros). En un grupo, **Opciones del grupo** permite renombrarlo, agregar personas o salirte (si sale el último, el grupo se borra).
+- **Tutorial de bienvenida**: la primera vez que entra una cuenta, un recorrido explica cada apartado que puede usar. Se repite en **Ajustes → Cuenta → Ver tutorial otra vez**.
+- **Otra persona con la misma app**: ver `docs/OTRA-INSTALACION.md` (cuenta dentro de tu app o instalación propia). Las apps de celular y Windows tienen **Cambiar servidor** (en el inicio de sesión del celular y en **Archivo** de Windows).
+
+### IA gratis local (Llama en tu VPS)
+
+Para cosas básicas sin gastar los 10 USD. Corre en tu VPS con Ollama (no publica puertos).
+
+1. En `/opt/mi-setup/.env` agrega:
+
+   ```bash
+   COMPOSE_PROFILES=ia-local
+   OLLAMA_URL=http://misetup-ollama:11434
+   OLLAMA_MODEL=llama3.2:3b
+   ```
+
+2. Despliega (`docker compose --env-file /opt/mi-setup/.env up -d --build`) y descarga el modelo una vez:
+
+   ```bash
+   docker exec misetup-ollama ollama pull llama3.2:3b
+   ```
+
+3. Úsala eligiendo **Llama local (gratis)** en el selector de modelo del chat, o deja que entre sola: cuando se llega al tope mensual (o no hay clave de Claude) responde la IA local y aparece un aviso.
+
+La IA local **solo conversa**: no propone acciones ni ve fotos/PDF. `llama3.2:3b` necesita ~3 GB de RAM libres; con más RAM puedes usar `qwen2.5:7b` (mejor en español). Responde más lento que Claude porque usa el procesador del VPS.
+
+### La IA ayuda con errores de servidores
+
+Dile qué falla ("el core no arranca", "el servidor de Minecraft se cae"). La IA propone **revisiones de solo lectura**: estado general, contenedores de Docker, últimos registros de un contenedor, servicios con fallas, errores del sistema, puertos, memoria, red, leer un archivo de configuración o código, y el estado de un servidor de Pterodactyl. Como siempre, nada corre hasta que tocas **Aprobar**. Al ejecutarse, en la tarjeta aparece **Ver salida** y **Analizar con la IA**, que le pasa el resultado para que te explique qué está mal y cómo arreglarlo (el arreglo vuelve a ser una propuesta). Nunca lee archivos de secretos (`.env`, llaves, contraseñas).
