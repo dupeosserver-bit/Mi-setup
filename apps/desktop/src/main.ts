@@ -178,6 +178,19 @@ function construirMenu(): void {
       ],
     },
     {
+      // Sin estos roles, Ctrl+C / Ctrl+V / Ctrl+A no funcionan dentro de Electron.
+      label: "Editar",
+      submenu: [
+        { role: "undo", label: "Deshacer" },
+        { role: "redo", label: "Rehacer" },
+        { type: "separator" },
+        { role: "cut", label: "Cortar" },
+        { role: "copy", label: "Copiar" },
+        { role: "paste", label: "Pegar" },
+        { role: "selectAll", label: "Seleccionar todo" },
+      ],
+    },
+    {
       label: "Ver",
       submenu: [
         { label: "Inicio", click: () => navegar("/") },

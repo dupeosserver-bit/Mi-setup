@@ -6,6 +6,7 @@ import { alertasRoutes, revisarAlertas } from "./alertas.js";
 import { archivosRoutes } from "./archivos.js";
 import { botsRoutes } from "./bots.js";
 import { comandosRoutes } from "./comandos.js";
+import { historialRoutes } from "./historial.js";
 import { registrarMetricasVps } from "./metricas.js";
 import { Servidores, servidoresRoutes } from "./servidores.js";
 import { registrarTerminal } from "./terminal.js";
@@ -21,6 +22,7 @@ export function vpsModule(deps: ModuleDeps) {
     await app.register(servidoresRoutes(deps, servidores));
     await app.register(alertasRoutes(deps));
     await app.register(comandosRoutes(deps, servidores));
+    await app.register(historialRoutes(deps));
     await app.register(archivosRoutes(deps, servidores));
     await app.register(botsRoutes(deps, servidores));
   }

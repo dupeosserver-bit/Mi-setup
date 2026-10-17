@@ -1,14 +1,22 @@
-/** Terminal tipo Termius: lista de servidores, pestañas y xterm.js sobre el WebSocket. */
+/**
+ * Terminal tipo Termius: lista de servidores, pestañas y xterm.js sobre el
+ * WebSocket. Pegar con Ctrl+V o clic derecho, copiar lo seleccionado, barra
+ * de comandos con "/nombre" para ejecutar comandos guardados, historial de
+ * comandos sincronizado y tema/fuente de Ajustes → Terminal.
+ */
 import "@xterm/xterm/css/xterm.css";
+import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { useMutation } from "@tanstack/react-query";
-import { Pencil, Plug, Plus, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { ClipboardPaste, History, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Punto, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api, ApiError } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
+import { haceCuanto } from "../lib/formato";
+import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { pedirReauth } from "../lib/reauth";
 import { tiempoReal } from "../lib/tiempo-real";
 import { useServidores, type Servidor } from "../lib/vps";
@@ -20,23 +28,88 @@ function base64aBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-function Consola({ servidor, visible }: { servidor: Servidor; visible: boolean }) {
+interface ComandoGuardado {
+  id: string;
+  nombre: string;
+  comando: string;
+  descripcion: string;
+  peligroso: boolean;
+}
+
+interface EntradaHistorial {
+  servidorId: string;
+  comando: string;
+  fecha: string;
+}
+
+/** Guarda en el historial (sin esperar; un fallo no interrumpe la terminal). */
+function anotar(servidorId: string, comando: string) {
+  const c = comando.trim();
+  if (!c) return;
+  void api("/api/vps/historial", { metodo: "POST", cuerpo: { servidorId, comando: c } })
+    .then(() => queryClient.invalidateQueries({ queryKey: ["vps", "historial"] }))
+    .catch(() => undefined);
+}
+
+function Consola({
+  servidor,
+  visible,
+  registrar,
+}: {
+  servidor: Servidor;
+  visible: boolean;
+  /** Entrega al padre una función para escribir en esta sesión (barra de comandos). */
+  registrar: (enviar: ((texto: string) => void) | null) => void;
+}) {
   const caja = useRef<HTMLDivElement>(null);
   const ajuste = useRef<FitAddon | null>(null);
+  const terminal = useRef<Terminal | null>(null);
+  const prefs = usePreferencias();
+  const opciones = opcionesTerminal(prefs);
+  const opcionesIniciales = useRef(opciones);
 
   useEffect(() => {
-    if (!caja.current) return;
-    const term = new Terminal({
-      fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
-      fontSize: 13,
-      cursorBlink: true,
-      theme: { background: "#121212", foreground: "#F2F2F7", cursor: "#E5E5EA", selectionBackground: "#48484A" },
-    });
+    const contenedor = caja.current;
+    if (!contenedor) return;
+    const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true });
+    terminal.current = term;
     const fit = new FitAddon();
     ajuste.current = fit;
     term.loadAddon(fit);
-    term.open(caja.current);
+    term.open(contenedor);
     fit.fit();
+
+    const pegar = async () => {
+      const texto = await navigator.clipboard.readText().catch(() => "");
+      if (texto) term.paste(texto);
+      else avisar("No hay texto en el portapapeles (o no se dio permiso para leerlo)", "info");
+    };
+    // Ctrl+V / Ctrl+Shift+V pegan; Ctrl+C copia si hay texto seleccionado (si no, va al servidor como siempre).
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      const tecla = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && tecla === "v") {
+        e.preventDefault();
+        void pegar();
+        return false;
+      }
+      if ((e.ctrlKey || e.metaKey) && tecla === "c" && (e.shiftKey || term.hasSelection())) {
+        void navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+        return false;
+      }
+      return true;
+    });
+    // Clic derecho: copia si hay selección; si no, pega.
+    const menu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (term.hasSelection()) {
+        void navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+        avisar("Copiado", "info");
+      } else void pegar();
+    };
+    contenedor.addEventListener("contextmenu", menu);
 
     const ref = crypto.randomUUID();
     let id: string | null = null;
@@ -70,31 +143,177 @@ function Consola({ servidor, visible }: { servidor: Servidor; visible: boolean }
         term.writeln(`\x1b[31m${m.error}\x1b[0m`);
       }),
     ];
+
+    // Historial: se arma la línea que escribes; si usas flechas o Tab no se sabe el texto final y no se guarda.
+    let linea = "";
+    let fiable = true;
     const entrada = term.onData((datos) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos });
+      for (const ch of datos) {
+        if (ch === "\r") {
+          if (fiable) anotar(servidor.id, linea);
+          linea = "";
+          fiable = true;
+        } else if (ch === "\x7f") linea = linea.slice(0, -1);
+        else if (ch === "\x03" || ch === "\x15") {
+          linea = "";
+          fiable = true;
+        } else if (ch === "\x1b" || ch === "\t") fiable = false;
+        else if (ch >= " ") linea += ch;
+      }
+    });
+    registrar((texto) => {
+      if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos: texto });
+      term.focus();
     });
     const tamano = term.onResize(({ cols, rows }) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.tamano", id, cols, rows });
     });
     const observador = new ResizeObserver(() => fit.fit());
-    observador.observe(caja.current);
+    observador.observe(contenedor);
     abrir();
 
     return () => {
+      registrar(null);
       if (id) tiempoReal.enviar({ tipo: "terminal.cerrar", id });
       offs.forEach((off) => off());
+      contenedor.removeEventListener("contextmenu", menu);
       entrada.dispose();
       tamano.dispose();
       observador.disconnect();
       term.dispose();
+      terminal.current = null;
     };
-  }, [servidor.id, servidor.host, servidor.usuario]);
+  }, [servidor.id, servidor.host, servidor.usuario, registrar]);
+
+  // Cambios de tema, fuente o tamaño en Ajustes se aplican sin reconectar.
+  useEffect(() => {
+    const term = terminal.current;
+    if (!term) return;
+    term.options.theme = opciones.theme;
+    term.options.fontFamily = opciones.fontFamily;
+    term.options.fontSize = opciones.fontSize;
+    ajuste.current?.fit();
+  }, [opciones.theme, opciones.fontFamily, opciones.fontSize]);
 
   useEffect(() => {
     if (visible) requestAnimationFrame(() => ajuste.current?.fit());
   }, [visible]);
 
-  return <div ref={caja} className={cx("h-full w-full", !visible && "hidden")} />;
+  return <div ref={caja} className={cx("h-full w-full p-1", !visible && "hidden")} style={{ background: opciones.theme.background }} />;
+}
+
+const normalizar = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-");
+
+/** Barra de comandos: escribe un comando o "/nombre" de un comando guardado y Enter lo ejecuta en la pestaña activa. */
+function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: string) => void) | null; servidorId: string | null; texto: string; setTexto: (t: string) => void }) {
+  const puedeComandos = usePuede("vps_comandos", "lectura");
+  const comandos = useQuery({ queryKey: ["vps", "comandos"], queryFn: () => api<ComandoGuardado[]>("/api/vps/comandos"), enabled: puedeComandos });
+  const busqueda = texto.startsWith("/") ? normalizar(texto.slice(1)) : null;
+  const sugerencias = busqueda !== null ? (comandos.data ?? []).filter((c) => normalizar(c.nombre).includes(busqueda)).slice(0, 6) : [];
+
+  const ejecutar = async (comando: string, nombre?: string) => {
+    if (!enviar || !servidorId) return avisar("Abre primero una sesión de terminal", "info");
+    const analisis = analizarComando(comando);
+    if (analisis.peligroso) {
+      const ok = await confirmar({
+        titulo: "Comando peligroso",
+        mensaje: analisis.motivos.join(" · "),
+        detalle: comando,
+        peligroso: true,
+        textoExacto: nombre ?? "EJECUTAR",
+        boton: "Ejecutar",
+      });
+      if (!ok) return;
+    }
+    enviar(`${comando}\r`);
+    anotar(servidorId, comando);
+    setTexto("");
+  };
+
+  const alEnviar = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busqueda !== null) {
+      const exacto = (comandos.data ?? []).find((c) => normalizar(c.nombre) === busqueda) ?? sugerencias[0];
+      if (!exacto) return avisar(`No hay un comando guardado que se llame "${texto.slice(1)}"`, "error");
+      await ejecutar(exacto.comando, exacto.nombre);
+      return;
+    }
+    if (texto.trim()) await ejecutar(texto);
+  };
+
+  return (
+    <div className="relative border-t border-borde bg-superficie p-2">
+      {sugerencias.length > 0 ? (
+        <div className="absolute bottom-full left-2 right-2 mb-1 overflow-hidden rounded-xl border border-borde bg-superficie shadow-2xl">
+          {sugerencias.map((c) => (
+            <button key={c.id} type="button" onClick={() => void ejecutar(c.comando, c.nombre)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-tarjeta">
+              <span className="font-medium">/{normalizar(c.nombre)}</span>
+              {c.peligroso ? <Insignia tono="peligro">peligroso</Insignia> : null}
+              <span className="truncate font-mono text-tenue">{c.comando}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <form className="flex gap-2" onSubmit={(e) => void alEnviar(e)}>
+        <Entrada
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Escribe un comando o /nombre de un comando guardado y pulsa Enter"
+          className="h-9 font-mono text-xs"
+          disabled={!enviar}
+        />
+        <Boton type="submit" tamano="icono" icono={Send} aria-label="Ejecutar" disabled={!enviar || !texto.trim()} />
+      </form>
+    </div>
+  );
+}
+
+function Historial({ servidorId, alElegir }: { servidorId: string | null; alElegir: (comando: string) => void }) {
+  const historial = useQuery({
+    queryKey: ["vps", "historial", servidorId],
+    queryFn: () => api<EntradaHistorial[]>(`/api/vps/historial${servidorId ? `?servidorId=${servidorId}` : ""}`),
+  });
+  const borrar = useMutation({
+    mutationFn: () => api("/api/vps/historial", { metodo: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["vps", "historial"] }),
+    onError: avisarError,
+  });
+  const lista = historial.data ?? [];
+  return (
+    <div className="rounded-tarjeta border border-borde bg-superficie p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="flex items-center gap-2 text-sm font-medium">
+          <History className="h-4 w-4 text-tenue" /> Historial {servidorId ? "de esta sesión" : ""}
+        </p>
+        {lista.length ? (
+          <Boton
+            tamano="sm"
+            variante="fantasma"
+            onClick={async () => {
+              if (await confirmar({ titulo: "Borrar historial", mensaje: "Se borra el historial de todos tus servidores." })) borrar.mutate();
+            }}
+          >
+            Borrar
+          </Boton>
+        ) : null}
+      </div>
+      {lista.length === 0 ? <p className="text-xs text-tenue">Aquí aparecen los comandos que ejecutas. Tócalos para usarlos de nuevo.</p> : null}
+      <div className="max-h-64 space-y-1 overflow-y-auto">
+        {lista.slice(0, 100).map((h) => (
+          <button
+            key={`${h.fecha}-${h.comando}`}
+            type="button"
+            onClick={() => alElegir(h.comando)}
+            className="block w-full truncate rounded-lg px-2 py-1 text-left font-mono text-xs hover:bg-tarjeta"
+            title={`${h.comando} · ${haceCuanto(h.fecha)}`}
+          >
+            {h.comando}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const VACIO = { nombre: "", host: "", puerto: 22, usuario: "root", tipo: "llave" as "llave" | "password", secreto: "", frase: "", alertas: true };
@@ -171,6 +390,24 @@ export default function VpsTerminal() {
   const [pestanas, setPestanas] = useState<{ clave: string; servidor: Servidor }[]>([]);
   const [activa, setActiva] = useState<string | null>(null);
   const [editando, setEditando] = useState<Servidor | null | "nuevo">(null);
+  const [texto, setTexto] = useState("");
+  const enviadores = useRef(new Map<string, (t: string) => void>());
+  const [, refrescar] = useState(0);
+
+  // Una función de registro estable por pestaña (si cambiara, la consola se reconectaría).
+  const registros = useRef(new Map<string, (enviar: ((t: string) => void) | null) => void>());
+  const registroDe = useCallback((clave: string) => {
+    let fn = registros.current.get(clave);
+    if (!fn) {
+      fn = (enviar) => {
+        if (enviar) enviadores.current.set(clave, enviar);
+        else enviadores.current.delete(clave);
+        refrescar((n) => n + 1);
+      };
+      registros.current.set(clave, fn);
+    }
+    return fn;
+  }, []);
 
   const abrir = (servidor: Servidor) => {
     const clave = crypto.randomUUID();
@@ -178,11 +415,20 @@ export default function VpsTerminal() {
     setActiva(clave);
   };
   const cerrar = (clave: string) => {
+    registros.current.delete(clave);
     setPestanas((p) => {
       const resto = p.filter((x) => x.clave !== clave);
       if (activa === clave) setActiva(resto.at(-1)?.clave ?? null);
       return resto;
     });
+  };
+  const pestanaActiva = pestanas.find((p) => p.clave === activa) ?? null;
+  const enviarActiva = activa ? (enviadores.current.get(activa) ?? null) : null;
+
+  const pegar = async () => {
+    const t = await navigator.clipboard.readText().catch(() => "");
+    if (!t) return avisar("No hay texto en el portapapeles", "info");
+    if (enviarActiva) enviarActiva(t);
   };
 
   const probar = async (s: Servidor) => {
@@ -215,7 +461,7 @@ export default function VpsTerminal() {
     <>
       <Encabezado
         titulo="Terminal"
-        descripcion="Sesiones SSH desde el servidor de Mi Setup. Root pide confirmar tu identidad."
+        descripcion="Sesiones SSH desde el servidor de Mi Setup. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado. Root pide confirmar tu identidad."
         acciones={esAdmin ? <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>Servidor</Boton> : null}
       />
       <ErrorCaja error={error} />
@@ -249,9 +495,10 @@ export default function VpsTerminal() {
               </div>
             </div>
           ))}
+          <Historial servidorId={pestanaActiva?.servidor.id ?? null} alElegir={setTexto} />
         </div>
-        <div className="flex h-[70vh] min-h-96 flex-col overflow-hidden rounded-tarjeta border border-borde bg-fondo">
-          <div className="flex gap-1 overflow-x-auto border-b border-borde bg-superficie p-1">
+        <div className="flex h-[72vh] min-h-96 flex-col overflow-hidden rounded-tarjeta border border-borde bg-fondo">
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-borde bg-superficie p-1">
             {pestanas.map((p) => (
               <div key={p.clave} className={cx("flex items-center gap-1 rounded-lg pl-3 text-xs", activa === p.clave ? "bg-tarjeta" : "text-tenue")}>
                 <button type="button" onClick={() => setActiva(p.clave)} className="py-1.5">{p.servidor.nombre}</button>
@@ -261,15 +508,21 @@ export default function VpsTerminal() {
               </div>
             ))}
             {pestanas.length === 0 ? <span className="px-3 py-1.5 text-xs text-tenue">Sin sesiones abiertas</span> : null}
+            {enviarActiva ? (
+              <Boton tamano="sm" variante="fantasma" icono={ClipboardPaste} className="ml-auto" onClick={() => void pegar()}>
+                Pegar
+              </Boton>
+            ) : null}
           </div>
           <div className="relative min-h-0 flex-1">
             {pestanas.map((p) => (
               <div key={p.clave} className={cx("absolute inset-0", activa !== p.clave && "pointer-events-none opacity-0")}>
-                <Consola servidor={p.servidor} visible={activa === p.clave} />
+                <Consola servidor={p.servidor} visible={activa === p.clave} registrar={registroDe(p.clave)} />
               </div>
             ))}
             {pestanas.length === 0 ? <Vacio icono={TerminalSquare} texto="Elige un servidor y pulsa Abrir." /> : null}
           </div>
+          <BarraComandos enviar={enviarActiva} servidorId={pestanaActiva?.servidor.id ?? null} texto={texto} setTexto={setTexto} />
         </div>
       </div>
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo servidor" : "Editar servidor"} alCerrar={() => setEditando(null)}>
