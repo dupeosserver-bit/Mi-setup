@@ -1,7 +1,7 @@
 /**
  * Mercados sin clave de API:
  * - Cripto: CoinGecko (precios, cambio 24 h, gráfica de 7 días).
- * - Inversiones: Stooq (cierre diario de acciones, ETF e índices).
+ * - Inversiones: Yahoo Finance (acciones, ETF e índices; con retraso).
  * - Divisas: Frankfurter (tipos de cambio del Banco Central Europeo).
  * Cada cuenta guarda su lista de seguimiento. Solo se muestran datos; no es
  * asesoría financiera.
@@ -16,18 +16,11 @@ import { pedirJson } from "./redes/oauth.js";
 import { getSetting, setSetting } from "./settings.js";
 
 const CRIPTO_INICIAL = ["bitcoin", "ethereum", "solana", "tether", "ripple", "dogecoin"];
-const INVERSIONES_INICIAL = ["aapl.us", "nvda.us", "msft.us", "tsla.us", "spy.us", "^spx"];
+const INVERSIONES_INICIAL = ["AAPL", "NVDA", "MSFT", "TSLA", "SPY", "^GSPC", "^MXX"];
 const DIVISAS_INICIAL = { base: "USD", destinos: ["MXN", "EUR", "GBP", "JPY", "CAD"] };
 
 async function lista<T>(deps: ModuleDeps, clave: string, inicial: T): Promise<T> {
   return (await getSetting<T>(deps.db, clave)) ?? inicial;
-}
-
-/** Descarga texto (CSV) de un servicio externo conocido. */
-async function pedirTexto(servicio: string, url: string): Promise<string> {
-  const r = await fetch(url, { headers: { "user-agent": "MiSetup/0.1 (+https://setup.mexicanland.net)" }, signal: AbortSignal.timeout(15_000) });
-  if (!r.ok) throw new HttpError(502, `${servicio} respondió ${r.status}`);
-  return r.text();
 }
 
 interface Cotizacion {
@@ -35,37 +28,46 @@ interface Cotizacion {
   nombre: string;
   precio: number | null;
   cambio: number | null;
+  moneda: string | null;
   fecha: string | null;
   serie: number[];
   error?: string;
 }
 
-/** Últimos ~30 cierres diarios de un símbolo de Stooq. */
-async function cotizacionStooq(simbolo: string): Promise<Cotizacion> {
-  return conCache(`stooq:${simbolo}`, 10 * 60_000, async () => {
+interface RespuestaYahoo {
+  chart: {
+    result:
+      | {
+          meta: { symbol: string; currency?: string; longName?: string; shortName?: string; regularMarketPrice?: number; chartPreviousClose?: number; regularMarketTime?: number };
+          indicators: { quote: { close: (number | null)[] }[] };
+        }[]
+      | null;
+    error: { description?: string } | null;
+  };
+}
+
+/** Precio actual, cambio del día y ~1 mes de cierres de un símbolo de Yahoo Finance. */
+async function cotizacion(simbolo: string): Promise<Cotizacion> {
+  const vacia = { simbolo, nombre: simbolo, precio: null, cambio: null, moneda: null, fecha: null, serie: [] };
+  return conCache(`yahoo:${simbolo}`, 10 * 60_000, async () => {
     try {
-      const desde = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10).replace(/-/g, "");
-      const csv = await pedirTexto("Stooq", `https://stooq.com/q/d/l/?s=${encodeURIComponent(simbolo)}&i=d&d1=${desde}`);
-      const filas = csv
-        .trim()
-        .split(/\r?\n/)
-        .slice(1)
-        .map((l) => l.split(","))
-        .filter((c) => c.length >= 5 && Number.isFinite(Number(c[4])));
-      if (!filas.length) return { simbolo, nombre: simbolo.toUpperCase(), precio: null, cambio: null, fecha: null, serie: [], error: "Símbolo no encontrado en Stooq" };
-      const cierres = filas.map((c) => Number(c[4]));
-      const ultimo = cierres.at(-1) ?? null;
-      const previo = cierres.at(-2) ?? null;
+      const r = await pedirJson<RespuestaYahoo>("Yahoo Finance", `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=1mo&interval=1d`);
+      const d = r.chart.result?.[0];
+      if (!d) return { ...vacia, error: r.chart.error?.description ?? "Símbolo no encontrado" };
+      const serie = (d.indicators.quote[0]?.close ?? []).filter((v): v is number => typeof v === "number");
+      const precio = d.meta.regularMarketPrice ?? serie.at(-1) ?? null;
+      const previo = serie.length >= 2 ? serie.at(-2)! : (d.meta.chartPreviousClose ?? null);
       return {
         simbolo,
-        nombre: simbolo.toUpperCase(),
-        precio: ultimo,
-        cambio: ultimo !== null && previo ? ((ultimo - previo) / previo) * 100 : null,
-        fecha: filas.at(-1)?.[0] ?? null,
-        serie: cierres.slice(-30),
+        nombre: d.meta.longName ?? d.meta.shortName ?? d.meta.symbol,
+        precio,
+        cambio: precio !== null && previo ? ((precio - previo) / previo) * 100 : null,
+        moneda: d.meta.currency ?? null,
+        fecha: d.meta.regularMarketTime ? new Date(d.meta.regularMarketTime * 1000).toISOString() : null,
+        serie,
       };
     } catch (err) {
-      return { simbolo, nombre: simbolo.toUpperCase(), precio: null, cambio: null, fecha: null, serie: [], error: err instanceof Error ? err.message : "Sin datos" };
+      return { ...vacia, error: err instanceof HttpError && /404/.test(err.message) ? "Símbolo no encontrado" : err instanceof Error ? err.message : "Sin datos" };
     }
   });
 }
@@ -132,13 +134,13 @@ export function mercadosRoutes(deps: ModuleDeps) {
     app.get("/api/inversiones", acceso("inversiones", "lectura"), async (request) => {
       const user = currentUser(request);
       const simbolos = await lista(deps, `inversiones:${user.id}`, INVERSIONES_INICIAL);
-      return Promise.all(simbolos.map((s) => cotizacionStooq(s)));
+      return Promise.all(simbolos.map((s) => cotizacion(s)));
     });
 
     app.put("/api/inversiones/lista", acceso("inversiones", "lectura"), async (request) => {
       const user = currentUser(request);
       const { simbolos } = z
-        .object({ simbolos: z.array(z.string().trim().toLowerCase().regex(/^\^?[a-z0-9.-]{1,20}$/, "Símbolo inválido (ej. aapl.us, ^spx, amxl.mx)")).max(20) })
+        .object({ simbolos: z.array(z.string().trim().toUpperCase().regex(/^\^?[A-Z0-9.=-]{1,20}$/, "Símbolo inválido (ej. AAPL, ^GSPC, AMXB.MX)")).max(20) })
         .parse(request.body);
       await setSetting(deps.db, `inversiones:${user.id}`, [...new Set(simbolos)], deps.now());
       return { ok: true };

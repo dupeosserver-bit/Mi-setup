@@ -47,15 +47,17 @@ describe("mercados", () => {
       "fetch",
       vi.fn(async (destino: string | URL) => {
         const u = String(destino);
-        if (u.includes("stooq.com") && u.includes("aapl.us")) return respuesta("Date,Open,High,Low,Close,Volume\n2026-10-14,1,1,1,100,10\n2026-10-15,1,1,1,110,10\n", "text/csv");
-        if (u.includes("stooq.com")) return respuesta("No data", "text/csv");
+        if (u.includes("finance.yahoo.com") && u.includes("/AAPL?")) {
+          return respuesta({ chart: { result: [{ meta: { symbol: "AAPL", currency: "USD", longName: "Apple Inc.", regularMarketPrice: 110 }, indicators: { quote: [{ close: [100, 110] }] } }], error: null } });
+        }
+        if (u.includes("finance.yahoo.com")) return new Response(JSON.stringify({ chart: { result: null, error: { description: "No data found" } } }), { status: 404 });
         if (u.includes("frankfurter.app/latest")) return respuesta({ date: "2026-10-16", rates: { MXN: 18.5 } });
         return respuesta({});
       }),
     );
-    await ctx.app.inject({ method: "PUT", url: "/api/inversiones/lista", headers: h, payload: { simbolos: ["AAPL.US", "xyz.us"] } });
+    await ctx.app.inject({ method: "PUT", url: "/api/inversiones/lista", headers: h, payload: { simbolos: ["aapl", "XYZ"] } });
     const inv = (await ctx.app.inject({ method: "GET", url: "/api/inversiones", headers: h })).json<{ simbolo: string; precio: number | null; cambio: number | null; error?: string }[]>();
-    expect(inv[0]).toMatchObject({ simbolo: "aapl.us", precio: 110 });
+    expect(inv[0]).toMatchObject({ simbolo: "AAPL", nombre: "Apple Inc.", precio: 110 });
     expect(inv[0]!.cambio).toBeCloseTo(10);
     expect(inv[1]!.error).toMatch(/no encontrado/);
     expect((await ctx.app.inject({ method: "PUT", url: "/api/inversiones/lista", headers: h, payload: { simbolos: ["rm -rf"] } })).statusCode).toBe(400);

@@ -155,7 +155,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     nota: "Solo informativo: no es asesoría financiera.",
   },
   inversiones: {
-    pasos: ["Agrega acciones, ETF o índices con su símbolo de Stooq (aapl.us, ^spx).", "Ves el último cierre, el cambio contra el día anterior y 30 días de gráfica."],
+    pasos: ["Agrega acciones, ETF o índices con su símbolo de Yahoo Finance (AAPL, ^GSPC, ^MXX, WALMEX.MX).", "Ves el precio, el cambio del día y un mes de gráfica."],
     nota: "Solo informativo: no es asesoría financiera.",
   },
   divisas: {

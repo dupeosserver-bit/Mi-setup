@@ -8,7 +8,7 @@ loadLocalEnv();
 
 const config = loadConfig();
 const base = await abrirBase(config);
-const { app, jobs } = await buildApp({ config, db: base.db });
+const { app, jobs, preparar } = await buildApp({ config, db: base.db });
 if (config.env.DB_EMBEBIDA) app.log.warn("Usando Postgres embebido (.data/pglite): solo para desarrollo");
 
 let dbLista = false;
@@ -16,6 +16,7 @@ try {
   await base.migrar();
   dbLista = true;
   app.log.info("Migraciones aplicadas");
+  await preparar();
 } catch (err) {
   if (config.isProduction) {
     app.log.fatal({ err }, "No se pudieron aplicar las migraciones");

@@ -66,6 +66,8 @@ export interface App {
   readonly deps: ModuleDeps;
   /** Tareas periódicas; index.ts las arranca. */
   readonly jobs: Job[];
+  /** Se llama después de migrar: aplica las claves guardadas en Ajustes y crea los roles iniciales. */
+  readonly preparar: () => Promise<void>;
 }
 
 export async function buildApp(appDeps: AppDeps): Promise<App> {
@@ -163,9 +165,6 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(cuentaRoutes(deps));
   await app.register(clavesRoutes(deps));
   await app.register(rolesRoutes(deps));
-  // Claves guardadas desde Ajustes → Servicios y roles iniciales (si la base aún no responde, se sigue con el .env).
-  await aplicarClavesGuardadas(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron cargar las claves guardadas"));
-  await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
   await app.register(notasRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
@@ -204,5 +203,11 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
     { nombre: "cobros", cadaMs: 6 * 60 * 60_000, alInicio: true, run: async () => void (await recordarCobros(deps)) },
   );
 
-  return { app, auth, hub, deps, jobs };
+  const preparar = async () => {
+    // Si la base aún no responde, se sigue con el .env.
+    await aplicarClavesGuardadas(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron cargar las claves guardadas"));
+    await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
+  };
+
+  return { app, auth, hub, deps, jobs, preparar };
 }
