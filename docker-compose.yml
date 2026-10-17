@@ -129,6 +129,9 @@ services:
     depends_on:
       - core
       - ntfy
+    # Permite que Caddy llegue a servicios del propio VPS (host.docker.internal).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "443:443"
@@ -138,6 +141,8 @@ services:
       NTFY_HOST: ${NTFY_HOST:-ntfy.mexicanland.net}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Sitios extra (p. ej. panel de Pterodactyl): archivos *.caddy fuera de la app.
+      - ${CADDY_SITIOS_DIR:-/opt/mi-setup/caddy}:/etc/caddy/sitios:ro
       - misetup_caddy_data:/data
       - misetup_caddy_config:/config
     networks:

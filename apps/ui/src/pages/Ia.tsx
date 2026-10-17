@@ -7,7 +7,7 @@ import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarj
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
-import { HERRAMIENTAS_DIAGNOSTICO, MENSAJE_ANALIZAR, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
+import { HERRAMIENTAS_DIAGNOSTICO, mensajeAnalizar, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
 import { usePreferencias } from "../lib/preferencias";
 import { hablar } from "../lib/voz";
 
@@ -81,8 +81,8 @@ function Chat() {
   });
 
   return (
-    <div className="grid gap-4 md:grid-cols-[240px_1fr]">
-      <div className="space-y-1">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
+      <div className="min-w-0 space-y-1">
         <Boton className="w-full" variante="primario" onClick={() => setActual(null)}>
           Nueva conversación
         </Boton>
@@ -98,6 +98,7 @@ function Chat() {
         ))}
       </div>
       <Tarjeta
+        className="min-w-0"
         titulo={detalle.data?.titulo ?? "Nueva conversación"}
         acciones={
           actual ? (
@@ -122,7 +123,7 @@ function Chat() {
             <div key={m.id} className={cx(m.rol === "user" && "text-right")}>
               <p
                 className={cx(
-                  "inline-block max-w-[90%] whitespace-pre-wrap rounded-xl px-3 py-2 text-left text-sm",
+                  "inline-block max-w-[90%] whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-left text-sm [overflow-wrap:anywhere]",
                   m.rol === "user" ? "border border-borde bg-fondo" : "bg-tarjeta",
                 )}
               >
@@ -144,7 +145,7 @@ function Chat() {
             <TarjetaPropuesta
               key={p.id}
               p={estado.get(p.id) ?? p}
-              alAnalizar={HERRAMIENTAS_DIAGNOSTICO.has(p.herramienta) && !enviar.isPending ? () => enviar.mutate({ mensaje: MENSAJE_ANALIZAR, adjuntos: [] }) : undefined}
+              alAnalizar={HERRAMIENTAS_DIAGNOSTICO.has(p.herramienta) && !enviar.isPending ? () => enviar.mutate({ mensaje: mensajeAnalizar(p), adjuntos: [] }) : undefined}
             />
           ))}
           {enviar.isPending ? <p className="text-sm text-tenue">Pensando…</p> : null}

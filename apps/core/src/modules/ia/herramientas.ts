@@ -125,6 +125,7 @@ export function crearHerramientas(ctx: ContextoHerramientas, extras: Herramienta
       inputSchema: objeto({ servidorId: { type: "string" }, comando: { type: "string" } }, ["servidorId", "comando"]),
       describir: (i) => `Ejecutar en VPS: ${i.comando.slice(0, 200)}`,
       peligroso: (i) => analizarComando(i.comando).peligroso,
+      alimentaIa: true,
       ejecutar: (user, i) =>
         ejecutarSeguro(deps, ctx.servidores, user, {
           servidorId: i.servidorId,

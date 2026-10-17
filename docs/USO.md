@@ -258,3 +258,19 @@ La IA local **solo conversa**: no propone acciones ni ve fotos/PDF. `llama3.2:3b
 ### La IA ayuda con errores de servidores
 
 Dile qué falla ("el core no arranca", "el servidor de Minecraft se cae"). La IA propone **revisiones de solo lectura**: estado general, contenedores de Docker, últimos registros de un contenedor, servicios con fallas, errores del sistema, puertos, memoria, red, leer un archivo de configuración o código, y el estado de un servidor de Pterodactyl. Como siempre, nada corre hasta que tocas **Aprobar**. Al ejecutarse, en la tarjeta aparece **Ver salida** y **Analizar con la IA**, que le pasa el resultado para que te explique qué está mal y cómo arreglarlo (el arreglo vuelve a ser una propuesta). Nunca lee archivos de secretos (`.env`, llaves, contraseñas).
+
+### Pterodactyl en el mismo VPS que Mi Setup
+
+Caddy (de Mi Setup) ya ocupa los puertos 80 y 443, así que el instalador del panel **no** puede sacar su propio certificado. Caddy lo hace por él:
+
+1. Instala o reinstala el panel **sin SSL / sin Let's Encrypt** y deja su Nginx escuchando en un puerto interno, por ejemplo `8081` (en `/etc/nginx/sites-available/pterodactyl.conf`: `listen 8081;`, y `sudo systemctl restart nginx`). No uses el 8080: es de Wings.
+2. Crea el sitio para Caddy (vive fuera de la app y no se borra al actualizar):
+
+   ```bash
+   mkdir -p /opt/mi-setup/caddy
+   printf 'panel.mexicanland.net {\n\treverse_proxy host.docker.internal:8081\n}\n' > /opt/mi-setup/caddy/panel.caddy
+   ```
+
+3. Aplica: `cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d` (y si ya estaba arriba: `docker exec misetup-caddy caddy reload --config /etc/caddy/Caddyfile`).
+4. En el `.env` del panel (`/var/www/pterodactyl/.env`) pon `APP_URL=https://panel.mexicanland.net` y agrega `TRUSTED_PROXIES=*`.
+5. Si usas `ufw`, deja que Docker llegue al puerto: `ufw allow from 172.16.0.0/12 to any port 8081`.

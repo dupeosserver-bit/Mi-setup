@@ -391,9 +391,10 @@ export function Layout() {
       </div>
 
       <PanelMovil abierto={panel} alCerrar={() => setPanel(false)} grupos={grupos} visibles={visibles} />
-      <BotonMas visibles={visibles} />
+      {/* En el apartado IA los botones flotantes taparían la caja de texto. */}
+      {actual?.id !== "ia" ? <BotonMas visibles={visibles} /> : null}
       <Buscador abierto={buscar} alCerrar={() => setBuscar(false)} visibles={visibles} />
-      {visibles.has("ia") ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
+      {visibles.has("ia") && actual?.id !== "ia" ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
       <Tutorial grupos={grupos} />
     </div>
   );

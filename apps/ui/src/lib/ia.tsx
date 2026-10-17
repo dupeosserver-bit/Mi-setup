@@ -57,8 +57,11 @@ export function usePropuestas() {
 const TONO = { pendiente: "aviso", aprobada: "neutro", rechazada: "neutro", ejecutada: "ok", fallida: "peligro" } as const;
 
 /** Herramientas de diagnóstico: su salida vuelve a la IA para que la analice. */
-export const HERRAMIENTAS_DIAGNOSTICO = new Set(["diagnosticar_vps", "leer_archivo_vps", "estado_servidor_juego"]);
-export const MENSAJE_ANALIZAR = "Analiza el resultado de la revisión: dime en palabras simples qué está mal, por qué y cómo arreglarlo.";
+export const HERRAMIENTAS_DIAGNOSTICO = new Set(["diagnosticar_vps", "leer_archivo_vps", "estado_servidor_juego", "ejecutar_comando_vps"]);
+/** Pide analizar el resultado de UNA propuesta concreta (la IA lo busca por su descripción). */
+export function mensajeAnalizar(p: Propuesta): string {
+  return `Analiza el resultado de "${p.descripcion}": dime en palabras simples qué está mal, por qué y cómo arreglarlo.`;
+}
 
 function textoSalida(r: unknown): string | null {
   if (r == null) return null;
@@ -101,7 +104,7 @@ export function TarjetaPropuesta({ p, alAnalizar }: { p: Propuesta; alAnalizar?:
   return (
     <div className="rounded-xl border border-borde bg-tarjeta p-3 text-left text-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 break-words font-medium">
+        <p className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">
           {p.peligrosa ? <AlertTriangle className="mr-1 inline h-4 w-4 text-peligro" /> : null}
           {p.descripcion}
         </p>

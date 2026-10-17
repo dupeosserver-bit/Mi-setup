@@ -11,3 +11,8 @@
 	header -Server
 	reverse_proxy ntfy:80
 }
+
+# Sitios extra que viven fuera de la app (no se borran al actualizar):
+# cada archivo /opt/mi-setup/caddy/*.caddy del VPS (p. ej. el panel de Pterodactyl).
+# Para llegar a un servicio del propio VPS usa host.docker.internal:PUERTO.
+import /etc/caddy/sitios/*.caddy
