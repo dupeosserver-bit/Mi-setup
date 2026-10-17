@@ -384,6 +384,18 @@ export const vpnDevices = pgTable(
   (t) => [uniqueIndex("vpn_devices_nombre").on(t.name)],
 );
 
+// ---------------------------------------------------------------- Plan 11: control remoto
+
+/** Equipos para RustDesk: ID y contraseña (cifrada con SERVER_ENC_KEY). */
+export const remoteHosts = pgTable("remote_hosts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  rustdeskId: text("rustdesk_id").notNull(),
+  passwordEnc: text("password_enc"),
+  deviceId: uuid("device_id").references(() => devices.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ---------------------------------------------------------------- Plan 10: redes, streams y novedades
 
 /** Cuentas conectadas por OAuth (una por plataforma). Tokens cifrados con SERVER_ENC_KEY. */

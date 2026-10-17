@@ -103,6 +103,13 @@ export async function api<T = unknown>(ruta: string, opciones: OpcionesApi = {},
 export async function descargar(ruta: string, nombre: string): Promise<void> {
   let res = await fetch(`${API_BASE}${ruta}`, { headers: encabezados(false) });
   if (res.status === 401 && (await refrescar())) res = await fetch(`${API_BASE}${ruta}`, { headers: encabezados(false) });
+  if (res.status === 403) {
+    const datos = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+    if (datos?.["codigo"] === "reauth_requerida") {
+      await pedirReauth((datos["metodo"] as ReauthRequirement | undefined) ?? "fuerte");
+      res = await fetch(`${API_BASE}${ruta}`, { headers: encabezados(false) });
+    }
+  }
   if (!res.ok) throw new ApiError(res.status, "No se pudo descargar el archivo");
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

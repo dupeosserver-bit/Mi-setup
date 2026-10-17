@@ -19,6 +19,8 @@ import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
 import { novedadesRoutes, revisarPrecios } from "./modules/novedades.js";
+import { controlRemotoRoutes } from "./modules/control-remoto.js";
+import { cuentasRoutes } from "./modules/cuentas.js";
 import { redesModule } from "./modules/redes/index.js";
 import type { ClienteIa } from "./modules/ia/servicio.js";
 import { equiposModule } from "./modules/equipos.js";
@@ -172,6 +174,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   const redes = redesModule(deps);
   await app.register(redes.routes);
   await app.register(novedadesRoutes(deps));
+  await app.register(cuentasRoutes(deps));
+  await app.register(controlRemotoRoutes(deps));
   jobs.push({ nombre: "vigilante-precios", cadaMs: 3 * 60 * 60_000, alInicio: false, run: () => revisarPrecios(deps) });
   await app.register(
     iaRoutes(deps, {

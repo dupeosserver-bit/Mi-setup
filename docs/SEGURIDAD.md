@@ -72,3 +72,9 @@ Se completa en la fase 12.
 - X: el costo estimado se confirma antes de cada publicación o lectura.
 - Discord: sin menciones masivas y solo a canales donde está el bot.
 - Vigilante de precios: protección SSRF (sin red interna), límites de tiempo, tamaño y redirecciones.
+
+## Control remoto, cuentas y auditoría (Plan 11)
+
+- Contraseñas de RustDesk cifradas; solo se entregan con reautenticación fuerte y quedan auditadas (`control_remoto_abierto`).
+- Cuentas: solo la maestra; permisos solo-maestra no otorgables; desactivar revoca sesiones al momento; cambios con reautenticación fuerte.
+- Auditoría inmutable (triggers); exportar CSV pide reautenticación y escapa fórmulas.

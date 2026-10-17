@@ -10,6 +10,7 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `APP_HOST` | No | `setup.mexicanland.net` | Host de la app y la API (Caddy + CORS) |
 | `NTFY_HOST` | No | `ntfy.mexicanland.net` | Host de notificaciones push |
 | `RD_HOST` | No | `rd.mexicanland.net` | Servidor RustDesk |
+| `RD_PUBLIC_KEY` | No | vacío | Clave pública de RustDesk (`id_ed25519.pub` de hbbs) para mostrarla en Control remoto |
 | `POSTGRES_USER` | No | `misetup` | Usuario de Postgres |
 | `POSTGRES_DB` | No | `misetup` | Base de datos |
 | `POSTGRES_PASSWORD` | **Sí** (producción) | — | Contraseña de Postgres |
@@ -194,3 +195,24 @@ URL de retorno (pégala en cada portal de desarrolladores): `https://setup.mexic
 - **Clima:** busca tu ciudad (Open-Meteo, sin clave). Cada usuario guarda la suya.
 - **Ofertas:** CheapShark (sin clave); filtra por tienda y precio máximo.
 - **Precios (RAM):** agrega la URL del producto y el selector CSS del precio (en el navegador: clic derecho → Inspeccionar). Se revisa cada 3 horas y, si cambia, llega un push. Si una tienda falla se muestra el error y se reintenta después. Solo se permiten URLs públicas (no la red interna).
+
+## Control remoto (RustDesk)
+
+En el VPS el script ya levanta hbbs/hbbr en `rd.mexicanland.net`. La clave pública está en el volumen de hbbs (`id_ed25519.pub`); ponla en `RD_PUBLIC_KEY` para verla en la app.
+
+1. En cada dispositivo instala RustDesk → Ajustes → Red → **Servidor de ID** `rd.mexicanland.net`, **Servidor de relay** `rd.mexicanland.net`, **Clave** = contenido de `id_ed25519.pub`.
+2. En la PC pon una **contraseña permanente** (Ajustes → Seguridad).
+3. En Mi Setup → **Control remoto** → Agregar equipo: ID, contraseña (se guarda cifrada) y, opcionalmente, el dispositivo vinculado para ver si la PC está encendida.
+4. **Conectar** pide huella o contraseña, copia la contraseña (se borra del portapapeles a los 20 s) y abre `rustdesk://<ID>`. Si no se abre, instala RustDesk y repite el paso 1.
+
+## Cuentas y permisos
+
+Solo la cuenta maestra. **Seguridad → Cuentas y permisos → Nueva cuenta**: correo, nombre, contraseña inicial (mín. 12) y nivel por módulo (Sin acceso, Ver, Editar, Administrar). Los apartados solo-maestra (bóveda, 2FA, VPS, control remoto, auditoría, cuentas…) no se pueden otorgar. Desactivar corta sus sesiones al momento; las cuentas no se borran para conservar el historial. Cada cambio pide contraseña o huella.
+
+## Registro de actividad
+
+**Seguridad → Registro de actividad**: filtra por módulo, acción, actor (usuario, IA, sistema) y resultado. Es de solo inserción (nadie puede editarlo ni borrarlo). **Exportar CSV** pide reautenticación.
+
+## Navegador privado
+
+En la app de PC: **Seguridad → Navegador privado** (o menú Ver / bandeja). Ventana aislada en memoria: al cerrarla se borra todo. Bloquea rastreadores conocidos y niega cámara, micrófono, ubicación y notificaciones. No oculta tu IP: usa la VPN para eso.

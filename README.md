@@ -2,7 +2,7 @@
 
 App personal (no pública) para PC (Windows) y celular (Android), vinculadas y con todo en la nube (VPS propio), para operar el hosting **MexicanLand**: terminal SSH, métricas en vivo, panel Pterodactyl, bóveda de contraseñas, 2FA, correos temporales, VPN, IA asistente con aprobación obligatoria y más.
 
-> Estado: **Plan 10 — Redes, streams y novedades** (Twitch, YouTube, Kick y X por OAuth, bot de Discord, clima, ofertas y vigilante de precios).
+> Estado: **Plan 11 — Control remoto, navegador privado y cuentas** (RustDesk, cuentas y permisos por módulo, registro de actividad con filtros y CSV).
 
 ## Estructura
 

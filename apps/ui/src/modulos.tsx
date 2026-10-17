@@ -75,16 +75,16 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck, lazy(() => import("./pages/Autenticador"))),
   correos_temporales: m("correos_temporales", "/seguridad/correos", Mail, lazy(() => import("./pages/Correos"))),
   vpn: m("vpn", "/seguridad/vpn", Shield, lazy(() => import("./pages/Vpn"))),
-  navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe),
-  auditoria: m("auditoria", "/seguridad/actividad", ScrollText),
-  cuentas: m("cuentas", "/seguridad/cuentas", UserCog),
+  navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe, lazy(() => import("./pages/NavegadorPrivado"))),
+  auditoria: m("auditoria", "/seguridad/actividad", ScrollText, lazy(() => import("./pages/Auditoria"))),
+  cuentas: m("cuentas", "/seguridad/cuentas", UserCog, lazy(() => import("./pages/Cuentas"))),
 
   streams: m("streams", "/redes/streams", Radio, lazy(() => import("./pages/Streams"))),
   x: m("x", "/redes/x", AtSign, lazy(() => import("./pages/X"))),
   discord: m("discord", "/redes/discord", MessageCircle, lazy(() => import("./pages/Discord"))),
 
   novedades: m("novedades", "/novedades", Newspaper, lazy(() => import("./pages/Novedades"))),
-  control_remoto: m("control_remoto", "/control-remoto", MonitorUp),
+  control_remoto: m("control_remoto", "/control-remoto", MonitorUp, lazy(() => import("./pages/ControlRemoto"))),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
 };

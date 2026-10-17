@@ -42,6 +42,7 @@ services:
       APP_HOST: ${APP_HOST:-setup.mexicanland.net}
       NTFY_HOST: ${NTFY_HOST:-ntfy.mexicanland.net}
       RD_HOST: ${RD_HOST:-rd.mexicanland.net}
+      RD_PUBLIC_KEY: ${RD_PUBLIC_KEY:-}
       POSTGRES_HOST: misetup-db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: ${POSTGRES_USER:-misetup}

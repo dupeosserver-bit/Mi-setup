@@ -22,6 +22,8 @@ const envSchema = z
     APP_HOST: z.string().default("setup.mexicanland.net"),
     NTFY_HOST: z.string().default("ntfy.mexicanland.net"),
     RD_HOST: z.string().default("rd.mexicanland.net"),
+    /** Clave pública del servidor RustDesk (id_ed25519.pub de hbbs). No es secreta; se muestra para configurar el cliente. */
+    RD_PUBLIC_KEY: optionalString,
 
     POSTGRES_HOST: z.string().default("localhost"),
     POSTGRES_PORT: z.coerce.number().int().default(5432),
