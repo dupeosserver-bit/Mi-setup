@@ -26,6 +26,7 @@
     "@fastify/websocket": "^11",
     "@mi-setup/shared": "workspace:*",
     "@node-rs/argon2": "^2",
+    "cheerio": "^1.2.0",
     "drizzle-orm": "^0.44.2",
     "fastify": "^5.2.1",
     "jose": "^5",

@@ -26,7 +26,8 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `PTERO_URL` | No | `https://panel.mexicanland.org` | Panel Pterodactyl |
 | `PTERO_CLIENT_KEY` / `PTERO_APP_KEY` | No | vacío | API de Pterodactyl (`ptlc_` / `ptla_`) |
 | `DISCORD_BOT_TOKEN` | No | vacío | Bot de Discord |
-| `X_CLIENT_ID` / `X_CLIENT_SECRET` / `X_BEARER_TOKEN` | No | vacío | X (Twitter) |
+| `X_CLIENT_ID` / `X_CLIENT_SECRET` / `X_BEARER_TOKEN` | No | vacío | X (Twitter). Se usa la cuenta conectada por OAuth; el bearer queda reservado |
+| `X_COSTO_PUBLICAR_USD` / `X_COSTO_LECTURA_USD` | No | `0.01` / `0.005` | Costo estimado por publicación y por mención leída |
 | `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` | No | vacío | Twitch |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | vacío | YouTube |
 | `KICK_CLIENT_ID` / `KICK_CLIENT_SECRET` | No | vacío | Kick |
@@ -170,3 +171,26 @@ Instalador de Windows y APK (fase 4), RustDesk (fase 11), WireGuard (fase 8) y c
 3. La IA responde con **propuestas**. Revisa el detalle y toca **Aprobar** (o **Rechazar**). Nada se ejecuta sin ese toque.
 4. Si la propuesta es peligrosa (comando destructivo, apagar a la fuerza) se pide escribir `EJECUTAR` y tu contraseña o huella.
 5. En **IA → Pendientes / Historial** ves la cola; el gasto del mes aparece arriba. Todo queda en el registro de actividad.
+
+## Redes y streams
+
+URL de retorno (pégala en cada portal de desarrolladores): `https://setup.mexicanland.net/api/redes/oauth/<plataforma>/callback`, con `<plataforma>` = `twitch`, `youtube`, `kick` o `x`. En local: `http://localhost:3000/api/redes/oauth/<plataforma>/callback`.
+
+| Plataforma | Dónde crear la app | Permisos |
+|---|---|---|
+| Twitch | dev.twitch.tv → Your Console → Applications | `channel:manage:broadcast` |
+| YouTube | console.cloud.google.com → YouTube Data API v3 → credenciales OAuth (aplicación web) | `https://www.googleapis.com/auth/youtube` |
+| Kick | kick.com → Settings → Developer | `user:read channel:read channel:write` |
+| X | developer.x.com → proyecto con OAuth 2.0 (cliente confidencial) | `tweet.read tweet.write users.read offline.access` |
+
+1. Pon las variables en `/opt/mi-setup/.env`, despliega y entra a **Redes → Streams** o **X** → **Conectar** (pide contraseña o huella). Autoriza en el navegador y vuelve a la app.
+2. Streams: cambia título y juego (en YouTube solo el título de la transmisión en vivo o programada).
+3. X: antes de publicar o leer menciones se muestra el costo estimado y hay que confirmarlo.
+4. Discord: crea un bot en discord.com/developers, invítalo a tu servidor con permiso de enviar mensajes y pon `DISCORD_BOT_TOKEN`. Las menciones masivas se desactivan siempre.
+5. La IA puede redactar un post, un mensaje o un cambio de título: aparece como propuesta y solo se publica al tocar **Aprobar**.
+
+## Novedades
+
+- **Clima:** busca tu ciudad (Open-Meteo, sin clave). Cada usuario guarda la suya.
+- **Ofertas:** CheapShark (sin clave); filtra por tienda y precio máximo.
+- **Precios (RAM):** agrega la URL del producto y el selector CSS del precio (en el navegador: clic derecho → Inspeccionar). Se revisa cada 3 horas y, si cambia, llega un push. Si una tienda falla se muestra el error y se reintenta después. Solo se permiten URLs públicas (no la red interna).

@@ -48,6 +48,19 @@ const envSchema = z
     ANTHROPIC_API_KEY: optionalString,
     AI_MODEL: optionalString.transform((v) => v ?? "claude-sonnet-5-5"),
     AI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10_000).default(10),
+    DISCORD_BOT_TOKEN: optionalString,
+    X_CLIENT_ID: optionalString,
+    X_CLIENT_SECRET: optionalString,
+    X_BEARER_TOKEN: optionalString,
+    /** Costo estimado (USD) por publicación y por cada mención leída en X (pago por uso). */
+    X_COSTO_PUBLICAR_USD: z.coerce.number().min(0).default(0.01),
+    X_COSTO_LECTURA_USD: z.coerce.number().min(0).default(0.005),
+    TWITCH_CLIENT_ID: optionalString,
+    TWITCH_CLIENT_SECRET: optionalString,
+    GOOGLE_CLIENT_ID: optionalString,
+    GOOGLE_CLIENT_SECRET: optionalString,
+    KICK_CLIENT_ID: optionalString,
+    KICK_CLIENT_SECRET: optionalString,
     /** Carpeta de la UI compilada. En Docker: /app/public. */
     UI_DIR: optionalString,
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */

@@ -64,3 +64,11 @@ Se completa en la fase 12.
 - Tope mensual (`AI_MONTHLY_BUDGET_USD`) con tokens reales; al llegar responde 402 sin llamar a la API.
 - Nunca recibe bóveda, 2FA, llaves SSH, tokens ni contraseñas; el texto externo va marcado como no confiable.
 - Auditoría: `ia_propuesta` y `ia_ejecutada` (actor ia), `ia_aprobada` y `ia_rechazada` (actor usuario).
+
+## Redes, streams y novedades (Plan 10)
+
+- OAuth en el servidor: `state` de un solo uso (hash, 10 min), PKCE en Kick y X, tokens cifrados con `SERVER_ENC_KEY`; los clientes nunca reciben tokens.
+- Conectar o desconectar cuentas exige `administrar` y reautenticación fuerte; todo queda en auditoría (`cuenta_conectada`, `stream_actualizado`, `x_publicado`, `discord_enviado`).
+- X: el costo estimado se confirma antes de cada publicación o lectura.
+- Discord: sin menciones masivas y solo a canales donde está el bot.
+- Vigilante de precios: protección SSRF (sin red interna), límites de tiempo, tamaño y redirecciones.

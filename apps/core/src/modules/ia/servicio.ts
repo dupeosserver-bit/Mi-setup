@@ -153,6 +153,7 @@ export class ServicioIa {
     private readonly deps: ModuleDeps,
     private readonly herramientas: readonly Herramienta[],
     private readonly cliente: ClienteIa | null,
+    private readonly contextosExtra: readonly ((user: AuthUser) => Promise<string | null>)[] = [],
   ) {}
 
   private get presupuesto(): number {
@@ -208,6 +209,10 @@ export class ServicioIa {
     if (can(user, "vps_comandos", "lectura")) {
       const vs = await db.select({ id: vpsServers.id, nombre: vpsServers.name }).from(vpsServers).limit(20);
       if (vs.length) partes.push(`Servidores VPS (servidorId → nombre): ${noConfiable(vs.map((v) => `${v.id} → ${v.nombre}`).join("; "))}`);
+    }
+    for (const extra of this.contextosExtra) {
+      const texto = await extra(user).catch(() => null);
+      if (texto) partes.push(noConfiable(texto));
     }
     return partes.join("\n");
   }

@@ -125,3 +125,11 @@ Claude ─tool_use─▶ core guarda propuesta "pendiente" (auditoría ia_propue
 usuario ─Aprobar─▶ core: permiso + (peligrosa ⇒ EJECUTAR + reauth fuerte) ─▶ pendiente→aprobada (atómico) ─▶ ejecuta ─▶ ejecutada/fallida
 usuario ─Rechazar─▶ rechazada        tokens reales ─▶ ai_usage (costo por modelo que respondió)
 ```
+
+## Redes (OAuth)
+
+```
+app ─POST /api/redes/oauth/<p>/iniciar (reauth fuerte)─▶ core: state (hash, 10 min) + PKCE ─▶ URL de autorización
+navegador ─▶ plataforma ─▶ GET /api/redes/oauth/<p>/callback?code&state ─▶ core: state de un solo uso → token → perfil
+core guarda tokens cifrados (social_accounts) ─▶ streams / X / IA (tras aprobación) usan tokenVigente()
+```

@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { aiConversations, aiMessages, aiProposals } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
-import { currentUser } from "../../security/rbac.js";
+import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
 import { clienteAnthropic, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
@@ -21,13 +21,15 @@ export interface OpcionesIa {
   readonly cliente?: ClienteIa;
   /** Herramientas adicionales registradas por otros módulos. */
   readonly extras?: Herramienta[];
+  /** Contexto adicional no secreto (p. ej. canales de Discord). */
+  readonly contextos?: ((user: AuthUser) => Promise<string | null>)[];
 }
 
 export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
   const llave = deps.config.env.ANTHROPIC_API_KEY;
   const cliente = opciones.cliente ?? (llave ? clienteAnthropic(llave) : null);
   const herramientas = crearHerramientas({ deps, ...opciones.contexto }, opciones.extras);
-  const servicio = new ServicioIa(deps, herramientas, cliente);
+  const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos);
   const leer = { config: { acceso: { modulo: "ia" as const, nivel: "lectura" as const } } };
   const escribir = { config: { acceso: { modulo: "ia" as const, nivel: "escritura" as const } } };
 

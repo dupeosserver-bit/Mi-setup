@@ -18,6 +18,8 @@ import { chatRoutes } from "./modules/chat.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
+import { novedadesRoutes, revisarPrecios } from "./modules/novedades.js";
+import { redesModule } from "./modules/redes/index.js";
 import type { ClienteIa } from "./modules/ia/servicio.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
@@ -95,7 +97,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "blob:"],
+        // Portadas de ofertas (CheapShark) vienen de CDNs de cada tienda: se permiten solo imágenes https.
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "data:"],
         connectSrc: ["'self'"],
         frameSrc: ["'self'", pteroOrigin],
@@ -166,8 +169,17 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(bovedaRoutes(deps));
   await app.register(correoRoutes(deps));
   await app.register(vpnRoutes(deps));
+  const redes = redesModule(deps);
+  await app.register(redes.routes);
+  await app.register(novedadesRoutes(deps));
+  jobs.push({ nombre: "vigilante-precios", cadaMs: 3 * 60 * 60_000, alInicio: false, run: () => revisarPrecios(deps) });
   await app.register(
-    iaRoutes(deps, { contexto: { servidores: vps.servidores, ptero: ptero.ptero }, ...(appDeps.clienteIa ? { cliente: appDeps.clienteIa } : {}) }),
+    iaRoutes(deps, {
+      contexto: { servidores: vps.servidores, ptero: ptero.ptero },
+      extras: redes.herramientas,
+      contextos: [redes.contexto],
+      ...(appDeps.clienteIa ? { cliente: appDeps.clienteIa } : {}),
+    }),
   );
   jobs.push({ nombre: "correos-24h", cadaMs: 60 * 60_000, alInicio: true, run: () => purgarCorreos(deps) });
   jobs.push(

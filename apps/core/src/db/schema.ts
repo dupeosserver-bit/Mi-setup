@@ -384,6 +384,60 @@ export const vpnDevices = pgTable(
   (t) => [uniqueIndex("vpn_devices_nombre").on(t.name)],
 );
 
+// ---------------------------------------------------------------- Plan 10: redes, streams y novedades
+
+/** Cuentas conectadas por OAuth (una por plataforma). Tokens cifrados con SERVER_ENC_KEY. */
+export const socialAccounts = pgTable("social_accounts", {
+  platform: text("platform").primaryKey(),
+  externalId: text("external_id").notNull(),
+  accountName: text("account_name").notNull(),
+  accessTokenEnc: text("access_token_enc").notNull(),
+  refreshTokenEnc: text("refresh_token_enc"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  scopes: text("scopes").notNull().default(""),
+  connectedBy: uuid("connected_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Estados de OAuth en curso (un solo uso, 10 min). Guarda el hash del state y el verificador PKCE cifrado. */
+export const oauthStates = pgTable("oauth_states", {
+  stateHash: text("state_hash").primaryKey(),
+  platform: text("platform").notNull(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  verifierEnc: text("verifier_enc"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+/** Vigilante de precios (RAM u otro producto): URL + selector CSS. */
+export const priceWatches = pgTable("price_watches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  selector: text("selector").notNull(),
+  active: boolean("active").notNull().default(true),
+  lastPrice: numeric("last_price", { precision: 14, scale: 2 }),
+  lastText: text("last_text"),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const priceHistory = pgTable(
+  "price_history",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    watchId: uuid("watch_id")
+      .notNull()
+      .references(() => priceWatches.id, { onDelete: "cascade" }),
+    price: numeric("price", { precision: 14, scale: 2 }).notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("price_history_watch").on(t.watchId, t.at)],
+);
+
 // ---------------------------------------------------------------- Plan 9: IA asistente
 
 export const aiConversations = pgTable("ai_conversations", {

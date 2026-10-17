@@ -79,11 +79,11 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   auditoria: m("auditoria", "/seguridad/actividad", ScrollText),
   cuentas: m("cuentas", "/seguridad/cuentas", UserCog),
 
-  streams: m("streams", "/redes/streams", Radio),
-  x: m("x", "/redes/x", AtSign),
-  discord: m("discord", "/redes/discord", MessageCircle),
+  streams: m("streams", "/redes/streams", Radio, lazy(() => import("./pages/Streams"))),
+  x: m("x", "/redes/x", AtSign, lazy(() => import("./pages/X"))),
+  discord: m("discord", "/redes/discord", MessageCircle, lazy(() => import("./pages/Discord"))),
 
-  novedades: m("novedades", "/novedades", Newspaper),
+  novedades: m("novedades", "/novedades", Newspaper, lazy(() => import("./pages/Novedades"))),
   control_remoto: m("control_remoto", "/control-remoto", MonitorUp),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
