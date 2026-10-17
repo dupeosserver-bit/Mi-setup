@@ -13,6 +13,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -327,6 +328,80 @@ export const discordBots = pgTable("discord_bots", {
 });
 
 export type VpsServerRow = typeof vpsServers.$inferSelect;
+
+// ---------------------------------------------------------------- Plan 6: panel y negocio
+
+export const expirations = pgTable("expirations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** "dominio" (RDAP), "ssl" (certificado TLS) o "vps" (fecha manual). */
+  kind: text("kind").notNull(),
+  name: text("name").notNull(),
+  target: text("target").notNull().default(""),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  notifyDays: integer("notify_days").notNull().default(14),
+  lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clients = pgTable("clients", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  contact: text("contact").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const charges = pgTable(
+  "charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** Servidor o servicio que se cobra. */
+    concept: text("concept").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("MXN"),
+    /** "mensual", "trimestral", "anual" o "unico". */
+    frequency: text("frequency").notNull(),
+    nextDue: timestamp("next_due", { withTimezone: true }).notNull(),
+    /** "activo", "pausado", "completado" o "cancelado". */
+    status: text("status").notNull().default("activo"),
+    lastPaidAt: timestamp("last_paid_at", { withTimezone: true }),
+    lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("charges_vencimiento").on(t.status, t.nextDue)],
+);
+
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** "ingreso" o "gasto". */
+    kind: text("kind").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("MXN"),
+    category: text("category").notNull(),
+    description: text("description").notNull().default(""),
+    date: timestamp("date", { withTimezone: true }).notNull(),
+    chargeId: uuid("charge_id").references(() => charges.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("transactions_fecha").on(t.date)],
+);
+
+export const businessNotes = pgTable("business_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  content: text("content").notNull().default(""),
+  /** "idea", "en_progreso" o "hecho". */
+  status: text("status").notNull().default("idea"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

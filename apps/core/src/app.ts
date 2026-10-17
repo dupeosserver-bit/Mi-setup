@@ -17,6 +17,10 @@ import { chatRoutes } from "./modules/chat.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
+import { negocioRoutes, recordarCobros } from "./modules/negocio.js";
+import { pteroRoutes } from "./modules/ptero.js";
+import { respaldosRoutes } from "./modules/respaldos.js";
+import { revisarVencimientos, vencimientosRoutes } from "./modules/vencimientos.js";
 import { vpsModule } from "./modules/vps/index.js";
 import { createNtfyNotifier, type Notifier } from "./notify/notifier.js";
 import { Hub } from "./realtime/hub.js";
@@ -146,6 +150,16 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   const vps = vpsModule(deps);
   jobs.push(...vps.jobs);
   await app.register(vps.routes);
+
+  const ptero = pteroRoutes(deps);
+  await app.register(ptero.routes);
+  await app.register(vencimientosRoutes(deps));
+  await app.register(negocioRoutes(deps));
+  await app.register(respaldosRoutes(deps));
+  jobs.push(
+    { nombre: "vencimientos", cadaMs: 6 * 60 * 60_000, alInicio: true, run: () => revisarVencimientos(deps) },
+    { nombre: "cobros", cadaMs: 6 * 60 * 60_000, alInicio: true, run: async () => void (await recordarCobros(deps)) },
+  );
 
   return { app, auth, hub, deps, jobs };
 }

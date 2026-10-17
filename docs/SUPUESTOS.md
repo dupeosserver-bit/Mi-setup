@@ -91,3 +91,15 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 63 | Comandos peligrosos (lista en `packages/shared/src/danger.ts`): doble confirmación (escribir el nombre exacto del botón) + reautenticación fuerte; el servidor lo vuelve a comprobar aunque la UI ya lo pida. | No basta con la UI. | `comandos.ts` (`ejecutarSeguro`). |
 | 64 | Salida de comandos limitada a 512 KB y 2 min. Subidas por SFTP de hasta 100 MB. | Proteger memoria y tiempo del servidor. | `ssh.ts`, `archivos.ts`. |
 | 65 | Bots: el nombre del servicio, proceso o contenedor se valida (`[A-Za-z0-9_.@:-]`) y se pasa entre comillas; si el usuario SSH no es root se usa `sudo -n` para systemd y Docker (debe estar permitido sin contraseña). pm2 se ejecuta como el propio usuario. | Nunca se concatena texto libre en un comando. | `bots.ts`. |
+
+## Plan 6 — Pterodactyl y negocio
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 66 | La consola de Pterodactyl la lee **core** desde el WebSocket de Wings (con `Origin` del panel) y la reenvía por el WebSocket de la app solo mientras alguien la mira; la llave nunca llega al cliente. | Wings exige el Origin del panel y el token no debe salir del servidor. | `modules/ptero.ts`. |
+| 67 | "Matar" un servidor de juego pide doble confirmación; "Detener" pide confirmación simple. Suspender o reactivar (llave de aplicación) pide PIN. | Riesgo de corromper datos. | `Pterodactyl.tsx`, `ptero.ts`. |
+| 68 | Panel web: en la PC se abre en una ventana propia con sesión persistente (`persist:panel-pterodactyl`); en web y Android se intenta un `iframe` (CSP `frame-src` del panel) con botón para abrirlo en pestaña si el panel bloquea el marco. | Algunos paneles envían `X-Frame-Options`. | `ventanas.ts`, `Pterodactyl.tsx`. |
+| 69 | Dominios por RDAP (`rdap.org`, sin claves) y SSL leyendo el certificado con una conexión TLS al 443; se acepta un certificado vencido o no válido para poder leer su fecha. | Lo pide el prompt. | `vencimientos.ts`. |
+| 70 | Avisos de vencimiento y de cobros: como máximo uno al día por elemento; los cobros avisan 3 días antes y cuando ya vencieron. | Sin spam. | `vencimientos.ts`, `negocio.ts`. |
+| 71 | Montos con `numeric(12,2)`; el resumen de finanzas se calcula por moneda (por defecto MXN). Un cobro mensual del día 31 pasa al último día del mes siguiente. | Sin errores de redondeo ni mezclar monedas. | `negocio.ts`. |
+| 72 | Respaldos de la base: el script del VPS los deja en `BACKUP_HOST_DIR` (por defecto `/opt/mi-setup/backups`), que se monta en core de solo lectura; "al día" = el último tiene menos de 26 h. | No se conoce la carpeta exacta del script; es configurable. | `docker-compose.yml`, `respaldos.ts`. |

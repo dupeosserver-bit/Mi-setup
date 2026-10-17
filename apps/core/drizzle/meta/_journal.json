@@ -43,6 +43,13 @@
       "when": 1792207028777,
       "tag": "0005_vps",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792207677146,
+      "tag": "0006_panel_y_negocio",
+      "breakpoints": true
     }
   ]
 }

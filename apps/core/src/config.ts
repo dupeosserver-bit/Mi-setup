@@ -37,6 +37,10 @@ const envSchema = z
     NTFY_URL: optionalString,
 
     PTERO_URL: z.string().url().default("https://panel.mexicanland.org"),
+    PTERO_CLIENT_KEY: optionalString,
+    PTERO_APP_KEY: optionalString,
+    /** Carpeta (montada de solo lectura) con los respaldos de la base que hace el script del VPS. */
+    BACKUP_DIR: optionalString,
     /** Carpeta de la UI compilada. En Docker: /app/public. */
     UI_DIR: optionalString,
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */

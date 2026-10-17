@@ -52,6 +52,7 @@ services:
       MAIL_INBOUND_SECRET: ${MAIL_INBOUND_SECRET:-}
       NTFY_TOPIC: ${NTFY_TOPIC:-}
       NTFY_URL: http://ntfy
+      BACKUP_DIR: /data/respaldos
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-5-5}
       AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-10}
@@ -70,6 +71,8 @@ services:
       KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
     volumes:
       - misetup_uploads:/data/uploads
+      # Respaldos diarios de la base que hace el script del VPS (solo lectura).
+      - ${BACKUP_HOST_DIR:-/opt/mi-setup/backups}:/data/respaldos:ro
     networks:
       - datos
       - web

@@ -63,13 +63,13 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree, lazy(() => import("./pages/VpsArchivos"))),
   vps_bots: m("vps_bots", "/vps/bots", Bot, lazy(() => import("./pages/VpsBots"))),
 
-  pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server),
-  vencimientos: m("vencimientos", "/panel/vencimientos", CalendarClock),
-  clientes: m("clientes", "/panel/clientes", Users),
-  finanzas: m("finanzas", "/panel/finanzas", Wallet),
-  negocio: m("negocio", "/panel/negocio", Lightbulb),
+  pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server, lazy(() => import("./pages/Pterodactyl"))),
+  vencimientos: m("vencimientos", "/panel/vencimientos", CalendarClock, lazy(() => import("./pages/Vencimientos"))),
+  clientes: m("clientes", "/panel/clientes", Users, lazy(() => import("./pages/Clientes"))),
+  finanzas: m("finanzas", "/panel/finanzas", Wallet, lazy(() => import("./pages/Finanzas"))),
+  negocio: m("negocio", "/panel/negocio", Lightbulb, lazy(() => import("./pages/Negocio"))),
 
-  respaldos: m("respaldos", "/respaldos", Archive),
+  respaldos: m("respaldos", "/respaldos", Archive, lazy(() => import("./pages/Respaldos"))),
 
   boveda: m("boveda", "/seguridad/boveda", KeyRound),
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck),

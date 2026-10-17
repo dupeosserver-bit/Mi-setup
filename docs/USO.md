@@ -31,6 +31,8 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | vacío | YouTube |
 | `KICK_CLIENT_ID` / `KICK_CLIENT_SECRET` | No | vacío | Kick |
 | `LOG_LEVEL` | No | `info` | Nivel de log de core |
+| `BACKUP_HOST_DIR` | No | `/opt/mi-setup/backups` | Carpeta del VPS con los respaldos de la base (se monta de solo lectura) |
+| `BACKUP_DIR` | No | Docker: `/data/respaldos` | Dónde core lee esos respaldos |
 | `UI_DIR` | No | `apps/ui/dist` (Docker: `/app/public`) | Carpeta de la UI compilada que sirve core |
 | `UPLOADS_DIR` | No | `.data/uploads` (Docker: `/data/uploads`, volumen) | Imágenes subidas en Ajustes → Apariencia |
 | `DB_EMBEBIDA` | No | vacío | Solo desarrollo: `1` usa Postgres embebido en `.data/pglite` |
@@ -101,6 +103,13 @@ Ver `README.md`. Sin Docker: pon `DB_EMBEBIDA=1` en tu `.env` y crea la cuenta c
 4. **Alertas de caída**: activa "Vigilar" y, si quieres, umbrales de RAM/disco. Agrega monitores TCP (servidores de juego) o HTTP (páginas).
 5. **Comandos guardados**: crea botones como `bash /root/vps-manager.sh backup`. Los peligrosos piden escribir el nombre del botón y tu contraseña o huella.
 6. **Bots de Discord**: indica si corre como servicio systemd, proceso pm2 o contenedor Docker. Si el usuario SSH no es root, permite `sudo -n systemctl restart <bot>` y `sudo -n docker …` en sudoers.
+
+## Panel (Pterodactyl y negocio)
+
+- **Pterodactyl**: en el panel, *Cuenta → API Credentials* crea una llave de cliente (`ptlc_…`) → `PTERO_CLIENT_KEY`. Para administración (ver todos los servidores, suspender), *Admin → Application API* crea una llave (`ptla_…`) → `PTERO_APP_KEY`. Sin llaves, la pestaña **Panel web** sigue disponible (en la PC se abre en su propia ventana con la sesión guardada).
+- **Vencimientos**: dominios (RDAP, sin claves), certificados SSL (conexión TLS al puerto 443) y VPS (fecha manual). Se revisan cada 6 h.
+- **Clientes y cobros**: al marcar "Pagado" se registra el ingreso en *Gastos e ingresos* y el cobro pasa a la siguiente fecha.
+- **Respaldos**: si el script del VPS guarda los respaldos en otra carpeta, cambia `BACKUP_HOST_DIR`.
 
 ## App de Windows (Electron)
 
