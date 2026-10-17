@@ -384,6 +384,31 @@ export const vpnDevices = pgTable(
   (t) => [uniqueIndex("vpn_devices_nombre").on(t.name)],
 );
 
+// ---------------------------------------------------------------- Roles (tipo Discord)
+
+/** Rol con nombre, color y permisos por módulo; los permisos de una cuenta son la suma de los suyos y los de sus roles. */
+export const roles = pgTable("roles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#8e8e93"),
+  position: integer("position").notNull().default(0),
+  permissions: jsonb("permissions").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const userRoles = pgTable(
+  "user_roles",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.roleId] })],
+);
+
 // ---------------------------------------------------------------- Plan 11: control remoto
 
 /** Equipos para RustDesk: ID y contraseña (cifrada con SERVER_ENC_KEY). */

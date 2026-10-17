@@ -13,6 +13,8 @@ import { HttpError } from "./http-error.js";
 import type { Job } from "./jobs.js";
 import { aparienciaRoutes } from "./modules/apariencia.js";
 import { cuentaRoutes } from "./modules/cuenta.js";
+import { aplicarClavesGuardadas, clavesRoutes } from "./modules/claves.js";
+import { rolesRoutes, sembrarRoles } from "./modules/roles.js";
 import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
@@ -157,6 +159,11 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(equipos.routes);
   await app.register(aparienciaRoutes(deps));
   await app.register(cuentaRoutes(deps));
+  await app.register(clavesRoutes(deps));
+  await app.register(rolesRoutes(deps));
+  // Claves guardadas desde Ajustes → Servicios y roles iniciales (si la base aún no responde, se sigue con el .env).
+  await aplicarClavesGuardadas(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron cargar las claves guardadas"));
+  await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
   await app.register(notasRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));

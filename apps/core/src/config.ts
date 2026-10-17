@@ -11,8 +11,8 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim() !== "" ? v : undefined));
 
-const envSchema = z
-  .object({
+/** Forma de cada variable (también la usa Ajustes → Servicios para validar un valor suelto). */
+export const envBase = z.object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     HOST: z.string().default("127.0.0.1"),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -72,8 +72,9 @@ const envSchema = z
       .string()
       .optional()
       .transform((v) => v === "1" || v === "true"),
-  })
-  .superRefine((env, ctx) => {
+  });
+
+const envSchema = envBase.superRefine((env, ctx) => {
     for (const key of ["JWT_SECRET", "SERVER_ENC_KEY"] as const) {
       const value = env[key];
       if (value && value.length < 32) {

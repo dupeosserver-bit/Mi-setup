@@ -5,6 +5,7 @@
  * WebSocket de la app solo mientras alguien la mira.
  */
 import { can, temas } from "@mi-setup/shared";
+import type { Env } from "../config.js";
 import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
 import { z } from "zod";
@@ -15,11 +16,18 @@ import { clientInfo, type ModuleDeps } from "./common.js";
 const idServidor = z.object({ id: z.string().regex(/^[a-zA-Z0-9-]{8,36}$/, "Servidor inválido") });
 
 export class PteroClient {
-  constructor(
-    private readonly base: string,
-    private readonly claveCliente: string | undefined,
-    private readonly claveApp: string | undefined,
-  ) {}
+  /** Lee la configuración en cada petición: un cambio en Ajustes → Servicios se aplica al momento. */
+  constructor(private readonly env: Pick<Env, "PTERO_URL" | "PTERO_CLIENT_KEY" | "PTERO_APP_KEY">) {}
+
+  private get base(): string {
+    return this.env.PTERO_URL;
+  }
+  private get claveCliente(): string | undefined {
+    return this.env.PTERO_CLIENT_KEY;
+  }
+  private get claveApp(): string | undefined {
+    return this.env.PTERO_APP_KEY;
+  }
 
   get configurado(): boolean {
     return Boolean(this.claveCliente);
@@ -66,7 +74,7 @@ interface ServidorPtero {
 }
 
 export function pteroRoutes(deps: ModuleDeps) {
-  const ptero = new PteroClient(deps.config.env.PTERO_URL, deps.config.env.PTERO_CLIENT_KEY, deps.config.env.PTERO_APP_KEY);
+  const ptero = new PteroClient(deps.config.env);
   const consolas = new Map<string, { ws: WebSocket | null; activo: boolean }>();
 
   const abrirConsola = async (id: string) => {

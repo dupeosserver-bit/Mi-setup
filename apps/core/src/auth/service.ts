@@ -4,6 +4,7 @@
  */
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
+  levelRank,
   isModuleId,
   MODULE_IDS,
   effectiveLevel,
@@ -26,6 +27,7 @@ import { HttpError, missingConfig } from "../http-error.js";
 import type { Notifier } from "../notify/notifier.js";
 import type { ServerCipher } from "../security/crypto.js";
 import type { AuthUser } from "../security/rbac.js";
+import { permisosDeRoles } from "../modules/roles.js";
 import { dummyHash, hashSecret, verifySecret } from "./password.js";
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -345,10 +347,16 @@ export class AuthService {
     const { session, user } = fila;
     if (session.revokedAt || session.expiresAt <= now || !user.isActive) return null;
 
-    const permissions: PermissionMap = {};
+    let permissions: PermissionMap = {};
     if (user.role !== "maestra") {
+      // Permisos propios + los de sus roles (gana el nivel más alto).
+      permissions = (await permisosDeRoles(db, user.id)).permisos;
       const filas = await db.select().from(userModulePermissions).where(eq(userModulePermissions.userId, user.id));
-      for (const p of filas) if (isModuleId(p.module)) permissions[p.module] = p.level;
+      for (const p of filas) {
+        if (!isModuleId(p.module)) continue;
+        const actual = permissions[p.module];
+        if (!actual || levelRank(p.level) > levelRank(actual)) permissions[p.module] = p.level;
+      }
     }
 
     return {
@@ -379,6 +387,7 @@ export class AuthService {
     return {
       usuario: publicUser(user),
       permisos,
+      roles: (await permisosDeRoles(this.deps.db, user.id)).roles,
       tienePin: Boolean(fila?.pinHash),
       reauth: { metodo: vigente ? user.reauthMethod : null, hasta: vigente ? hasta.toISOString() : null },
     };

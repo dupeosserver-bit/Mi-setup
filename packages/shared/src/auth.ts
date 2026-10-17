@@ -85,6 +85,8 @@ export interface LoginResponse extends AuthTokens {
 export interface MeResponse {
   readonly usuario: PublicUser;
   readonly permisos: Record<ModuleId, PermissionLevel>;
+  /** Roles tipo Discord asignados (insignias). */
+  readonly roles: readonly { readonly id: string; readonly nombre: string; readonly color: string }[];
   readonly tienePin: boolean;
   readonly reauth: { readonly metodo: ReauthMethod | null; readonly hasta: string | null };
 }

@@ -9,11 +9,31 @@ import { idParams, type ModuleDeps } from "../common.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
 import { clienteAnthropic, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
 
+/** Tipos de archivo que se pueden adjuntar: imágenes, PDF y texto. */
+const TIPO_ADJUNTO = /^(image\/(png|jpeg|webp|gif)|application\/(pdf|json|xml|x-yaml|yaml|javascript|typescript|x-sh)|text\/[a-z0-9.+-]+)$/;
+
 const chatSchema = z.object({
   conversacionId: z.string().uuid().optional(),
   mensaje: z.string().trim().min(1, "Escribe un mensaje").max(8000),
   modulo: z.string().max(40).optional(),
+  adjuntos: z
+    .array(
+      z.object({
+        nombre: z.string().trim().min(1).max(200),
+        tipo: z.string().regex(TIPO_ADJUNTO, "Tipo de archivo no permitido (usa imágenes, PDF o texto)"),
+        // Hasta ~5 MB por archivo (en base64).
+        datos: z
+          .string()
+          .max(7_000_000, "Cada archivo puede pesar hasta 5 MB")
+          .regex(/^[A-Za-z0-9+/=]*$/, "Archivo dañado"),
+      }),
+    )
+    .max(5, "Máximo 5 archivos por mensaje")
+    .default([]),
 });
+
+/** Quita del texto mostrado el contenido de los archivos de texto adjuntos. */
+const SIN_ARCHIVOS = /Archivo adjunto "[^"]*":\n<contenido_no_confiable>[\s\S]*?<\/contenido_no_confiable>/g;
 
 export interface OpcionesIa {
   readonly contexto: Omit<ContextoHerramientas, "deps">;
@@ -26,8 +46,15 @@ export interface OpcionesIa {
 }
 
 export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
-  const llave = deps.config.env.ANTHROPIC_API_KEY;
-  const cliente = opciones.cliente ?? (llave ? clienteAnthropic(llave) : null);
+  // El cliente se crea con la clave vigente (puede cambiar desde Ajustes → Servicios sin reiniciar).
+  let cache: { llave: string; cliente: ClienteIa } | null = null;
+  const cliente = (): ClienteIa | null => {
+    if (opciones.cliente) return opciones.cliente;
+    const llave = deps.config.env.ANTHROPIC_API_KEY;
+    if (!llave) return null;
+    if (cache?.llave !== llave) cache = { llave, cliente: clienteAnthropic(llave) };
+    return cache.cliente;
+  };
   const herramientas = crearHerramientas({ deps, ...opciones.contexto }, opciones.extras);
   const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos);
   const leer = { config: { acceso: { modulo: "ia" as const, nivel: "lectura" as const } } };
@@ -36,7 +63,8 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/ia/uso", leer, async () => servicio.uso());
 
-    app.post("/api/ia/chat", escribir, async (request) => servicio.chat(currentUser(request), chatSchema.parse(request.body)));
+    // Con adjuntos el cuerpo puede pasar de 1 MB: se permite hasta 40 MB solo en esta ruta.
+    app.post("/api/ia/chat", { ...escribir, bodyLimit: 40 * 1024 * 1024 }, async (request) => servicio.chat(currentUser(request), chatSchema.parse(request.body)));
 
     app.get("/api/ia/conversaciones", leer, async (request) => {
       const user = currentUser(request);
@@ -67,7 +95,8 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
           .map((b) => (b.text as string).replace(/^<contexto>[\s\S]*?<\/contexto>\s*/, ""))
           .join("\n")
           .trim();
-        return texto ? [{ id: m.id, rol: m.role, texto, fecha: m.createdAt.toISOString() }] : [];
+        const adjuntos = (m.content as BloqueIa[]).filter((b) => b.type === "image" || b.type === "document" || (b.type === "text" && String(b.text).startsWith("Archivo adjunto"))).length;
+        return texto ? [{ id: m.id, rol: m.role, texto: texto.replace(SIN_ARCHIVOS, "").trim(), adjuntos, fecha: m.createdAt.toISOString() }] : [];
       });
       return { id: c.id, titulo: c.title, mensajes: visibles, propuestas: propuestas.map(propuestaDto) };
     });
