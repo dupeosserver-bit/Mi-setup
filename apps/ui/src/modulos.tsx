@@ -2,6 +2,9 @@
 import type { ModuleCategory, ModuleId } from "@mi-setup/shared";
 import {
   Activity,
+  ArrowLeftRight,
+  Bitcoin,
+  TrendingUp,
   Archive,
   AtSign,
   Bell,
@@ -83,7 +86,11 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   x: m("x", "/redes/x", AtSign, lazy(() => import("./pages/X"))),
   discord: m("discord", "/redes/discord", MessageCircle, lazy(() => import("./pages/Discord"))),
 
-  novedades: m("novedades", "/novedades", Newspaper, lazy(() => import("./pages/Novedades"))),
+  novedades: m("novedades", "/novedades", Sparkles, lazy(() => import("./pages/Novedades"))),
+  noticias: m("noticias", "/noticias", Newspaper, lazy(() => import("./pages/Noticias"))),
+  cripto: m("cripto", "/cripto", Bitcoin, lazy(() => import("./pages/Cripto"))),
+  inversiones: m("inversiones", "/inversiones", TrendingUp, lazy(() => import("./pages/Inversiones"))),
+  divisas: m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))),
   control_remoto: m("control_remoto", "/control-remoto", MonitorUp, lazy(() => import("./pages/ControlRemoto"))),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),

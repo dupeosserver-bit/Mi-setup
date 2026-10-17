@@ -1,4 +1,4 @@
-/** Novedades: clima (Open-Meteo), ofertas de juegos (CheapShark) y vigilante de precios de RAM. */
+/** Novedades: clima (con ubicación en tiempo real), ofertas y juegos gratis, tiendas para buscar y vigilante de precios. */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Cloud,
@@ -8,23 +8,29 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
+  Crosshair,
   ExternalLink,
+  Gift,
+  Info,
   MapPin,
   Moon,
   Plus,
   RefreshCw,
+  Search,
   Sun,
+  Target,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Pestanas, Selector, Tarjeta, Vacio, avisarError, cx } from "../components/ui";
+import { useEffect, useRef, useState } from "react";
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { fmtFecha, fmtFechaHora, haceCuanto } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
+import { ubicacionActual } from "../lib/ubicacion";
 
 // ---------------------------------------------------------------- clima
 
@@ -32,6 +38,7 @@ interface Ubicacion {
   nombre: string;
   lat: number;
   lon: number;
+  auto?: boolean;
 }
 interface Pronostico {
   current: { temperature_2m: number; apparent_temperature: number; relative_humidity_2m: number; weather_code: number; wind_speed_10m: number; is_day: number };
@@ -54,6 +61,7 @@ function Clima() {
   const ubicacion = useQuery({ queryKey: ["novedades", "ubicacion"], queryFn: () => api<Ubicacion | null>("/api/novedades/clima/ubicacion") });
   const [buscar, setBuscar] = useState("");
   const [q, setQ] = useState("");
+  const [detectando, setDetectando] = useState(false);
   const ciudades = useQuery({
     queryKey: ["novedades", "ciudades", q],
     queryFn: () => api<Ubicacion[]>(`/api/novedades/ciudades?q=${encodeURIComponent(q)}`),
@@ -69,6 +77,29 @@ function Clima() {
     onError: avisarError,
   });
   const u = ubicacion.data;
+
+  const detectar = async (auto: boolean, silencioso = false) => {
+    setDetectando(true);
+    try {
+      const lugar = await ubicacionActual();
+      guardar.mutate({ nombre: lugar.nombre, lat: lugar.lat, lon: lugar.lon, auto });
+      if (!silencioso) avisar(lugar.metodo === "gps" ? `Ubicación detectada: ${lugar.nombre}` : `Ubicación aproximada por tu internet: ${lugar.nombre}`, "info");
+    } catch (err) {
+      if (!silencioso) avisarError(err);
+    } finally {
+      setDetectando(false);
+    }
+  };
+
+  // Ubicación en tiempo real: si está activada, se vuelve a detectar cada vez que abres Clima.
+  const yaDetectado = useRef(false);
+  useEffect(() => {
+    if (u?.auto && !yaDetectado.current) {
+      yaDetectado.current = true;
+      void detectar(true, true);
+    }
+  }, [u?.auto]);
+
   const clima = useQuery({
     queryKey: ["novedades", "clima", u?.lat, u?.lon],
     queryFn: () => api<Pronostico>(`/api/novedades/clima?lat=${u!.lat}&lon=${u!.lon}`),
@@ -79,32 +110,42 @@ function Clima() {
   const actual = clima.data ? tiempo(clima.data.current.weather_code, clima.data.current.is_day === 1) : null;
   return (
     <div className="space-y-4">
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setQ(buscar.trim());
-        }}
-      >
-        <Entrada value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={u ? `Cambiar ciudad (${u.nombre})` : "Busca tu ciudad…"} />
-        <Boton type="submit" icono={MapPin}>
-          Buscar
+      <div className="flex flex-wrap gap-2">
+        <Boton variante="primario" icono={Crosshair} cargando={detectando} onClick={() => void detectar(Boolean(u?.auto))}>
+          Usar mi ubicación
         </Boton>
-      </form>
+        <form
+          className="flex min-w-60 flex-1 gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setQ(buscar.trim());
+          }}
+        >
+          <Entrada value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={u ? `O busca otra ciudad (ahora: ${u.nombre})` : "O busca tu ciudad…"} />
+          <Boton type="submit" icono={MapPin}>
+            Buscar
+          </Boton>
+        </form>
+      </div>
+      <Interruptor
+        activo={Boolean(u?.auto)}
+        alCambiar={(v) => (u ? guardar.mutate({ ...u, auto: v }) : void detectar(v))}
+        etiqueta="Ubicación en tiempo real (detectarla cada vez que abro Clima)"
+      />
       {ciudades.data?.length ? (
         <div className="flex flex-wrap gap-2">
           {ciudades.data.map((c) => (
-            <Boton key={`${c.lat},${c.lon}`} tamano="sm" onClick={() => guardar.mutate(c)}>
+            <Boton key={`${c.lat},${c.lon}`} tamano="sm" onClick={() => guardar.mutate({ ...c, auto: false })}>
               {c.nombre}
             </Boton>
           ))}
         </div>
       ) : null}
-      {!u && !ubicacion.isLoading ? <Vacio icono={MapPin} texto="Elige tu ciudad para ver el clima." /> : null}
+      {!u && !ubicacion.isLoading ? <Vacio icono={MapPin} texto="Toca 'Usar mi ubicación' o busca tu ciudad." /> : null}
       <ErrorCaja error={clima.error} />
       {clima.data && actual && u ? (
         <>
-          <Tarjeta titulo={u.nombre}>
+          <Tarjeta titulo={u.nombre} acciones={u.auto ? <Insignia tono="ok">En tiempo real</Insignia> : null}>
             <div className="flex items-center gap-4">
               <actual.icono className="h-12 w-12 text-acento" />
               <div>
@@ -131,14 +172,14 @@ function Clima() {
               );
             })}
           </div>
-          <p className="text-xs text-tenue">Datos de Open-Meteo.</p>
+          <p className="text-xs text-tenue">Datos de Open-Meteo. La ubicación usa el GPS del celular o la del sistema en la PC; si no hay, una aproximada por tu internet.</p>
         </>
       ) : null}
     </div>
   );
 }
 
-// ---------------------------------------------------------------- ofertas
+// ---------------------------------------------------------------- ofertas y tiendas
 
 interface Oferta {
   id: string;
@@ -152,6 +193,48 @@ interface Oferta {
   url: string;
 }
 
+interface TiendaJuegos {
+  id: string;
+  nombre: string;
+  tipo: "oficial" | "autorizada" | "revendedor" | "mercado";
+  url: string;
+}
+
+const TIPO_TIENDA: Record<TiendaJuegos["tipo"], { texto: string; tono: "ok" | "neutro" | "aviso" }> = {
+  oficial: { texto: "Oficial", tono: "ok" },
+  autorizada: { texto: "Autorizada", tono: "ok" },
+  revendedor: { texto: "Revendedor", tono: "neutro" },
+  mercado: { texto: "Mercado de claves", tono: "aviso" },
+};
+
+function BuscarEnTiendas() {
+  const tiendas = useQuery({ queryKey: ["novedades", "tiendas-juegos"], queryFn: () => api<TiendaJuegos[]>("/api/novedades/tiendas-juegos"), staleTime: Infinity });
+  const [juego, setJuego] = useState("");
+  return (
+    <Tarjeta titulo="Buscar un juego en tiendas confiables" icono={Search}>
+      <Entrada value={juego} onChange={(e) => setJuego(e.target.value)} placeholder="Nombre del juego, ej. Minecraft" />
+      <div className="mt-3 flex flex-wrap gap-2">
+        {tiendas.data?.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            disabled={!juego.trim()}
+            onClick={() => abrirExterno(`${t.url}${encodeURIComponent(juego.trim())}`)}
+            className="flex items-center gap-2 rounded-xl border border-borde bg-fondo px-3 py-2 text-sm hover:bg-tarjeta disabled:opacity-40"
+          >
+            {t.nombre}
+            <Insignia tono={TIPO_TIENDA[t.tipo].tono}>{TIPO_TIENDA[t.tipo].texto}</Insignia>
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-tenue">
+        Oficial/Autorizada: venden claves directo del desarrollador. Eneba, G2A y Kinguin son mercados donde venden otras personas: suelen ser más baratos, pero revisa la
+        calificación del vendedor, que la clave sea para tu región (México o Global) y evita pagar la "protección" extra si no la necesitas.
+      </p>
+    </Tarjeta>
+  );
+}
+
 function Ofertas() {
   const [tienda, setTienda] = useState("");
   const [precioMax, setPrecioMax] = useState("15");
@@ -163,6 +246,7 @@ function Ofertas() {
   const nombreTienda = new Map((tiendas.data ?? []).map((t) => [t.id, t.nombre]));
   return (
     <div className="space-y-4">
+      <BuscarEnTiendas />
       <div className="flex flex-wrap gap-2">
         <Selector className="max-w-xs" value={tienda} onChange={(e) => setTienda(e.target.value)}>
           <option value="">Todas las tiendas</option>
@@ -204,7 +288,58 @@ function Ofertas() {
           </button>
         ))}
       </div>
-      <p className="text-xs text-tenue">Ofertas de CheapShark (precios en USD).</p>
+      <p className="text-xs text-tenue">Ofertas de tiendas oficiales vía CheapShark (precios en USD).</p>
+    </div>
+  );
+}
+
+interface Gratis {
+  id: number;
+  titulo: string;
+  valor: string | null;
+  imagen: string;
+  descripcion: string;
+  url: string;
+  plataformas: string;
+  termina: string | null;
+}
+
+function JuegosGratis() {
+  const [plataforma, setPlataforma] = useState("todas");
+  const lista = useQuery({ queryKey: ["novedades", "gratis", plataforma], queryFn: () => api<Gratis[]>(`/api/novedades/juegos-gratis?plataforma=${plataforma}`) });
+  return (
+    <div className="space-y-4">
+      <Selector className="max-w-xs" value={plataforma} onChange={(e) => setPlataforma(e.target.value)}>
+        <option value="todas">Todas las plataformas</option>
+        <option value="pc">PC</option>
+        <option value="epic-games-store">Epic Games</option>
+        <option value="steam">Steam</option>
+        <option value="gog">GOG</option>
+        <option value="ps5">PlayStation 5</option>
+        <option value="xbox-series-xs">Xbox Series</option>
+        <option value="switch">Nintendo Switch</option>
+        <option value="android">Android</option>
+      </Selector>
+      {lista.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={lista.error} />
+      {lista.data?.length === 0 ? <Vacio icono={Gift} texto="No hay juegos gratis activos para esa plataforma." /> : null}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {lista.data?.map((g) => (
+          <button key={g.id} type="button" onClick={() => abrirExterno(g.url)} className="overflow-hidden rounded-tarjeta border border-borde bg-superficie text-left hover:bg-tarjeta">
+            <img src={g.imagen} alt={g.titulo} loading="lazy" referrerPolicy="no-referrer" className="h-32 w-full object-cover" />
+            <div className="space-y-1 p-3">
+              <p className="text-sm font-medium">{g.titulo}</p>
+              <p className="text-xs text-tenue">{g.plataformas}</p>
+              <div className="flex flex-wrap gap-1">
+                <Insignia tono="ok">Gratis</Insignia>
+                {g.valor ? <Insignia>Vale {g.valor}</Insignia> : null}
+                {g.termina ? <Insignia tono="aviso">Hasta {fmtFecha(g.termina)}</Insignia> : null}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-tenue">Datos de GamerPower. Ábrelos para reclamarlos en su tienda.</p>
     </div>
   );
 }
@@ -218,46 +353,84 @@ interface Vigilante {
   selector: string;
   activo: boolean;
   precio: number | null;
+  objetivo: number | null;
   texto: string | null;
   revisado: string | null;
   error: string | null;
 }
 
-function Historial({ id }: { id: string }) {
+function Historial({ id, objetivo }: { id: string; objetivo: number | null }) {
   const h = useQuery({ queryKey: ["novedades", "historial", id], queryFn: () => api<{ precio: number; fecha: string }[]>(`/api/novedades/vigilante/${id}/historial`) });
   if (!h.data || h.data.length < 2) return null;
   return (
     <div className="mt-3 h-32">
       <ResponsiveContainer>
         <LineChart data={h.data.map((p) => ({ ...p, t: new Date(p.fecha).getTime() }))}>
-          <CartesianGrid stroke="#3a3a3c" strokeDasharray="3 3" />
-          <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={(v: number) => fmtFecha(v)} stroke="#8e8e93" fontSize={11} />
-          <YAxis stroke="#8e8e93" fontSize={11} width={50} domain={["auto", "auto"]} />
-          <Tooltip labelFormatter={(v) => fmtFechaHora(Number(v))} contentStyle={{ background: "#2c2c2e", border: "1px solid #3a3a3c", borderRadius: 12 }} />
-          <Line type="stepAfter" dataKey="precio" stroke="#30D158" dot={false} strokeWidth={2} isAnimationActive={false} />
+          <CartesianGrid stroke="var(--borde)" strokeDasharray="3 3" />
+          <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={(v: number) => fmtFecha(v)} stroke="var(--texto-2)" fontSize={11} />
+          <YAxis stroke="var(--texto-2)" fontSize={11} width={50} domain={["auto", "auto"]} />
+          <Tooltip labelFormatter={(v) => fmtFechaHora(Number(v))} contentStyle={{ background: "var(--tarjeta)", border: "1px solid var(--borde)", borderRadius: 12 }} />
+          {objetivo !== null ? <ReferenceLine y={objetivo} stroke="var(--aviso)" strokeDasharray="4 4" /> : null}
+          <Line type="stepAfter" dataKey="precio" stroke="var(--ok)" dot={false} strokeWidth={2} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
+function ComoFunciona() {
+  return (
+    <Tarjeta titulo="¿Cómo se configura? (léelo una vez)" icono={Info}>
+      <ol className="list-decimal space-y-2 pl-5 text-sm text-tenue">
+        <li>Abre la página del producto (la RAM) en tu navegador y copia la dirección (URL).</li>
+        <li>
+          Haz clic derecho sobre el <b className="text-texto">precio que pagarías</b> → <b className="text-texto">Inspeccionar</b>. Se marca un trozo de código; fíjate en su{" "}
+          <code>class</code> o <code>id</code>.
+        </li>
+        <li>
+          Escribe el selector: si dice <code>class="precio-final"</code> pon <code>.precio-final</code>; si dice <code>id="price"</code> pon <code>#price</code>. Muchas tiendas tienen{" "}
+          <code>meta[itemprop="price"]</code>, que da el precio sin símbolos.
+        </li>
+        <li>
+          <b className="text-texto">Si el producto tiene descuento</b>, la página muestra dos precios: el tachado (antes) y el nuevo (ahora). Usa siempre el selector del{" "}
+          <b className="text-texto">precio nuevo</b>, el que pagas. Si el selector apunta al tachado, la app leerá el precio viejo.
+        </li>
+        <li>Pon un "precio objetivo" (opcional): te llega un aviso cuando el precio baje a esa cantidad o menos.</li>
+      </ol>
+      <p className="mt-2 text-xs text-tenue">Si después de guardar aparece un error en rojo, revisa el selector. Algunas tiendas (Amazon, Mercado Libre) cambian su página a menudo o bloquean robots.</p>
+    </Tarjeta>
+  );
+}
+
+const VACIO_VIGILANTE = { nombre: "", url: "", selector: "", objetivo: "" };
+
 function Precios() {
   const puede = usePuede("novedades", "escritura");
   const lista = useQuery({ queryKey: ["novedades", "vigilante"], queryFn: () => api<Vigilante[]>("/api/novedades/vigilante") });
   const [nuevo, setNuevo] = useState(false);
-  const [d, setD] = useState({ nombre: "", url: "", selector: "" });
+  const [d, setD] = useState(VACIO_VIGILANTE);
+  const [objetivoDe, setObjetivoDe] = useState<{ id: string; nombre: string; valor: string } | null>(null);
   const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["novedades"] });
   const crear = useMutation({
-    mutationFn: () => api<Vigilante>("/api/novedades/vigilante", { metodo: "POST", cuerpo: d }),
+    mutationFn: () =>
+      api<Vigilante>("/api/novedades/vigilante", {
+        metodo: "POST",
+        cuerpo: { nombre: d.nombre, url: d.url, selector: d.selector, objetivo: d.objetivo ? Number(d.objetivo) : null },
+      }),
     onSuccess: () => {
       setNuevo(false);
-      setD({ nombre: "", url: "", selector: "" });
+      setD(VACIO_VIGILANTE);
       refrescar();
     },
     onError: avisarError,
   });
   const revisar = useMutation({
     mutationFn: (id: string) => api(`/api/novedades/vigilante/${id}/revisar`, { metodo: "POST" }),
+    onSuccess: refrescar,
+    onError: avisarError,
+  });
+  const objetivo = useMutation({
+    mutationFn: ({ id, valor }: { id: string; valor: number | null }) => api(`/api/novedades/vigilante/${id}`, { metodo: "PATCH", cuerpo: { objetivo: valor } }),
     onSuccess: refrescar,
     onError: avisarError,
   });
@@ -270,13 +443,14 @@ function Precios() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-tenue">Se revisa cada 3 horas y avisa por push cuando cambia el precio.</p>
+        <p className="text-sm text-tenue">Se revisa cada 3 horas y avisa por push cuando cambia el precio o llega a tu objetivo.</p>
         {puede ? (
           <Boton variante="primario" icono={Plus} onClick={() => setNuevo(true)}>
             Vigilar URL
           </Boton>
         ) : null}
       </div>
+      <ComoFunciona />
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.length === 0 ? <Vacio texto="Agrega la página de una tienda y el selector CSS del precio." /> : null}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -287,6 +461,13 @@ function Precios() {
             acciones={
               puede ? (
                 <>
+                  <Boton
+                    tamano="icono"
+                    variante="fantasma"
+                    icono={Target}
+                    aria-label="Precio objetivo"
+                    onClick={() => setObjetivoDe({ id: w.id, nombre: w.nombre, valor: w.objetivo?.toString() ?? "" })}
+                  />
                   <Boton tamano="icono" variante="fantasma" icono={RefreshCw} aria-label="Revisar ahora" cargando={revisar.isPending && revisar.variables === w.id} onClick={() => revisar.mutate(w.id)} />
                   <Boton
                     tamano="icono"
@@ -301,7 +482,15 @@ function Precios() {
               ) : null
             }
           >
-            <p className={cx("text-2xl font-bold", w.precio === null && "text-tenue")}>{w.precio === null ? "—" : w.precio.toLocaleString("es-MX")}</p>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <p className={cx("text-2xl font-bold", w.precio === null && "text-tenue")}>{w.precio === null ? "—" : w.precio.toLocaleString("es-MX")}</p>
+              {w.objetivo !== null ? (
+                <Insignia tono={w.precio !== null && w.precio <= w.objetivo ? "ok" : "aviso"}>
+                  Objetivo: {w.objetivo.toLocaleString("es-MX")}
+                  {w.precio !== null && w.precio <= w.objetivo ? " ✓" : ""}
+                </Insignia>
+              ) : null}
+            </div>
             <p className="truncate text-xs text-tenue">
               {w.texto ? `"${w.texto}" · ` : ""}revisado {haceCuanto(w.revisado)}
             </p>
@@ -309,10 +498,28 @@ function Precios() {
             <button type="button" className="mt-1 block max-w-full truncate text-xs text-tenue underline" onClick={() => abrirExterno(w.url)}>
               {w.url}
             </button>
-            <Historial id={w.id} />
+            <Historial id={w.id} objetivo={w.objetivo} />
           </Tarjeta>
         ))}
       </div>
+      <Modal abierto={objetivoDe !== null} titulo={`Precio objetivo · ${objetivoDe?.nombre ?? ""}`} alCerrar={() => setObjetivoDe(null)}>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!objetivoDe) return;
+            const valor = objetivoDe.valor.trim() ? Number(objetivoDe.valor.replace(",", ".")) : null;
+            if (valor !== null && !(valor > 0)) return avisar("Escribe un número mayor que 0", "error");
+            objetivo.mutate({ id: objetivoDe.id, valor });
+            setObjetivoDe(null);
+          }}
+        >
+          <Entrada type="number" min={0} step="0.01" value={objetivoDe?.valor ?? ""} onChange={(e) => objetivoDe && setObjetivoDe({ ...objetivoDe, valor: e.target.value })} placeholder="Vacío = sin objetivo" autoFocus />
+          <Boton type="submit" variante="primario">
+            Guardar
+          </Boton>
+        </form>
+      </Modal>
       <Modal abierto={nuevo} titulo="Vigilar precio" alCerrar={() => setNuevo(false)}>
         <form
           className="space-y-3"
@@ -327,8 +534,11 @@ function Precios() {
           <Campo etiqueta="URL de la tienda">
             <Entrada type="url" value={d.url} onChange={(e) => setD({ ...d, url: e.target.value })} placeholder="https://…" required />
           </Campo>
-          <Campo etiqueta="Selector CSS del precio" ayuda='En la página, clic derecho en el precio → Inspeccionar → copia su clase, p. ej. ".price" o meta[itemprop="price"].'>
+          <Campo etiqueta="Selector CSS del precio que pagas" ayuda='Si hay descuento, usa el del precio NUEVO (no el tachado). Ej.: ".precio-final", "#price" o meta[itemprop="price"].'>
             <Entrada value={d.selector} onChange={(e) => setD({ ...d, selector: e.target.value })} placeholder=".product-price" required />
+          </Campo>
+          <Campo etiqueta="Precio objetivo (opcional)" ayuda="Te avisa cuando baje a este precio o menos.">
+            <Entrada type="number" min={0} step="0.01" value={d.objetivo} onChange={(e) => setD({ ...d, objetivo: e.target.value })} placeholder="Ej. 1500" />
           </Campo>
           <ErrorCaja error={crear.error} />
           <Boton type="submit" variante="primario" cargando={crear.isPending}>
@@ -341,20 +551,21 @@ function Precios() {
 }
 
 export default function Novedades() {
-  const [pestana, setPestana] = useState<"clima" | "ofertas" | "precios">("clima");
+  const [pestana, setPestana] = useState<"clima" | "ofertas" | "gratis" | "precios">("clima");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Novedades" descripcion="Clima, ofertas de videojuegos y vigilante de precios." />
+      <Encabezado titulo="Novedades" descripcion="Clima, ofertas y juegos gratis, y vigilante de precios." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
         opciones={[
           { id: "clima", texto: "Clima" },
           { id: "ofertas", texto: "Ofertas de juegos" },
+          { id: "gratis", texto: "Juegos gratis" },
           { id: "precios", texto: "Precios (RAM)" },
         ]}
       />
-      {pestana === "clima" ? <Clima /> : pestana === "ofertas" ? <Ofertas /> : <Precios />}
+      {pestana === "clima" ? <Clima /> : pestana === "ofertas" ? <Ofertas /> : pestana === "gratis" ? <JuegosGratis /> : <Precios />}
     </div>
   );
 }

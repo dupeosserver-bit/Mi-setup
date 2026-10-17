@@ -17,6 +17,7 @@
     "@capacitor-community/text-to-speech": "^4.1.1",
     "@capacitor/core": "^6.2.0",
     "@capacitor/device": "^6.0.2",
+    "@capacitor/geolocation": "^6.1.1",
     "@capacitor/local-notifications": "^6.1.1",
     "@capacitor/network": "^6.0.3",
     "@fontsource/fira-code": "^5.3.0",
