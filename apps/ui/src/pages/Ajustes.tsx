@@ -127,7 +127,7 @@ function Cuenta() {
             <p className="truncate text-sm text-tenue">{me?.usuario.email}</p>
             <div className="mt-1 flex gap-1">
               <Insignia tono={me?.usuario.role === "maestra" ? "ok" : "neutro"}>{me?.usuario.role === "maestra" ? "Cuenta maestra" : "Usuario"}</Insignia>
-              {me?.roles.map((r) => <InsigniaRol key={r.id} nombre={r.nombre} color={r.color} />)}
+              {me?.roles?.map((r) => <InsigniaRol key={r.id} nombre={r.nombre} color={r.color} />)}
             </div>
           </div>
         </div>

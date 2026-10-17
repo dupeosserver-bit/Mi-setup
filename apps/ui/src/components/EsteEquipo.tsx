@@ -12,10 +12,10 @@ import { cx } from "./ui";
 
 function Dato({ icono: Icono, etiqueta, valor }: { icono: LucideIcon; etiqueta: string; valor: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-borde bg-superficie px-4 py-3">
+    <div className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-borde bg-superficie px-4 py-3">
       <Icono className="h-4 w-4 shrink-0 text-tenue" />
       <span className="shrink-0 text-sm">{etiqueta}</span>
-      <span className="ml-auto truncate text-right text-sm text-tenue" title={valor}>
+      <span className="ml-auto min-w-0 truncate text-right text-sm text-tenue" title={valor}>
         {valor}
       </span>
     </div>
@@ -24,14 +24,14 @@ function Dato({ icono: Icono, etiqueta, valor }: { icono: LucideIcon; etiqueta: 
 
 function Uso({ icono: Icono, etiqueta, valor, extra }: { icono: LucideIcon; etiqueta: string; valor: string; extra?: string }) {
   return (
-    <div className="flex min-h-28 flex-col justify-between rounded-xl border border-borde bg-superficie p-4">
+    <div className="flex min-h-28 min-w-0 flex-col justify-between overflow-hidden rounded-xl border border-borde bg-superficie p-4">
       <div className="flex items-start justify-between gap-2">
         <Icono className="h-5 w-5 text-tenue" />
         {extra ? <span className="text-xs text-tenue">{extra}</span> : null}
       </div>
       <div className="flex items-end justify-between gap-2">
         <span className="text-sm">{etiqueta}</span>
-        <span className="text-2xl font-semibold">{valor}</span>
+        <span className="min-w-0 truncate text-2xl font-semibold">{valor}</span>
       </div>
     </div>
   );

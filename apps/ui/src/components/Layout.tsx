@@ -23,6 +23,7 @@ import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
 import { CATEGORIAS, MODULOS_UI, moduloPorRuta } from "../modulos";
 import { AsistenteFlotante } from "./Asistente";
 import { Buscador } from "./Buscador";
+import { ErrorPantalla } from "./ErrorPantalla";
 import { Logo } from "./Logo";
 import { Cargando, Modal, Punto, cx } from "./ui";
 
@@ -376,12 +377,14 @@ export function Layout() {
 
       <div className="flex min-h-0 flex-1">
         <BarraLateral grupos={grupos} compacta={compacta} alternar={alternarLateral} />
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto max-w-7xl p-4 pb-28 md:p-6">
             {actual ? <BotonAyuda modulo={actual.id} /> : null}
-            <Suspense fallback={<Cargando />}>
-              <Outlet />
-            </Suspense>
+            <ErrorPantalla key={ubicacion.pathname}>
+              <Suspense fallback={<Cargando />}>
+                <Outlet />
+              </Suspense>
+            </ErrorPantalla>
           </div>
         </main>
       </div>
