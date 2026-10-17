@@ -31,7 +31,7 @@ export const MODULES = {
   recordatorios: { label: "Recordatorios", category: "principal", masterOnly: false },
   notas: { label: "Bloc de notas", category: "principal", masterOnly: false },
   equipos: { label: "Equipos", category: "principal", masterOnly: false },
-  chat: { label: "Chat privado", category: "principal", masterOnly: false },
+  chat: { label: "Chat", category: "principal", masterOnly: false },
 
   // VPS (los accesos a VPS son solo de la cuenta maestra)
   vps_terminal: { label: "Terminal", category: "vps", masterOnly: true },

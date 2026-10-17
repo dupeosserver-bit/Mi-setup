@@ -24,6 +24,7 @@ import { CATEGORIAS, MODULOS_UI, moduloPorRuta } from "../modulos";
 import { AsistenteFlotante } from "./Asistente";
 import { Buscador } from "./Buscador";
 import { ErrorPantalla } from "./ErrorPantalla";
+import { Tutorial } from "./Tutorial";
 import { Logo } from "./Logo";
 import { Cargando, Modal, Punto, cx } from "./ui";
 
@@ -393,6 +394,7 @@ export function Layout() {
       <BotonMas visibles={visibles} />
       <Buscador abierto={buscar} alCerrar={() => setBuscar(false)} visibles={visibles} />
       {visibles.has("ia") ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
+      <Tutorial grupos={grupos} />
     </div>
   );
 }

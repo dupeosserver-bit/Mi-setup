@@ -67,6 +67,8 @@ export const preferenciasSchema = z.object({
   fuente: z.enum(claves(FUENTES_APP)).default("inter"),
   /** Porcentaje de zoom de la interfaz. */
   zoom: z.number().int().min(70).max(150).default(100),
+  /** Ya vio el tutorial de bienvenida (se muestra una vez por cuenta). */
+  tutorialVisto: z.boolean().default(false),
   terminal: z
     .object({
       tema: z.enum(claves(TEMAS_TERMINAL)).default("mi-setup"),

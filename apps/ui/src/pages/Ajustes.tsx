@@ -16,11 +16,12 @@ import {
   type TemaTerminal,
 } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Volume2 } from "lucide-react";
+import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
 import { Logo } from "../components/Logo";
+import { abrirTutorial } from "../components/Tutorial";
 import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -148,6 +149,9 @@ function Cuenta() {
         <div className="mt-4">
           <SubirImagen ruta="/api/apariencia/avatar" etiqueta="Tu foto de perfil" actual={apariencia?.avatar ?? null} />
         </div>
+        <Boton className="mt-4" variante="secundario" icono={GraduationCap} onClick={abrirTutorial}>
+          Ver tutorial otra vez
+        </Boton>
       </Tarjeta>
       <Tarjeta titulo="Cambiar contraseña" icono={KeyRound}>
         <form

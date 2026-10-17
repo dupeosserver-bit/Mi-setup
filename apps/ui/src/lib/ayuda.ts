@@ -28,7 +28,8 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   chat: {
     pasos: [
       "'Mis dispositivos' es un chat contigo mismo para pasar textos y enlaces entre PC y celular.",
-      "Puedes crear canales con otras cuentas de la app.",
+      "Privado: toca 'Privado' y elige otra cuenta para hablar solo con ella.",
+      "Grupo: toca 'Grupo', ponle nombre y elige quién entra. En 'Opciones del grupo' puedes renombrarlo, agregar personas o salirte.",
       "Escribe y presiona Enter; también puedes convertir un mensaje en recordatorio.",
     ],
   },
