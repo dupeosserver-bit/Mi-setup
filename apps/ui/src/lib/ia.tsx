@@ -1,6 +1,6 @@
 /** Piezas compartidas de la IA: tipos, consultas y la tarjeta de propuesta con Aprobar / Rechazar. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, Check, Sparkles, X } from "lucide-react";
 import { Boton, Insignia, avisar, avisarError } from "../components/ui";
 import { api } from "./api";
 import { confirmar } from "./confirmar";
@@ -56,7 +56,19 @@ export function usePropuestas() {
 
 const TONO = { pendiente: "aviso", aprobada: "neutro", rechazada: "neutro", ejecutada: "ok", fallida: "peligro" } as const;
 
-export function TarjetaPropuesta({ p }: { p: Propuesta }) {
+/** Herramientas de diagnóstico: su salida vuelve a la IA para que la analice. */
+export const HERRAMIENTAS_DIAGNOSTICO = new Set(["diagnosticar_vps", "leer_archivo_vps", "estado_servidor_juego"]);
+export const MENSAJE_ANALIZAR = "Analiza el resultado de la revisión: dime en palabras simples qué está mal, por qué y cómo arreglarlo.";
+
+function textoSalida(r: unknown): string | null {
+  if (r == null) return null;
+  const c = r as { salida?: string; error?: string; codigo?: number | null };
+  if (typeof c === "object" && "salida" in c) return `${c.salida ?? ""}${c.error ? `\n${c.error}` : ""}`.trim() || `(sin salida, código ${c.codigo ?? "?"})`;
+  return JSON.stringify(r, null, 2);
+}
+
+export function TarjetaPropuesta({ p, alAnalizar }: { p: Propuesta; alAnalizar?: (() => void) | undefined }) {
+  const salida = textoSalida(p.resultado);
   const decidir = useMutation({
     mutationFn: async (accion: "aprobar" | "rechazar") => {
       if (accion === "rechazar") return api<Propuesta>(`/api/ia/propuestas/${p.id}/rechazar`, { metodo: "POST" });
@@ -96,6 +108,17 @@ export function TarjetaPropuesta({ p }: { p: Propuesta }) {
         <Insignia tono={TONO[p.estado]}>{p.estado}</Insignia>
       </div>
       {p.error ? <p className="mt-1 text-xs text-peligro">{p.error}</p> : null}
+      {p.estado === "ejecutada" && salida ? (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-tenue">Ver salida</summary>
+          <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-fondo p-2 font-mono text-[11px]">{salida}</pre>
+        </details>
+      ) : null}
+      {p.estado === "ejecutada" && alAnalizar ? (
+        <Boton tamano="sm" variante="secundario" icono={Sparkles} className="mt-2" onClick={alAnalizar}>
+          Analizar con la IA
+        </Boton>
+      ) : null}
       {p.estado === "pendiente" ? (
         <div className="mt-3 flex gap-2">
           <Boton

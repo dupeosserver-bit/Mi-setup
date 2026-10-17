@@ -7,7 +7,7 @@ import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarj
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
-import { TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
+import { HERRAMIENTAS_DIAGNOSTICO, MENSAJE_ANALIZAR, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
 import { usePreferencias } from "../lib/preferencias";
 import { hablar } from "../lib/voz";
 
@@ -140,7 +140,13 @@ function Chat() {
               </p>
             </div>
           ))}
-          {detalle.data?.propuestas.map((p) => <TarjetaPropuesta key={p.id} p={estado.get(p.id) ?? p} />)}
+          {detalle.data?.propuestas.map((p) => (
+            <TarjetaPropuesta
+              key={p.id}
+              p={estado.get(p.id) ?? p}
+              alAnalizar={HERRAMIENTAS_DIAGNOSTICO.has(p.herramienta) && !enviar.isPending ? () => enviar.mutate({ mensaje: MENSAJE_ANALIZAR, adjuntos: [] }) : undefined}
+            />
+          ))}
           {enviar.isPending ? <p className="text-sm text-tenue">Pensando…</p> : null}
           <ErrorCaja error={enviar.error} />
         </div>

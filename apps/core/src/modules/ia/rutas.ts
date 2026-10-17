@@ -7,7 +7,7 @@ import { HttpError } from "../../http-error.js";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
-import { clienteAnthropic, clienteOllama, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
+import { clienteAnthropic, clienteOllama, MARCA_RESULTADO, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
 
 /** Tipos de archivo que se pueden adjuntar: imágenes, PDF y texto. */
 const TIPO_ADJUNTO = /^(image\/(png|jpeg|webp|gif)|application\/(pdf|json|xml|x-yaml|yaml|javascript|typescript|x-sh)|text\/[a-z0-9.+-]+)$/;
@@ -102,7 +102,8 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
       // Para mostrar: solo texto visible (sin el bloque de contexto ni resultados internos).
       const visibles = mensajes.flatMap((m) => {
         const texto = (m.content as BloqueIa[])
-          .filter((b) => b.type === "text" && typeof b.text === "string")
+          // La salida de los diagnósticos se ve en la tarjeta de la propuesta, no como mensaje.
+          .filter((b) => b.type === "text" && typeof b.text === "string" && !b.text.startsWith(MARCA_RESULTADO))
           .map((b) => (b.text as string).replace(/^<contexto>[\s\S]*?<\/contexto>\s*/, ""))
           .join("\n")
           .trim();

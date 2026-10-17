@@ -147,6 +147,26 @@ describe("IA: solo propone, el usuario aprueba", () => {
     expect((await ctx.app.inject({ method: "GET", url: "/api/ia/uso", headers: h })).json()).toMatchObject({ bloqueada: false, topeAlcanzado: true, local: true });
   });
 
+  it("diagnóstico: solo se propone (solo lectura) y nunca lee archivos de secretos", async () => {
+    const servidorId = "00000000-0000-4000-8000-000000000000";
+    const diag = iaFalsa("diagnosticar_vps", { servidorId, revision: "logs_contenedor", contenedor: "misetup-core" });
+    ctx = await createTestContext({ clienteIa: diag });
+    const h = await maestra(ctx);
+    const r = (await ctx.app.inject({ method: "POST", url: "/api/ia/chat", headers: h, payload: { mensaje: "el core no arranca" } })).json<{ propuestas: (Propuesta & { descripcion: string })[] }>();
+    expect(r.propuestas).toHaveLength(1);
+    expect(r.propuestas[0]).toMatchObject({ estado: "pendiente", peligrosa: false });
+    expect(r.propuestas[0]!.descripcion).toContain("docker logs --tail 150 misetup-core");
+    await ctx.close();
+
+    const secreto = iaFalsa("leer_archivo_vps", { servidorId, ruta: "/opt/mi-setup/.env" });
+    ctx = await createTestContext({ clienteIa: secreto });
+    const h2 = await maestra(ctx);
+    const r2 = (await ctx.app.inject({ method: "POST", url: "/api/ia/chat", headers: h2, payload: { mensaje: "lee el env" } })).json<{ propuestas: unknown[] }>();
+    expect(r2.propuestas).toHaveLength(0);
+    const resultado = secreto.peticiones[1]?.mensajes.at(-1)?.content.find((b) => b.type === "tool_result");
+    expect(String(resultado?.["content"])).toContain("secretos");
+  });
+
   it("no ofrece herramientas de módulos sin permiso de escritura", async () => {
     const ia = iaFalsa("ejecutar_comando_vps", { servidorId: "00000000-0000-4000-8000-000000000000", comando: "ls" });
     ctx = await createTestContext({ clienteIa: ia });

@@ -5,7 +5,7 @@ import { Paperclip, Sparkles, Volume2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
-import { TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
+import { HERRAMIENTAS_DIAGNOSTICO, MENSAJE_ANALIZAR, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
 import { usePreferencias } from "../lib/preferencias";
 import { hablar } from "../lib/voz";
 import { EntradaIa, type AdjuntoIa } from "./EntradaIa";
@@ -109,7 +109,13 @@ export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
                     <Volume2 className="inline h-3.5 w-3.5" />
                   </button>
                 ) : null}
-                {l.propuestas?.map((p) => <TarjetaPropuesta key={p.id} p={estado.get(p.id) ?? p} />)}
+                {l.propuestas?.map((p) => (
+                  <TarjetaPropuesta
+                    key={p.id}
+                    p={estado.get(p.id) ?? p}
+                    alAnalizar={HERRAMIENTAS_DIAGNOSTICO.has(p.herramienta) && !enviar.isPending ? () => enviar.mutate({ mensaje: MENSAJE_ANALIZAR, adjuntos: [] }) : undefined}
+                  />
+                ))}
               </div>
             ))}
             {enviar.isPending ? <p className="text-sm text-tenue">Pensando…</p> : null}
