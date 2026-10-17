@@ -77,3 +77,17 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 54 | Los recordatorios se revisan cada 30 s; al vencer se envían por ntfy y por WebSocket (notificación local en PC/Android). Los repetidos pasan a la siguiente fecha; uno mensual del día 31 cae en el último día del mes. | Lo pide el prompt. | `modules/recordatorios.ts`. |
 | 55 | Cada cuenta tiene un canal de chat personal "Mis dispositivos"; los mensajes que son solo una URL se marcan como enlace, y un mensaje puede crear un recordatorio. | Chat entre celular y PC; el modelo ya admite grupos. | `modules/chat.ts`. |
 | 56 | El APK de depuración se firma con la llave de depuración de Android; el de release se firma si existe `android/keystore.properties` (no se sube al repo). | APK "firmable" sin guardar secretos en el repo. | `apps/mobile/android/app/build.gradle`. |
+
+## Plan 5 — VPS
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 57 | Las credenciales SSH (llave o contraseña, y la frase de la llave) se cifran con AES-256-GCM (`SERVER_ENC_KEY`); la API nunca las devuelve, ni siquiera al editar (campo vacío = conservar). | Nivel B de seguridad. | `modules/vps/servidores.ts`. |
+| 58 | Huella del host: se acepta y guarda en la primera conexión (TOFU); si cambia, se rechaza la conexión, se avisa por push y la UI permite aceptar la nueva **solo** escribiendo el nombre del servidor y con reautenticación fuerte. Cambiar host o puerto borra la huella guardada. | Equivalente a `StrictHostKeyChecking`. | `ssh.ts`, `servidores.ts`. |
+| 59 | Alta, edición y borrado de servidores: solo la cuenta maestra (módulo Terminal, nivel administrar) y con reautenticación fuerte. | Son las llaves del VPS. | `servidoresRoutes`. |
+| 60 | En servidores con usuario `root`, la terminal y el explorador de archivos piden reautenticación fuerte (5 min). | Lo pide el prompt para root; los archivos dan el mismo poder. | `terminal.ts`, `archivos.ts`. |
+| 61 | Métricas del VPS: un solo comando por SSH cada 3 s (`/proc/stat`, `meminfo`, `df`, `net/dev`, `loadavg`, `uptime`), solo mientras alguien está suscrito; la conexión se cierra al irse el último. | Sin agentes en el VPS ni historial. | `metricas.ts`, `parse.ts`. |
+| 62 | Alertas: cada 60 s se prueba el puerto SSH de cada VPS (TCP) y cada monitor (TCP o HTTP; HTTP "arriba" = respuesta < 500). Solo se avisa en los cambios; el primer resultado no avisa. Umbrales de RAM/disco opcionales, con aviso como máximo cada 30 min. | Evita avisos repetidos. | `alertas.ts`. |
+| 63 | Comandos peligrosos (lista en `packages/shared/src/danger.ts`): doble confirmación (escribir el nombre exacto del botón) + reautenticación fuerte; el servidor lo vuelve a comprobar aunque la UI ya lo pida. | No basta con la UI. | `comandos.ts` (`ejecutarSeguro`). |
+| 64 | Salida de comandos limitada a 512 KB y 2 min. Subidas por SFTP de hasta 100 MB. | Proteger memoria y tiempo del servidor. | `ssh.ts`, `archivos.ts`. |
+| 65 | Bots: el nombre del servicio, proceso o contenedor se valida (`[A-Za-z0-9_.@:-]`) y se pasa entre comillas; si el usuario SSH no es root se usa `sudo -n` para systemd y Docker (debe estar permitido sin contraseña). pm2 se ejecuta como el propio usuario. | Nunca se concatena texto libre en un comando. | `bots.ts`. |

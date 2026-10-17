@@ -93,6 +93,15 @@ Ver `README.md`. Sin Docker: pon `DB_EMBEBIDA=1` en tu `.env` y crea la cuenta c
 - Avisos que llegan desde la fase 2: intento fallido de inicio de sesión, bloqueo temporal, posible robo de sesión y sesión cerrada por fallos de reautenticación.
 - Las notificaciones vía Capacitor se documentan en la fase 4.
 
+## VPS (terminal, rendimiento, alertas, comandos, archivos, bots)
+
+1. **VPS → Terminal → Servidor**: nombre, host, puerto, usuario y la **llave privada** (recomendado) o contraseña. Se guardan cifradas y no se vuelven a mostrar.
+2. La primera conexión acepta la huella del servidor. Si algún día cambia, la app no se conecta y te avisa; acepta la nueva solo si reinstalaste el VPS.
+3. **Rendimiento** muestra CPU, RAM, red, carga y discos en vivo mientras la pantalla está abierta.
+4. **Alertas de caída**: activa "Vigilar" y, si quieres, umbrales de RAM/disco. Agrega monitores TCP (servidores de juego) o HTTP (páginas).
+5. **Comandos guardados**: crea botones como `bash /root/vps-manager.sh backup`. Los peligrosos piden escribir el nombre del botón y tu contraseña o huella.
+6. **Bots de Discord**: indica si corre como servicio systemd, proceso pm2 o contenedor Docker. Si el usuario SSH no es root, permite `sudo -n systemctl restart <bot>` y `sudo -n docker …` en sudoers.
+
 ## App de Windows (Electron)
 
 Requisitos: haber ejecutado `pnpm branding` (ícono de MexicanLand).

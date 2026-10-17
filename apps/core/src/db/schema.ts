@@ -266,6 +266,68 @@ export const chatMessages = pgTable(
   (t) => [index("chat_messages_canal").on(t.channelId, t.createdAt)],
 );
 
+// ---------------------------------------------------------------- Plan 5: VPS
+
+export const vpsServers = pgTable("vps_servers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  host: text("host").notNull(),
+  port: integer("port").notNull().default(22),
+  username: text("username").notNull(),
+  /** "llave" (preferida) o "password". */
+  authType: text("auth_type").notNull(),
+  /** Llave privada o contraseña cifrada con SERVER_ENC_KEY. Nunca sale del servidor. */
+  secretEnc: text("secret_enc").notNull(),
+  passphraseEnc: text("passphrase_enc"),
+  /** Huella SHA256 de la llave del host, aceptada la primera vez (TOFU). */
+  hostKeyFingerprint: text("host_key_fingerprint"),
+  alerts: boolean("alerts").notNull().default(true),
+  ramThreshold: integer("ram_threshold"),
+  diskThreshold: integer("disk_threshold"),
+  status: text("status").notNull().default("desconocido"),
+  lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
+  lastResourceAlertAt: timestamp("last_resource_alert_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const savedCommands = pgTable("saved_commands", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  command: text("command").notNull(),
+  description: text("description").notNull().default(""),
+  /** Servidor por defecto (opcional; se puede elegir otro al ejecutar). */
+  serverId: uuid("server_id").references(() => vpsServers.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const monitors = pgTable("monitors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  /** "tcp" (host + puerto) o "http" (URL). */
+  kind: text("kind").notNull(),
+  target: text("target").notNull(),
+  port: integer("port"),
+  status: text("status").notNull().default("desconocido"),
+  latencyMs: integer("latency_ms"),
+  lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
+  lastChangeAt: timestamp("last_change_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const discordBots = pgTable("discord_bots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  serverId: uuid("server_id")
+    .notNull()
+    .references(() => vpsServers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** "systemd", "pm2" o "docker". */
+  kind: text("kind").notNull(),
+  target: text("target").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type VpsServerRow = typeof vpsServers.$inferSelect;
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type AuditRow = typeof auditLog.$inferSelect;

@@ -4,7 +4,10 @@ import { bearer, createTestContext, seedUser } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
 let ctx: Ctx | undefined;
-afterEach(async () => ctx?.close());
+afterEach(async () => {
+  await ctx?.close();
+  ctx = undefined;
+});
 
 async function sesion(c: Ctx, email: string, permisos: Record<string, string>) {
   await seedUser(c.db, { email, password: "clave-de-prueba-123", permissions: permisos as never });

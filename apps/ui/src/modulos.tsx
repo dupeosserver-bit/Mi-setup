@@ -56,12 +56,12 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   equipos: m("equipos", "/equipos", MonitorSmartphone, lazy(() => import("./pages/Equipos"))),
   chat: m("chat", "/chat", MessagesSquare, lazy(() => import("./pages/Chat"))),
 
-  vps_terminal: m("vps_terminal", "/vps/terminal", TerminalSquare),
-  vps_rendimiento: m("vps_rendimiento", "/vps/rendimiento", Activity),
-  vps_alertas: m("vps_alertas", "/vps/alertas", Siren),
-  vps_comandos: m("vps_comandos", "/vps/comandos", ListChecks),
-  vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree),
-  vps_bots: m("vps_bots", "/vps/bots", Bot),
+  vps_terminal: m("vps_terminal", "/vps/terminal", TerminalSquare, lazy(() => import("./pages/VpsTerminal"))),
+  vps_rendimiento: m("vps_rendimiento", "/vps/rendimiento", Activity, lazy(() => import("./pages/VpsRendimiento"))),
+  vps_alertas: m("vps_alertas", "/vps/alertas", Siren, lazy(() => import("./pages/VpsAlertas"))),
+  vps_comandos: m("vps_comandos", "/vps/comandos", ListChecks, lazy(() => import("./pages/VpsComandos"))),
+  vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree, lazy(() => import("./pages/VpsArchivos"))),
+  vps_bots: m("vps_bots", "/vps/bots", Bot, lazy(() => import("./pages/VpsBots"))),
 
   pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server),
   vencimientos: m("vencimientos", "/panel/vencimientos", CalendarClock),

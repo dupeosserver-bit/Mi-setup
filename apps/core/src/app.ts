@@ -17,6 +17,7 @@ import { chatRoutes } from "./modules/chat.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
+import { vpsModule } from "./modules/vps/index.js";
 import { createNtfyNotifier, type Notifier } from "./notify/notifier.js";
 import { Hub } from "./realtime/hub.js";
 import { realtimeRoutes } from "./realtime/routes.js";
@@ -141,6 +142,10 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(notasRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
+
+  const vps = vpsModule(deps);
+  jobs.push(...vps.jobs);
+  await app.register(vps.routes);
 
   return { app, auth, hub, deps, jobs };
 }

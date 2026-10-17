@@ -36,6 +36,13 @@
       "when": 1792205889025,
       "tag": "0004_notas_recordatorios_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792207028777,
+      "tag": "0005_vps",
+      "breakpoints": true
     }
   ]
 }
