@@ -78,6 +78,7 @@ function crearVentana(): void {
     },
   });
   ventana.once("ready-to-show", () => ventana?.show());
+  vigilarCarga(ventana.webContents);
   ventana.webContents.setWindowOpenHandler(({ url }) => {
     if (externoPermitido(url)) void shell.openExternal(url);
     return { action: "deny" };
@@ -98,7 +99,59 @@ function crearVentana(): void {
   ventana.on("closed", () => {
     ventana = null;
   });
-  void ventana.loadURL(URL_APP);
+  cargarApp();
+}
+
+// ---------------------------------------------------------------- sin conexión con el servidor
+
+let reintento: NodeJS.Timeout | null = null;
+let limite: NodeJS.Timeout | null = null;
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function paginaSinConexion(detalle: string): string {
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Mi Setup</title>
+<style>body{margin:0;background:#121212;color:#f2f2f7;font-family:system-ui,Segoe UI,sans-serif;display:grid;place-items:center;min-height:100vh}
+main{max-width:460px;padding:32px;text-align:center}h1{font-size:20px;margin:0 0 8px}p{color:#a1a1aa;font-size:14px;line-height:1.5}
+code{background:#2c2c2e;padding:2px 6px;border-radius:6px;color:#f2f2f7}a{display:inline-block;margin-top:16px;background:#f2f2f7;color:#000;padding:10px 18px;border-radius:12px;text-decoration:none;font-weight:600}</style></head>
+<body><main><h1>No se pudo conectar con el servidor</h1>
+<p>La app abre <code>${esc(URL_APP)}</code> y no respondió (${esc(detalle)}).</p>
+<p>Si todavía no despliegas Mi Setup en tu VPS, hazlo primero (ver <code>docs/USO.md</code>). Se reintenta solo cada 15 segundos.</p>
+<a href="${esc(URL_APP)}">Reintentar ahora</a></main></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function limpiarTemporizadores(): void {
+  if (reintento) clearTimeout(reintento);
+  if (limite) clearTimeout(limite);
+  reintento = limite = null;
+}
+
+function sinConexion(detalle: string): void {
+  if (!ventana) return;
+  limpiarTemporizadores();
+  void ventana.loadURL(paginaSinConexion(detalle));
+  ventana.show();
+  reintento = setTimeout(cargarApp, 15_000);
+}
+
+function cargarApp(): void {
+  if (!ventana) return;
+  limpiarTemporizadores();
+  // Si el servidor no contesta en 20 s se muestra la pantalla de error en vez de una ventana vacía.
+  limite = setTimeout(() => sinConexion("tiempo de espera agotado"), 20_000);
+  void ventana.loadURL(URL_APP).catch(() => undefined);
+}
+
+function vigilarCarga(wc: Electron.WebContents): void {
+  wc.on("did-fail-load", (_e, codigo, descripcion, url, principal) => {
+    // -3 = navegación cancelada (p. ej. al reintentar); se ignora.
+    if (!principal || codigo === -3 || !url.startsWith(ORIGEN)) return;
+    sinConexion(descripcion || `error ${codigo}`);
+  });
+  wc.on("did-finish-load", () => {
+    if (wc.getURL().startsWith(ORIGEN)) limpiarTemporizadores();
+  });
 }
 
 function mostrar(): void {
