@@ -77,6 +77,23 @@ refresh {token} → rota el secreto; token viejo reutilizado → revoca sesión 
 - `sessions`: una por dispositivo; hash del refresh actual y del anterior, reautenticación y fallos.
 - `login_attempts`: intentos de login para el bloqueo temporal (se purgan a los 30 días).
 
+## Tiempo real (WebSocket único `/api/ws`)
+
+```
+cliente ──{tipo:"auth", token, dispositivoId}──▶ core   (≤10 s, si no se cierra)
+        ◀─{tipo:"auth.ok", dispositivo:true|false}─
+cliente ──{tipo:"sub", tema}──▶ autorización por tema (permisos del módulo)
+core    ──{tipo:"evento", tema, datos}──▶ suscriptores
+dispositivo ──{tipo:"latido"} cada 15 s──▶ presencia (desconectado a los 45 s)
+core ──{tipo:"interes", activo}──▶ dispositivo (alguien mira sus gráficas → métricas cada 2 s)
+```
+
+Temas: `dispositivos`, `equipo:<id>:metricas`, `usuario:<id>` (sincronización), `chat:<canal>`, `vps:<id>:metricas`, `ptero:<id>:consola`, `apariencia`. La sesión del socket se revalida cada minuto; el cliente reenvía `auth` cuando renueva su token.
+
+## UI (`apps/ui`)
+
+React + Vite + Tailwind. Una sola UI para web, Electron y Capacitor. `src/modulos.tsx` registra cada apartado (ruta, ícono, página); el menú se construye con los permisos de `/api/auth/me`. Las peticiones pasan por `lib/api.ts`, que renueva el token y abre el diálogo de reautenticación cuando el servidor responde `reauth_requerida`.
+
 ## Flujos pendientes (se documentan en su fase)
 
 - WebSocket multiplexado (fases 3–4), SSH/terminal (fase 5), correo entrante con HMAC y VPN (fase 8), IA con cola de propuestas (fase 9).

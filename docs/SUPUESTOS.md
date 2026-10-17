@@ -47,3 +47,19 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 34 | Nueva variable `NTFY_URL` (por defecto `https://NTFY_HOST`; en Docker `http://ntfy` por la red interna). | Publicar sin salir a internet. | `.env.example`, `docker-compose.yml`. |
 | 35 | Las pruebas usan PGlite (Postgres 17 embebido) con las mismas migraciones. | Pruebas reales de SQL sin Docker. | `apps/core/test/helpers.ts`. |
 | 36 | Cada día se borran los intentos de login y las sesiones vencidas o revocadas con más de 30 días. La auditoría no se borra nunca. | Que esas tablas no crezcan sin límite. | `AuthService.purge`. |
+
+## Plan 3 — Interfaz base
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 37 | `core` sirve la UI compilada (en Docker, `/app/public`); cualquier GET fuera de `/api` devuelve `index.html`. | Un solo dominio, sin CORS ni otro servidor. | `static-ui.ts`, `UI_DIR`. |
+| 38 | Fuentes Inter y Montserrat empaquetadas (`@fontsource`), no desde Google Fonts. | Privacidad y CSP estricta. | `apps/ui/src/main.tsx`. |
+| 39 | CSP: solo recursos propios, `wasm-unsafe-eval` (cifrado de la bóveda) y `frame-src` del panel Pterodactyl. | Mínimo necesario. | `app.ts` (helmet). |
+| 40 | En PC, por debajo de 1280 px las categorías se agrupan en un menú "Apartados"; desde 1280 px cada categoría es su propio menú. | Que la barra superior no se parta en pantallas medianas. | `Layout.tsx`. |
+| 41 | La sincronización entre dispositivos usa el tema `usuario:<id>` del WebSocket: el servidor avisa qué recurso cambió y la UI lo vuelve a pedir. | Simple y sin duplicar datos. | `modules/common.ts` (`sync`). |
+| 42 | Las imágenes subidas se sirven en `/uploads/<tipo>-<uuid>.<ext>` sin sesión (nombre imposible de adivinar), con CSP `sandbox`. Logo y fondo también se exponen en `/api/apariencia/publica` para la pantalla de login. | Las etiquetas `<img>` no envían el token; el login necesita el logo. | `apariencia.ts`, `static-ui.ts`. |
+| 43 | SVG "saneado" = se rechaza cualquier SVG con scripts, eventos `on*`, `foreignObject`, enlaces externos o entidades. | Es más seguro rechazar que intentar limpiar. | `validarImagen` en `apariencia.ts`. |
+| 44 | El refresh token y el usuario se guardan en `localStorage`; el access token solo en memoria. | Funciona igual en web, Electron y Capacitor. | `apps/ui/src/lib/sesion.ts`. |
+| 45 | Modo de desarrollo `DB_EMBEBIDA=1`: Postgres embebido (PGlite) en `.data/pglite`, prohibido en producción. | Poder usar `pnpm dev` completo sin Docker. | `db/open.ts`, `config.ts`. |
+| 46 | El "+" flotante del celular ofrece crear nota, recordatorio o mensaje. | Acciones rápidas más comunes. | `BotonMas` en `Layout.tsx`. |
+| 47 | Los navegadores web también se registran como equipo (`web`), además de PC y celular. | Ver desde dónde hay sesiones abiertas. | `lib/dispositivo.ts`. |

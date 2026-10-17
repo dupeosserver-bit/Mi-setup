@@ -2,7 +2,7 @@
 
 App personal (no pública) para PC (Windows) y celular (Android), vinculadas y con todo en la nube (VPS propio), para operar el hosting **MexicanLand**: terminal SSH, métricas en vivo, panel Pterodactyl, bóveda de contraseñas, 2FA, correos temporales, VPN, IA asistente con aprobación obligatoria y más.
 
-> Estado: **Plan 2 — Autenticación y seguridad** (login con 2FA, sesiones, bloqueo, reautenticación, permisos en todas las rutas).
+> Estado: **Plan 3 — Interfaz base** (UI oscura, barra estilo LP, panel móvil, WebSocket, gráficas en vivo, apariencia).
 
 ## Estructura
 

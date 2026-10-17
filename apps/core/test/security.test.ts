@@ -41,7 +41,7 @@ describe("configuración", () => {
     expect(decodeURIComponent(url.password)).toBe("p@ss/word");
   });
 
-  it("CORS en producción solo permite el host de la app", () => {
+  it("CORS en producción solo permite el host de la app y la app de Android", () => {
     const config = loadConfig({
       NODE_ENV: "production",
       APP_HOST: "setup.mexicanland.net",
@@ -49,7 +49,7 @@ describe("configuración", () => {
       JWT_SECRET: "b".repeat(32),
       SERVER_ENC_KEY: "c".repeat(32),
     });
-    expect(config.corsOrigins).toEqual(["https://setup.mexicanland.net"]);
+    expect(config.corsOrigins).toEqual(["https://setup.mexicanland.net", "https://localhost", "capacitor://localhost"]);
   });
 
   it("rechaza secretos de menos de 32 caracteres", () => {

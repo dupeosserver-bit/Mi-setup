@@ -1,18 +1,19 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { createDb } from "./db/client.js";
-import { runMigrations } from "./db/migrate.js";
+import { abrirBase } from "./db/open.js";
 import { loadLocalEnv } from "./env-file.js";
+import { startJobs } from "./jobs.js";
 
 loadLocalEnv();
 
 const config = loadConfig();
-const { db, pool } = createDb(config.databaseUrl);
-const { app, auth } = await buildApp({ config, db });
+const base = await abrirBase(config);
+const { app, jobs } = await buildApp({ config, db: base.db });
+if (config.env.DB_EMBEBIDA) app.log.warn("Usando Postgres embebido (.data/pglite): solo para desarrollo");
 
 let dbLista = false;
 try {
-  await runMigrations(pool);
+  await base.migrar();
   dbLista = true;
   app.log.info("Migraciones aplicadas");
 } catch (err) {
@@ -24,21 +25,20 @@ try {
 }
 
 if (!config.env.JWT_SECRET) app.log.warn("Falta configurar: JWT_SECRET (el inicio de sesión no funcionará)");
-if (!config.env.SERVER_ENC_KEY) app.log.warn("Falta configurar: SERVER_ENC_KEY (2FA no funcionará)");
+if (!config.env.SERVER_ENC_KEY) app.log.warn("Falta configurar: SERVER_ENC_KEY (2FA y credenciales no funcionarán)");
 
 await app.listen({ host: config.env.HOST, port: config.env.PORT });
 
-// Limpieza diaria de intentos de login y sesiones viejas.
-const limpiar = () => auth.purge().catch((err: unknown) => app.log.warn({ err }, "Falló la limpieza de sesiones"));
-if (dbLista) void limpiar();
-setInterval(limpiar, 24 * 60 * 60 * 1000).unref();
+// Sin base de datos (solo desarrollo) las tareas periódicas no tienen sentido.
+const detenerJobs = dbLista ? startJobs(jobs, app.log) : () => undefined;
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, "Cerrando core");
+    detenerJobs();
     void app
       .close()
-      .then(() => pool.end())
+      .then(() => base.cerrar())
       .finally(() => process.exit(0));
   });
 }

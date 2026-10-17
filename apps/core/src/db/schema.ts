@@ -52,6 +52,8 @@ export const users = pgTable(
     totpLastStep: bigint("totp_last_step", { mode: "number" }),
     /** Hash Argon2id del PIN de reautenticación (6+ dígitos). */
     pinHash: text("pin_hash"),
+    /** Nombre del archivo de avatar en UPLOADS_DIR. */
+    avatarPath: text("avatar_path"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -146,6 +148,32 @@ export const loginAttempts = pgTable(
     index("login_attempts_ip").on(t.ip, t.createdAt),
   ],
 );
+
+// ---------------------------------------------------------------- Plan 3: equipos y ajustes
+
+export const deviceKind = pgEnum("tipo_dispositivo", ["pc", "celular", "web"]);
+
+export const devices = pgTable(
+  "devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: deviceKind("kind").notNull(),
+    platform: text("platform"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("devices_usuario").on(t.userId)],
+);
+
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

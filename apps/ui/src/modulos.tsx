@@ -1,0 +1,109 @@
+/** Registro de apartados de la UI: ruta, ícono y página de cada módulo. */
+import type { ModuleCategory, ModuleId } from "@mi-setup/shared";
+import {
+  Activity,
+  Archive,
+  AtSign,
+  Bell,
+  Bot,
+  CalendarClock,
+  FolderTree,
+  Gamepad2,
+  Globe,
+  Home,
+  KeyRound,
+  Lightbulb,
+  ListChecks,
+  Mail,
+  MessageCircle,
+  MessagesSquare,
+  MonitorSmartphone,
+  MonitorUp,
+  Newspaper,
+  NotebookPen,
+  Radio,
+  ScrollText,
+  Server,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Siren,
+  Sparkles,
+  TerminalSquare,
+  UserCog,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+
+export interface ModuloUi {
+  readonly id: ModuleId;
+  readonly ruta: string;
+  readonly icono: LucideIcon;
+  readonly Pagina: LazyExoticComponent<ComponentType>;
+}
+
+const Pendiente = lazy(() => import("./pages/Pendiente"));
+
+function m(id: ModuleId, ruta: string, icono: LucideIcon, Pagina: LazyExoticComponent<ComponentType> = Pendiente): ModuloUi {
+  return { id, ruta, icono, Pagina };
+}
+
+export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
+  recordatorios: m("recordatorios", "/recordatorios", Bell),
+  notas: m("notas", "/notas", NotebookPen),
+  equipos: m("equipos", "/equipos", MonitorSmartphone, lazy(() => import("./pages/Equipos"))),
+  chat: m("chat", "/chat", MessagesSquare),
+
+  vps_terminal: m("vps_terminal", "/vps/terminal", TerminalSquare),
+  vps_rendimiento: m("vps_rendimiento", "/vps/rendimiento", Activity),
+  vps_alertas: m("vps_alertas", "/vps/alertas", Siren),
+  vps_comandos: m("vps_comandos", "/vps/comandos", ListChecks),
+  vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree),
+  vps_bots: m("vps_bots", "/vps/bots", Bot),
+
+  pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server),
+  vencimientos: m("vencimientos", "/panel/vencimientos", CalendarClock),
+  clientes: m("clientes", "/panel/clientes", Users),
+  finanzas: m("finanzas", "/panel/finanzas", Wallet),
+  negocio: m("negocio", "/panel/negocio", Lightbulb),
+
+  respaldos: m("respaldos", "/respaldos", Archive),
+
+  boveda: m("boveda", "/seguridad/boveda", KeyRound),
+  autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck),
+  correos_temporales: m("correos_temporales", "/seguridad/correos", Mail),
+  vpn: m("vpn", "/seguridad/vpn", Shield),
+  navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe),
+  auditoria: m("auditoria", "/seguridad/actividad", ScrollText),
+  cuentas: m("cuentas", "/seguridad/cuentas", UserCog),
+
+  streams: m("streams", "/redes/streams", Radio),
+  x: m("x", "/redes/x", AtSign),
+  discord: m("discord", "/redes/discord", MessageCircle),
+
+  novedades: m("novedades", "/novedades", Newspaper),
+  control_remoto: m("control_remoto", "/control-remoto", MonitorUp),
+  ia: m("ia", "/ia", Sparkles),
+  ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
+};
+
+export const CATEGORIAS: readonly { id: ModuleCategory; titulo: string; icono: LucideIcon }[] = [
+  { id: "principal", titulo: "Menú principal", icono: Home },
+  { id: "vps", titulo: "VPS", icono: TerminalSquare },
+  { id: "panel", titulo: "Panel", icono: Gamepad2 },
+  { id: "respaldos", titulo: "Respaldos", icono: Archive },
+  { id: "seguridad", titulo: "Seguridad", icono: Shield },
+  { id: "redes", titulo: "Redes y streams", icono: Radio },
+  { id: "novedades", titulo: "Novedades", icono: Newspaper },
+  { id: "control_remoto", titulo: "Control remoto", icono: MonitorUp },
+  { id: "ia", titulo: "IA", icono: Sparkles },
+  { id: "ajustes", titulo: "Ajustes", icono: Settings },
+];
+
+export function moduloPorRuta(ruta: string): ModuloUi | undefined {
+  return Object.values(MODULOS_UI)
+    .filter((x) => ruta === x.ruta || ruta.startsWith(`${x.ruta}/`))
+    .sort((a, b) => b.ruta.length - a.ruta.length)[0];
+}

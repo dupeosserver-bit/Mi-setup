@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --fondo: #121212;
+  --superficie: #1c1c1e;
+  --tarjeta: #2c2c2e;
+  --borde: #3a3a3c;
+  --texto: #f2f2f7;
+  --texto-2: #8e8e93;
+  --acento: #e5e5ea;
+  --ok: #30d158;
+  --aviso: #ffd60a;
+  --error: #ff453a;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Montserrat, Inter, sans-serif;
+}
+
+::selection {
+  background: #48484a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #48484a transparent;
+}
+
+input,
+textarea,
+select {
+  color-scheme: dark;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* xterm ocupa todo su contenedor */
+.xterm {
+  height: 100%;
+  padding: 8px;
+}

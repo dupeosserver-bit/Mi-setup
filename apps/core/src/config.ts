@@ -3,6 +3,7 @@
  * Nunca se escriben secretos en el código: los valores por defecto son seguros
  * y vacíos para todo lo sensible.
  */
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const optionalString = z
@@ -34,6 +35,17 @@ const envSchema = z
     NTFY_TOPIC: optionalString,
     /** URL a la que core publica avisos. En Docker: http://ntfy (red interna). */
     NTFY_URL: optionalString,
+
+    PTERO_URL: z.string().url().default("https://panel.mexicanland.org"),
+    /** Carpeta de la UI compilada. En Docker: /app/public. */
+    UI_DIR: optionalString,
+    /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */
+    UPLOADS_DIR: optionalString,
+    /** Solo desarrollo: "1" usa Postgres embebido en .data/pglite (sin Docker). */
+    DB_EMBEBIDA: z
+      .string()
+      .optional()
+      .transform((v) => v === "1" || v === "true"),
   })
   .superRefine((env, ctx) => {
     for (const key of ["JWT_SECRET", "SERVER_ENC_KEY"] as const) {
@@ -43,6 +55,9 @@ const envSchema = z
       }
     }
     if (env.NODE_ENV !== "production") return;
+    if (env.DB_EMBEBIDA) {
+      ctx.addIssue({ code: "custom", path: ["DB_EMBEBIDA"], message: "DB_EMBEBIDA solo se permite en desarrollo" });
+    }
     for (const key of ["POSTGRES_PASSWORD", "JWT_SECRET", "SERVER_ENC_KEY"] as const) {
       if (!env[key]) {
         ctx.addIssue({ code: "custom", path: [key], message: `Falta configurar: ${key}` });
@@ -59,6 +74,9 @@ export interface Config {
   /** Orígenes permitidos por CORS (lista cerrada). */
   readonly corsOrigins: readonly string[];
   readonly ntfyUrl: string;
+  /** Carpeta de la UI compilada (null = no se sirve UI). */
+  readonly uiDir: string | null;
+  readonly uploadsDir: string;
 }
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
@@ -77,10 +95,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   url.password = env.POSTGRES_PASSWORD ?? "";
   url.pathname = `/${env.POSTGRES_DB}`;
 
-  const corsOrigins = [`https://${env.APP_HOST}`];
+  // La app de Android (Capacitor) carga la UI desde https://localhost.
+  const corsOrigins = [`https://${env.APP_HOST}`, "https://localhost", "capacitor://localhost"];
   if (!isProduction) corsOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
 
   const ntfyUrl = env.NTFY_URL ?? `https://${env.NTFY_HOST}`;
 
-  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl };
+  // src/ y dist/ están a la misma profundidad: ../../ui/dist es apps/ui/dist.
+  const uiDir = env.UI_DIR ?? (isProduction ? null : fileURLToPath(new URL("../../ui/dist", import.meta.url)));
+  const uploadsDir =
+    env.UPLOADS_DIR ??
+    (isProduction ? "/data/uploads" : fileURLToPath(new URL("../../../.data/uploads", import.meta.url)));
+
+  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl, uiDir, uploadsDir };
 }

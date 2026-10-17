@@ -11,8 +11,7 @@ import { createDbAuditWriter } from "../audit/audit.js";
 import { createMasterAccount, masterExists, masterInputSchema } from "../auth/master.js";
 import { generateTotpSecret, otpauthUri, verifyTotp } from "../auth/totp.js";
 import { loadConfig } from "../config.js";
-import { createDb } from "../db/client.js";
-import { runMigrations } from "../db/migrate.js";
+import { abrirBase } from "../db/open.js";
 import { loadLocalEnv } from "../env-file.js";
 import { createServerCipher } from "../security/crypto.js";
 
@@ -42,11 +41,12 @@ async function main(): Promise<number> {
     return 1;
   }
   const cipher = createServerCipher(config.env.SERVER_ENC_KEY);
-  const { db, pool } = createDb(config.databaseUrl);
+  const base = await abrirBase(config);
+  const { db } = base;
   const rl = createInterface({ input: stdin, output: stdout, terminal: true });
 
   try {
-    await runMigrations(pool);
+    await base.migrar();
     if (await masterExists(db)) {
       escribir("Ya existe una cuenta maestra. No se creó nada.");
       return 1;
@@ -86,7 +86,7 @@ async function main(): Promise<number> {
     return 1;
   } finally {
     rl.close();
-    await pool.end();
+    await base.cerrar();
   }
 }
 

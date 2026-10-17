@@ -31,6 +31,9 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | vacío | YouTube |
 | `KICK_CLIENT_ID` / `KICK_CLIENT_SECRET` | No | vacío | Kick |
 | `LOG_LEVEL` | No | `info` | Nivel de log de core |
+| `UI_DIR` | No | `apps/ui/dist` (Docker: `/app/public`) | Carpeta de la UI compilada que sirve core |
+| `UPLOADS_DIR` | No | `.data/uploads` (Docker: `/data/uploads`, volumen) | Imágenes subidas en Ajustes → Apariencia |
+| `DB_EMBEBIDA` | No | vacío | Solo desarrollo: `1` usa Postgres embebido en `.data/pglite` |
 
 Generar secretos: `openssl rand -base64 48`.
 
@@ -71,9 +74,17 @@ El comando pide correo, nombre y contraseña (mínimo 12 caracteres), y muestra 
 - Reutilizar un refresh token viejo cierra la sesión y avisa ("posible robo de sesión").
 - 5 fallos de PIN o contraseña al reautenticarse cierran la sesión.
 
+## Marca (logo de MexicanLand)
+
+1. Coloca el logo en `assets/branding/icon.png` (PNG 1024×1024).
+2. Ejecuta `pnpm branding`: genera favicon, apple-touch-icon y logo del encabezado (web), `icon.ico` (Windows) y los íconos de Android.
+3. Sin `icon.png` la app muestra "MexicanLand" en texto; no se usa ninguna imagen genérica.
+
+Desde la app, **Ajustes → Apariencia** permite subir otro logo, un fondo y tu avatar (PNG/JPG/WEBP/SVG, máx. 5 MB). "Restablecer" vuelve al logo de MexicanLand.
+
 ## Desarrollo local
 
-Ver `README.md`. Postgres local: `docker compose -f docker-compose.dev.yml up -d` (con `POSTGRES_PASSWORD=misetup-dev` en tu `.env`, o la que pongas en ambos).
+Ver `README.md`. Sin Docker: pon `DB_EMBEBIDA=1` en tu `.env` y crea la cuenta con `pnpm --filter @mi-setup/core crear-maestra`. Postgres local: `docker compose -f docker-compose.dev.yml up -d` (con `POSTGRES_PASSWORD=misetup-dev` en tu `.env`, o la que pongas en ambos).
 
 ## ntfy
 
