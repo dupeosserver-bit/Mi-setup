@@ -105,7 +105,78 @@ export function chatRoutes(deps: ModuleDeps) {
         .innerJoin(chatMembers, eq(chatMembers.channelId, chatChannels.id))
         .where(eq(chatMembers.userId, user.id))
         .orderBy(chatChannels.createdAt);
-      return canales;
+      // Miembros de cada canal: en los privados el nombre que ves es el de la otra persona.
+      const ids = canales.map((c) => c.id);
+      const miembros = ids.length
+        ? await db
+            .select({ canal: chatMembers.channelId, id: users.id, nombre: users.displayName })
+            .from(chatMembers)
+            .innerJoin(users, eq(users.id, chatMembers.userId))
+            .where(inArray(chatMembers.channelId, ids))
+        : [];
+      return canales.map((c) => {
+        const de = miembros.filter((m) => m.canal === c.id).map((m) => ({ id: m.id, nombre: m.nombre }));
+        const otro = de.find((m) => m.id !== user.id);
+        return { ...c, nombre: c.tipo === "privado" ? (otro?.nombre ?? c.nombre) : c.nombre, miembros: de };
+      });
+    });
+
+    /** Mensaje privado con otra cuenta: abre la conversación que ya existe o crea una nueva. */
+    app.post("/api/chat/privado", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
+      const user = currentUser(request);
+      const { usuarioId } = z.object({ usuarioId: z.string().uuid() }).parse(request.body);
+      if (usuarioId === user.id) throw new HttpError(400, "Para escribirte a ti mismo usa 'Mis dispositivos'");
+      const [otro] = await db.select({ id: users.id, nombre: users.displayName }).from(users).where(and(eq(users.id, usuarioId), eq(users.isActive, true)));
+      if (!otro) throw new HttpError(404, "Esa cuenta no existe");
+      const mios = await db
+        .select({ id: chatChannels.id })
+        .from(chatChannels)
+        .innerJoin(chatMembers, eq(chatMembers.channelId, chatChannels.id))
+        .where(and(eq(chatChannels.kind, "privado"), eq(chatMembers.userId, user.id)));
+      for (const c of mios) {
+        const m = await db.select({ userId: chatMembers.userId }).from(chatMembers).where(eq(chatMembers.channelId, c.id));
+        if (m.length === 2 && m.some((x) => x.userId === usuarioId)) return { id: c.id, nombre: otro.nombre, tipo: "privado" };
+      }
+      const [canal] = await db.insert(chatChannels).values({ name: "Privado", kind: "privado", createdBy: user.id }).returning();
+      if (!canal) throw new HttpError(500, "No se pudo crear la conversación");
+      await db.insert(chatMembers).values([
+        { channelId: canal.id, userId: user.id },
+        { channelId: canal.id, userId: usuarioId },
+      ]);
+      for (const id of [user.id, usuarioId]) deps.hub.publicar(temas.usuario(id), { recurso: "chat" });
+      return { id: canal.id, nombre: otro.nombre, tipo: "privado" };
+    });
+
+    /** Grupos: cambiar nombre y agregar personas (cualquier miembro), o salirse. */
+    app.patch("/api/chat/canales/:id", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const d = z.object({ nombre: z.string().trim().min(1).max(60).optional(), agregar: z.array(z.string().uuid()).max(50).default([]) }).parse(request.body);
+      const [canal] = await db.select().from(chatChannels).where(eq(chatChannels.id, id));
+      if (!canal || canal.kind !== "grupo" || !(await esMiembro(deps, id, user.id))) throw new HttpError(404, "Grupo no encontrado");
+      if (d.nombre) await db.update(chatChannels).set({ name: d.nombre }).where(eq(chatChannels.id, id));
+      if (d.agregar.length) {
+        const validos = await db.select({ id: users.id }).from(users).where(and(inArray(users.id, d.agregar), eq(users.isActive, true)));
+        const ya = new Set((await db.select({ u: chatMembers.userId }).from(chatMembers).where(eq(chatMembers.channelId, id))).map((x) => x.u));
+        const nuevos = validos.filter((v) => !ya.has(v.id));
+        if (nuevos.length) await db.insert(chatMembers).values(nuevos.map((v) => ({ channelId: id, userId: v.id })));
+      }
+      const todos = await db.select({ u: chatMembers.userId }).from(chatMembers).where(eq(chatMembers.channelId, id));
+      for (const m of todos) deps.hub.publicar(temas.usuario(m.u), { recurso: "chat" });
+      return { ok: true };
+    });
+
+    app.post("/api/chat/canales/:id/salir", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const [canal] = await db.select().from(chatChannels).where(eq(chatChannels.id, id));
+      if (!canal || canal.kind === "personal") throw new HttpError(400, "No puedes salir de este canal");
+      await db.delete(chatMembers).where(and(eq(chatMembers.channelId, id), eq(chatMembers.userId, user.id)));
+      const quedan = await db.select({ u: chatMembers.userId }).from(chatMembers).where(eq(chatMembers.channelId, id));
+      // Si ya nadie queda, se borra el canal con sus mensajes.
+      if (!quedan.length) await db.delete(chatChannels).where(eq(chatChannels.id, id));
+      for (const m of [...quedan.map((q) => q.u), user.id]) deps.hub.publicar(temas.usuario(m), { recurso: "chat" });
+      return { ok: true };
     });
 
     app.get("/api/chat/usuarios", { config: { acceso: { modulo: "chat", nivel: "lectura" } } }, async () =>

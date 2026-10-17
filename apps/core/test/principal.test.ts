@@ -92,4 +92,37 @@ describe("chat", () => {
     expect((await ctx.app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: b, payload: { texto: "hola" } })).statusCode).toBe(403);
     expect((await ctx.app.inject({ method: "GET", url: `/api/chat/canales/${canal}/mensajes`, headers: a })).json()).toHaveLength(2);
   });
+
+  it("chat privado (uno por pareja) y grupos: renombrar, agregar y salir", async () => {
+    ctx = await createTestContext();
+    const app = ctx.app;
+    const a = await sesion(ctx, "a@x.test", { chat: "escritura" });
+    const b = await sesion(ctx, "b@x.test", { chat: "escritura" });
+    const c = await sesion(ctx, "c@x.test", { chat: "escritura" });
+    const usuarios = (await app.inject({ method: "GET", url: "/api/chat/usuarios", headers: a })).json<{ id: string; nombre: string }[]>();
+    const idDe = (email: string) => usuarios.find((u) => u.nombre === email || u.nombre.startsWith(email.split("@")[0]!))?.id ?? "";
+    const idA = idDe("a@x.test");
+    const idB = idDe("b@x.test");
+    const idC = idDe("c@x.test");
+    expect(idA && idB && idC).toBeTruthy();
+
+    const p1 = (await app.inject({ method: "POST", url: "/api/chat/privado", headers: a, payload: { usuarioId: idB } })).json<{ id: string }>();
+    const p2 = (await app.inject({ method: "POST", url: "/api/chat/privado", headers: b, payload: { usuarioId: idA } })).json<{ id: string }>();
+    expect(p2.id).toBe(p1.id);
+    await app.inject({ method: "POST", url: `/api/chat/canales/${p1.id}/mensajes`, headers: a, payload: { texto: "hola primo" } });
+    expect((await app.inject({ method: "GET", url: `/api/chat/canales/${p1.id}/mensajes`, headers: b })).json()).toHaveLength(1);
+    expect((await app.inject({ method: "GET", url: `/api/chat/canales/${p1.id}/mensajes`, headers: c })).statusCode).toBe(403);
+
+    const g = (await app.inject({ method: "POST", url: "/api/chat/canales", headers: a, payload: { nombre: "Equipo", miembros: [idB] } })).json<{ id: string }>();
+    expect((await app.inject({ method: "PATCH", url: `/api/chat/canales/${g.id}`, headers: c, payload: { agregar: [idC] } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PATCH", url: `/api/chat/canales/${g.id}`, headers: a, payload: { nombre: "Equipo VPS", agregar: [idC] } })).statusCode).toBe(200);
+    const deC = (await app.inject({ method: "GET", url: "/api/chat/canales", headers: c })).json<{ id: string; nombre: string; tipo: string; miembros: unknown[] }[]>();
+    expect(deC.find((x) => x.id === g.id)).toMatchObject({ nombre: "Equipo VPS", tipo: "grupo" });
+    expect(deC.find((x) => x.id === g.id)?.miembros).toHaveLength(3);
+
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${g.id}/salir`, headers: c })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/chat/canales/${g.id}/mensajes`, headers: c })).statusCode).toBe(403);
+    const personal = (await app.inject({ method: "GET", url: "/api/chat/canales", headers: a })).json<{ id: string; tipo: string }[]>().find((x) => x.tipo === "personal")!;
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${personal.id}/salir`, headers: a })).statusCode).toBe(400);
+  });
 });

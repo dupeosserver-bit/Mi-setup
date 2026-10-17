@@ -1,7 +1,7 @@
-/** Chat privado entre dispositivos (y grupos para chat de equipo). */
+/** Chat: entre tus dispositivos, privado con otra cuenta y en grupo. */
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bell, Link2, MessagesSquare, Plus, Send, Users } from "lucide-react";
+import { ArrowLeft, Bell, Link2, LogOut, MessagesSquare, Plus, Send, Settings2, User, Users } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisarError, cx } from "../components/ui";
@@ -16,6 +16,7 @@ interface Canal {
   id: string;
   nombre: string;
   tipo: string;
+  miembros?: { id: string; nombre: string }[];
 }
 
 interface Mensaje {
@@ -50,7 +51,7 @@ function NuevoCanal({ alTerminar }: { alTerminar: (id: string) => void }) {
         crear.mutate();
       }}
     >
-      <Campo etiqueta="Nombre del canal">
+      <Campo etiqueta="Nombre del grupo">
         <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} required maxLength={60} autoFocus />
       </Campo>
       <div>
@@ -73,7 +74,7 @@ function NuevoCanal({ alTerminar }: { alTerminar: (id: string) => void }) {
       </div>
       <ErrorCaja error={crear.error} />
       <Boton type="submit" variante="primario" className="w-full" cargando={crear.isPending}>
-        Crear canal
+        Crear grupo
       </Boton>
     </form>
   );
@@ -185,43 +186,207 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
   );
 }
 
+function NuevoPrivado({ alTerminar }: { alTerminar: (id: string) => void }) {
+  const { data: me } = useMe();
+  const usuarios = useQuery({ queryKey: ["chat", "usuarios"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/chat/usuarios") });
+  const abrir = useMutation({
+    mutationFn: (usuarioId: string) => api<Canal>("/api/chat/privado", { cuerpo: { usuarioId } }),
+    onSuccess: (c) => {
+      void queryClient.invalidateQueries({ queryKey: ["chat"] });
+      alTerminar(c.id);
+    },
+    onError: avisarError,
+  });
+  const otros = (usuarios.data ?? []).filter((u) => u.id !== me?.usuario.id);
+  return (
+    <div className="space-y-1">
+      {usuarios.isLoading ? <Cargando /> : null}
+      {otros.map((u) => (
+        <button
+          key={u.id}
+          type="button"
+          disabled={abrir.isPending}
+          onClick={() => abrir.mutate(u.id)}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-tarjeta"
+        >
+          <User className="h-4 w-4 text-tenue" /> {u.nombre}
+        </button>
+      ))}
+      {usuarios.data && !otros.length ? <p className="text-sm text-tenue">Aún no hay otras cuentas. Créalas en Cuentas y permisos.</p> : null}
+    </div>
+  );
+}
+
+function OpcionesGrupo({ canal, alSalir }: { canal: Canal; alSalir: () => void }) {
+  const usuarios = useQuery({ queryKey: ["chat", "usuarios"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/chat/usuarios") });
+  const [nombre, setNombre] = useState(canal.nombre);
+  const [agregar, setAgregar] = useState<string[]>([]);
+  const [confirmar, setConfirmar] = useState(false);
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["chat"] });
+  const guardar = useMutation({
+    mutationFn: () =>
+      api(`/api/chat/canales/${canal.id}`, { metodo: "PATCH", cuerpo: { ...(nombre.trim() !== canal.nombre ? { nombre: nombre.trim() } : {}), agregar } }),
+    onSuccess: () => {
+      setAgregar([]);
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  const salir = useMutation({
+    mutationFn: () => api(`/api/chat/canales/${canal.id}/salir`, { metodo: "POST" }),
+    onSuccess: () => {
+      refrescar();
+      alSalir();
+    },
+    onError: avisarError,
+  });
+  const dentro = new Set((canal.miembros ?? []).map((m) => m.id));
+  const fuera = (usuarios.data ?? []).filter((u) => !dentro.has(u.id));
+  const sinCambios = nombre.trim() === canal.nombre && !agregar.length;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm">
+        <span className="text-tenue">Miembros:</span> {(canal.miembros ?? []).map((m) => m.nombre).join(", ") || "—"}
+      </p>
+      <Campo etiqueta="Nombre del grupo">
+        <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={60} />
+      </Campo>
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-tenue">Agregar personas</p>
+        <div className="space-y-1">
+          {fuera.map((u) => (
+            <label key={u.id} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agregar.includes(u.id)}
+                onChange={(e) => setAgregar((a) => (e.target.checked ? [...a, u.id] : a.filter((x) => x !== u.id)))}
+              />
+              {u.nombre}
+            </label>
+          ))}
+          {usuarios.data && !fuera.length ? <p className="text-xs text-tenue">Todas las cuentas ya están en el grupo.</p> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Boton variante="primario" cargando={guardar.isPending} disabled={sinCambios || !nombre.trim()} onClick={() => guardar.mutate()}>
+          Guardar
+        </Boton>
+        {confirmar ? (
+          <Boton variante="peligro" icono={LogOut} cargando={salir.isPending} onClick={() => salir.mutate()}>
+            Sí, salir del grupo
+          </Boton>
+        ) : (
+          <Boton variante="peligro" icono={LogOut} onClick={() => setConfirmar(true)}>
+            Salir del grupo
+          </Boton>
+        )}
+      </div>
+      {confirmar ? <p className="text-xs text-tenue">Si eres el último miembro, el grupo y sus mensajes se borran.</p> : null}
+    </div>
+  );
+}
+
+const SECCIONES: [string, string][] = [
+  ["personal", "Mis dispositivos"],
+  ["privado", "Privados"],
+  ["grupo", "Grupos"],
+];
+
 export default function Chat() {
   const [params, setParams] = useSearchParams();
   const puedeEscribir = usePuede("chat", "escritura");
   const [nuevo, setNuevo] = useState(false);
+  const [privado, setPrivado] = useState(false);
+  const [opciones, setOpciones] = useState(false);
   const { data, isLoading, error } = useQuery({ queryKey: ["chat", "canales"], queryFn: () => api<Canal[]>("/api/chat/canales") });
   const actual = data?.find((c) => c.id === params.get("canal")) ?? (params.get("canal") ? null : data?.[0] ?? null);
 
   return (
     <>
       <Encabezado
-        titulo="Chat privado"
-        acciones={puedeEscribir ? <Boton icono={Plus} onClick={() => setNuevo(true)}>Canal</Boton> : null}
+        titulo="Chat"
+        descripcion="Mensajes entre tus dispositivos, privados con otra cuenta o en grupo."
+        acciones={
+          puedeEscribir ? (
+            <>
+              <Boton icono={User} onClick={() => setPrivado(true)}>
+                Privado
+              </Boton>
+              <Boton icono={Plus} onClick={() => setNuevo(true)}>
+                Grupo
+              </Boton>
+            </>
+          ) : null
+        }
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
       <div className="grid gap-4 md:grid-cols-[240px_1fr]">
-        <div className={cx("space-y-1", params.get("canal") && "hidden md:block")}>
-          {data?.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setParams({ canal: c.id })}
-              className={cx(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm",
-                actual?.id === c.id ? "bg-tarjeta" : "hover:bg-tarjeta",
-              )}
-            >
-              {c.tipo === "personal" ? <MessagesSquare className="h-4 w-4 text-tenue" /> : <Users className="h-4 w-4 text-tenue" />}
-              {c.nombre}
-            </button>
-          ))}
+        <div className={cx("min-w-0 space-y-3", params.get("canal") && "hidden md:block")}>
+          {SECCIONES.map(([tipo, titulo]) => {
+            const lista = (data ?? []).filter((c) => c.tipo === tipo);
+            if (!lista.length) return null;
+            return (
+              <div key={tipo} className="space-y-1">
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-tenue">{titulo}</p>
+                {lista.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setParams({ canal: c.id })}
+                    className={cx(
+                      "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm",
+                      actual?.id === c.id ? "bg-tarjeta" : "hover:bg-tarjeta",
+                    )}
+                  >
+                    {c.tipo === "personal" ? (
+                      <MessagesSquare className="h-4 w-4 shrink-0 text-tenue" />
+                    ) : c.tipo === "privado" ? (
+                      <User className="h-4 w-4 shrink-0 text-tenue" />
+                    ) : (
+                      <Users className="h-4 w-4 shrink-0 text-tenue" />
+                    )}
+                    <span className="truncate">{c.nombre}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
-        <div className={cx(!params.get("canal") && "hidden md:block")}>
+        <div className={cx("min-w-0", !params.get("canal") && "hidden md:block")}>
+          {actual?.tipo === "grupo" ? (
+            <div className="mb-2 flex justify-end">
+              <Boton tamano="sm" variante="fantasma" icono={Settings2} onClick={() => setOpciones(true)}>
+                Opciones del grupo
+              </Boton>
+            </div>
+          ) : null}
           {actual ? <Conversacion key={actual.id} canal={actual} alVolver={() => setParams({})} /> : null}
         </div>
       </div>
-      <Modal abierto={nuevo} titulo="Nuevo canal" alCerrar={() => setNuevo(false)}>
+      <Modal abierto={privado} titulo="Mensaje privado: ¿con quién?" alCerrar={() => setPrivado(false)}>
+        {privado ? (
+          <NuevoPrivado
+            alTerminar={(id) => {
+              setPrivado(false);
+              setParams({ canal: id });
+            }}
+          />
+        ) : null}
+      </Modal>
+      <Modal abierto={opciones && actual?.tipo === "grupo"} titulo="Opciones del grupo" alCerrar={() => setOpciones(false)}>
+        {opciones && actual ? (
+          <OpcionesGrupo
+            key={actual.id}
+            canal={actual}
+            alSalir={() => {
+              setOpciones(false);
+              setParams({});
+            }}
+          />
+        ) : null}
+      </Modal>
+      <Modal abierto={nuevo} titulo="Nuevo grupo" alCerrar={() => setNuevo(false)}>
         <NuevoCanal
           alTerminar={(id) => {
             setNuevo(false);
