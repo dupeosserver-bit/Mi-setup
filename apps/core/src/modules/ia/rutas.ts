@@ -7,7 +7,7 @@ import { HttpError } from "../../http-error.js";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
-import { clienteAnthropic, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
+import { clienteAnthropic, clienteOllama, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
 
 /** Tipos de archivo que se pueden adjuntar: imágenes, PDF y texto. */
 const TIPO_ADJUNTO = /^(image\/(png|jpeg|webp|gif)|application\/(pdf|json|xml|x-yaml|yaml|javascript|typescript|x-sh)|text\/[a-z0-9.+-]+)$/;
@@ -39,6 +39,8 @@ export interface OpcionesIa {
   readonly contexto: Omit<ContextoHerramientas, "deps">;
   /** Cliente inyectado (pruebas). Si no se da, se usa ANTHROPIC_API_KEY. */
   readonly cliente?: ClienteIa;
+  /** IA local inyectada (pruebas); null = sin IA local. Si no se da, se usa OLLAMA_URL. */
+  readonly clienteLocal?: ClienteIa | null;
   /** Herramientas adicionales registradas por otros módulos. */
   readonly extras?: Herramienta[];
   /** Contexto adicional no secreto (p. ej. canales de Discord). */
@@ -55,8 +57,17 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
     if (cache?.llave !== llave) cache = { llave, cliente: clienteAnthropic(llave) };
     return cache.cliente;
   };
+  // IA gratuita del VPS: también se toma la URL vigente en cada uso.
+  let cacheLocal: { clave: string; cliente: ClienteIa } | null = null;
+  const local = (): ClienteIa | null => {
+    if (opciones.clienteLocal !== undefined) return opciones.clienteLocal;
+    const { OLLAMA_URL: url, OLLAMA_MODEL: modelo } = deps.config.env;
+    if (!url) return null;
+    if (cacheLocal?.clave !== `${url}|${modelo}`) cacheLocal = { clave: `${url}|${modelo}`, cliente: clienteOllama(url, modelo) };
+    return cacheLocal.cliente;
+  };
   const herramientas = crearHerramientas({ deps, ...opciones.contexto }, opciones.extras);
-  const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos);
+  const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos, local);
   const leer = { config: { acceso: { modulo: "ia" as const, nivel: "lectura" as const } } };
   const escribir = { config: { acceso: { modulo: "ia" as const, nivel: "escritura" as const } } };
 

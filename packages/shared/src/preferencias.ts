@@ -54,7 +54,10 @@ export const MODELOS_IA = {
   "claude-opus-5-5": { nombre: "Claude Opus 5.5", detalle: "El más capaz para tareas difíciles; cuesta el doble" },
   "claude-haiku-5-5": { nombre: "Claude Haiku 5.5", detalle: "El más rápido y barato, para cosas simples" },
   "claude-fable-5-1": { nombre: "Claude Fable 5.1", detalle: "Máxima calidad; el más caro" },
+  "llama-local": { nombre: "Llama local (gratis)", detalle: "Corre en tu VPS con Ollama: sin costo, más simple y solo conversa (no propone acciones)" },
 } as const;
+/** Modelo gratuito que corre en el VPS (Ollama). También se usa solo al llegar al tope mensual. */
+export const MODELO_LOCAL = "llama-local";
 export type ModeloIa = keyof typeof MODELOS_IA;
 
 const claves = <T extends Record<string, unknown>>(o: T) => Object.keys(o) as [keyof T & string, ...(keyof T & string)[]];

@@ -39,7 +39,7 @@ export function memoryNotifier(): Notifier & { sent: PushMessage[] } {
   };
 }
 
-export async function createTestContext(options: { config?: Config; clienteIa?: ClienteIa } = {}) {
+export async function createTestContext(options: { config?: Config; clienteIa?: ClienteIa; clienteIaLocal?: ClienteIa } = {}) {
   const { db, client } = await createTestDb();
   const clock = { now: new Date("2026-03-01T12:00:00.000Z") };
   const notifier = memoryNotifier();
@@ -50,6 +50,7 @@ export async function createTestContext(options: { config?: Config; clienteIa?: 
     now: () => clock.now,
     logger: false,
     ...(options.clienteIa ? { clienteIa: options.clienteIa } : {}),
+    ...(options.clienteIaLocal ? { clienteIaLocal: options.clienteIaLocal } : {}),
   });
   await preparar();
   return {

@@ -25,6 +25,12 @@ export interface UsoIa {
   presupuestoUsd: number;
   gastadoUsd: number;
   bloqueada: boolean;
+  /** Hay clave de Claude. */
+  claude?: boolean;
+  /** Hay IA local gratis (Ollama) configurada. */
+  local?: boolean;
+  modeloLocal?: string | null;
+  topeAlcanzado?: boolean;
 }
 
 export interface RespuestaChat {
@@ -32,6 +38,9 @@ export interface RespuestaChat {
   respuesta: string;
   propuestas: Propuesta[];
   costoUsd: number;
+  /** Aviso cuando respondió la IA local en lugar de Claude. */
+  aviso?: string | null;
+  local?: boolean;
 }
 
 export const CONFIRMACION_PELIGROSA = "EJECUTAR";

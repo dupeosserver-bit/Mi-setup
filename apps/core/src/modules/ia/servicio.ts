@@ -4,7 +4,7 @@
  * propuesta "pendiente" y solo corre cuando el usuario la aprueba.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { can, MODELOS_IA, reauthSatisfies, type ModuleId } from "@mi-setup/shared";
+import { can, MODELO_LOCAL, MODELOS_IA, reauthSatisfies, type ModuleId } from "@mi-setup/shared";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
   aiConversations,
@@ -86,6 +86,55 @@ export function clienteAnthropic(apiKey: string): ClienteIa {
   };
 }
 
+/**
+ * IA gratuita que corre en el VPS (Ollama). Solo conversa: no recibe
+ * herramientas, así que nunca propone acciones. Las imágenes y PDF se cambian
+ * por un aviso (los modelos ligeros no los leen).
+ */
+export function clienteOllama(url: string, modelo: string): ClienteIa {
+  const base = url.replace(/\/+$/, "");
+  const aTexto = (b: BloqueIa): string => {
+    if (b.type === "text") return b.text ?? "";
+    if (b.type === "tool_use") return `[propuso la acción ${b.name ?? ""}]`;
+    if (b.type === "tool_result") return `[resultado: ${typeof b["content"] === "string" ? b["content"] : JSON.stringify(b["content"] ?? "")}]`;
+    if (b.type === "image" || b.type === "document") return "[archivo adjunto: la IA local no puede verlo; usa un modelo Claude]";
+    return "";
+  };
+  return {
+    async mensajes(p) {
+      let r: Response;
+      try {
+        r = await fetch(`${base}/api/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: modelo,
+            stream: false,
+            messages: [
+              { role: "system", content: p.sistema },
+              ...p.mensajes.map((m) => ({ role: m.role, content: m.content.map(aTexto).filter(Boolean).join("\n") })),
+            ],
+          }),
+          signal: AbortSignal.timeout(180_000),
+        });
+      } catch {
+        throw new HttpError(502, `No se pudo conectar con la IA local (${base}). ¿Está encendido el servicio ollama?`, "ia_local");
+      }
+      if (r.status === 404) {
+        throw new HttpError(502, `El modelo ${modelo} no está descargado. En el VPS: docker exec misetup-ollama ollama pull ${modelo}`, "ia_local");
+      }
+      if (!r.ok) throw new HttpError(502, `La IA local respondió ${r.status}`, "ia_local");
+      const d = (await r.json()) as { message?: { content?: string }; prompt_eval_count?: number; eval_count?: number };
+      return {
+        model: `ollama:${modelo}`,
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: d.message?.content?.trim() || "(sin respuesta)" }],
+        usage: { input_tokens: d.prompt_eval_count ?? 0, output_tokens: d.eval_count ?? 0 },
+      };
+    },
+  };
+}
+
 /** Archivo adjunto al mensaje (contenido en base64). */
 export interface Adjunto {
   nombre: string;
@@ -107,6 +156,8 @@ const PRECIOS: Record<string, readonly [number, number]> = {
 const PRECIO_MAXIMO = [10, 50] as const;
 
 export function calcularCosto(modelo: string, u: RespuestaIa["usage"]): number {
+  // La IA local corre en tu VPS: no cuesta.
+  if (modelo.startsWith("ollama:")) return 0;
   const clave = Object.keys(PRECIOS).find((k) => modelo === k || modelo.startsWith(`${k}-`));
   const [entrada, salida] = clave ? PRECIOS[clave]! : PRECIO_MAXIMO;
   const lectura = u.cache_read_input_tokens ?? 0;
@@ -137,6 +188,9 @@ export interface ResultadoChat {
   respuesta: string;
   propuestas: ReturnType<typeof propuestaDto>[];
   costoUsd: number;
+  /** Aviso cuando respondió la IA local en lugar de Claude. */
+  aviso: string | null;
+  local: boolean;
 }
 
 export function propuestaDto(p: typeof aiProposals.$inferSelect) {
@@ -165,6 +219,8 @@ export class ServicioIa {
     private readonly herramientas: readonly Herramienta[],
     private readonly obtenerCliente: () => ClienteIa | null,
     private readonly contextosExtra: readonly ((user: AuthUser) => Promise<string | null>)[] = [],
+    /** IA gratuita del VPS (Ollama); null si OLLAMA_URL no está configurada. */
+    private readonly obtenerLocal: () => ClienteIa | null = () => null,
   ) {}
 
   private get presupuesto(): number {
@@ -181,12 +237,18 @@ export class ServicioIa {
 
   async uso() {
     const gastado = await this.gastoDelMes();
+    const local = Boolean(this.obtenerLocal());
     return {
-      configurada: Boolean(this.obtenerCliente()),
+      configurada: Boolean(this.obtenerCliente()) || local,
+      claude: Boolean(this.obtenerCliente()),
+      local,
+      modeloLocal: local ? this.deps.config.env.OLLAMA_MODEL : null,
       modelo: this.deps.config.env.AI_MODEL,
       presupuestoUsd: this.presupuesto,
       gastadoUsd: Math.round(gastado * 10_000) / 10_000,
-      bloqueada: gastado >= this.presupuesto,
+      // Con IA local la app sigue respondiendo gratis aunque se llegue al tope.
+      topeAlcanzado: gastado >= this.presupuesto,
+      bloqueada: gastado >= this.presupuesto && !local,
     };
   }
 
@@ -285,11 +347,34 @@ export class ServicioIa {
     user: AuthUser,
     entrada: { conversacionId?: string; mensaje: string; modulo?: string; adjuntos?: readonly Adjunto[] },
   ): Promise<ResultadoChat> {
-    const cliente = this.obtenerCliente();
-    if (!cliente) throw missingConfig("ANTHROPIC_API_KEY");
-    if ((await this.gastoDelMes()) >= this.presupuesto) {
-      throw new HttpError(402, `Se alcanzó el tope mensual de la IA (${this.presupuesto} USD). Súbelo con AI_MONTHLY_BUDGET_USD o espera al próximo mes.`, "tope_ia");
+    // Elige quién responde: Claude, o la IA local si se pidió, si no hay clave o si se llegó al tope.
+    const elegido = await this.modeloDe(user);
+    const local = this.obtenerLocal();
+    const claude = this.obtenerCliente();
+    const topeAlcanzado = (await this.gastoDelMes()) >= this.presupuesto;
+    let aviso: string | null = null;
+    let cliente: ClienteIa;
+    let usarLocal = false;
+    if (elegido === MODELO_LOCAL) {
+      if (!local) throw missingConfig("OLLAMA_URL");
+      cliente = local;
+      usarLocal = true;
+    } else if (!claude) {
+      if (!local) throw missingConfig("ANTHROPIC_API_KEY");
+      cliente = local;
+      usarLocal = true;
+      aviso = "Respondió la IA local gratis porque no hay clave de Claude configurada.";
+    } else if (topeAlcanzado) {
+      if (!local) {
+        throw new HttpError(402, `Se alcanzó el tope mensual de la IA (${this.presupuesto} USD). Súbelo con AI_MONTHLY_BUDGET_USD, configura la IA local gratis (OLLAMA_URL) o espera al próximo mes.`, "tope_ia");
+      }
+      cliente = local;
+      usarLocal = true;
+      aviso = `Se alcanzó el tope de ${this.presupuesto} USD: respondió la IA local gratis (solo conversa, no propone acciones).`;
+    } else {
+      cliente = claude;
     }
+    const modelo = usarLocal ? this.deps.config.env.OLLAMA_MODEL : elegido;
     const { db } = this.deps;
 
     let conversacionId = entrada.conversacionId;
@@ -309,23 +394,25 @@ export class ServicioIa {
     }
 
     const contexto = await this.contexto(user, entrada.modulo);
-    const modelo = await this.modeloDe(user);
     const idTurno = await this.guardarMensaje(conversacionId, "user", [
       { type: "text", text: `<contexto>\n${contexto}\n</contexto>\n\n${entrada.mensaje}` },
       ...this.bloquesAdjuntos(entrada.adjuntos ?? []),
     ]);
 
-    const disponibles = herramientasPermitidas(this.herramientas, user);
+    // La IA local no recibe herramientas: solo conversa.
+    const disponibles = usarLocal ? [] : herramientasPermitidas(this.herramientas, user);
     const porNombre = new Map(disponibles.map((h) => [h.nombre, h]));
     const propuestas: (typeof aiProposals.$inferSelect)[] = [];
     const textos: string[] = [];
     let costoTotal = 0;
 
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-      if (vuelta > 0 && (await this.gastoDelMes()) >= this.presupuesto) break;
+      if (vuelta > 0 && !usarLocal && (await this.gastoDelMes()) >= this.presupuesto) break;
       const r = await cliente.mensajes({
         modelo,
-        sistema: SISTEMA,
+        sistema: usarLocal
+          ? `${SISTEMA}\n- Ahora eres la IA local gratuita del VPS: no tienes herramientas. Si piden una acción, explica los pasos para hacerla a mano o sugiere cambiar a un modelo Claude.`
+          : SISTEMA,
         mensajes: await this.historial(conversacionId, idTurno),
         herramientas: disponibles.map((h) => ({ name: h.nombre, description: h.descripcion, input_schema: h.inputSchema })),
       });
@@ -402,6 +489,8 @@ export class ServicioIa {
     return {
       conversacionId,
       respuesta: textos.join("\n\n").trim(),
+      aviso,
+      local: usarLocal,
       propuestas: propuestas.map(propuestaDto),
       costoUsd: Math.round(costoTotal * 1_000_000) / 1_000_000,
     };

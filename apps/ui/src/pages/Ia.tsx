@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessagesSquare, Paperclip, Trash2, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { EntradaIa, type AdjuntoIa } from "../components/EntradaIa";
-import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, cx } from "../components/ui";
+import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, avisar, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
@@ -36,6 +36,13 @@ function Uso() {
         <div className={cx("h-full", pct >= 100 ? "bg-peligro" : pct > 80 ? "bg-aviso" : "bg-acento")} style={{ width: `${pct}%` }} />
       </div>
       {uso.data.bloqueada ? <p className="mt-2 text-xs text-peligro">Tope alcanzado: la IA queda bloqueada hasta el próximo mes.</p> : null}
+      {uso.data.topeAlcanzado && uso.data.local ? (
+        <p className="mt-2 text-xs text-aviso">Tope alcanzado: mientras tanto responde gratis la IA local ({uso.data.modeloLocal}), que solo conversa.</p>
+      ) : null}
+      <p className="mt-2 text-xs text-tenue">
+        IA gratis del VPS:{" "}
+        {uso.data.local ? `activa (${uso.data.modeloLocal}). Elígela en el selector de modelo como "Llama local".` : "apagada. Se activa con OLLAMA_URL (ver USO.md)."}
+      </p>
     </Tarjeta>
   );
 }
@@ -60,6 +67,7 @@ function Chat() {
       }),
     onSuccess: (r) => {
       setActual(r.conversacionId);
+      if (r.aviso) avisar(r.aviso, "info");
       if (prefs.voz.leerRespuestas && r.respuesta) void hablar(r.respuesta, prefs.voz).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["ia"] });
     },

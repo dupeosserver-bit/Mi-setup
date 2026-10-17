@@ -123,6 +123,30 @@ describe("IA: solo propone, el usuario aprueba", () => {
     expect(await ctx.db.select().from(aiUsage)).toHaveLength(1);
   });
 
+  it("al llegar al tope responde la IA local gratis, sin herramientas ni costo", async () => {
+    const ia = iaFalsa("crear_nota", { contenido: "x" }, { input_tokens: 1_000_000, output_tokens: 1_000_000 });
+    const peticionesLocal: PeticionIa[] = [];
+    const local: ClienteIa = {
+      async mensajes(p) {
+        peticionesLocal.push(p);
+        return { model: "ollama:llama3.2:3b", stop_reason: "end_turn", content: [{ type: "text", text: "Hola desde Llama" }], usage: { input_tokens: 50, output_tokens: 10 } };
+      },
+    };
+    const config = loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, AI_MONTHLY_BUDGET_USD: "5" });
+    ctx = await createTestContext({ config, clienteIa: ia, clienteIaLocal: local });
+    const h = await maestra(ctx);
+    await ctx.app.inject({ method: "POST", url: "/api/ia/chat", headers: h, payload: { mensaje: "hola" } });
+    const llamadasClaude = ia.peticiones.length;
+
+    const res = await ctx.app.inject({ method: "POST", url: "/api/ia/chat", headers: h, payload: { mensaje: "otra" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ respuesta: "Hola desde Llama", local: true, costoUsd: 0, propuestas: [] });
+    expect(res.json<{ aviso: string }>().aviso).toContain("tope");
+    expect(ia.peticiones.length).toBe(llamadasClaude);
+    expect(peticionesLocal[0]?.herramientas).toEqual([]);
+    expect((await ctx.app.inject({ method: "GET", url: "/api/ia/uso", headers: h })).json()).toMatchObject({ bloqueada: false, topeAlcanzado: true, local: true });
+  });
+
   it("no ofrece herramientas de módulos sin permiso de escritura", async () => {
     const ia = iaFalsa("ejecutar_comando_vps", { servidorId: "00000000-0000-4000-8000-000000000000", comando: "ls" });
     ctx = await createTestContext({ clienteIa: ia });

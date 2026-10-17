@@ -9,7 +9,7 @@ import { TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type Respues
 import { usePreferencias } from "../lib/preferencias";
 import { hablar } from "../lib/voz";
 import { EntradaIa, type AdjuntoIa } from "./EntradaIa";
-import { Boton, ErrorCaja, FaltaConfigurar, avisarError, cx } from "./ui";
+import { Boton, ErrorCaja, FaltaConfigurar, avisar, avisarError, cx } from "./ui";
 
 interface Linea {
   rol: "user" | "assistant";
@@ -37,6 +37,7 @@ export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
     onMutate: ({ mensaje, adjuntos }) => setLineas((l) => [...l, { rol: "user", texto: mensaje, adjuntos: adjuntos.length }]),
     onSuccess: (r) => {
       setConversacion(r.conversacionId);
+      if (r.aviso) avisar(r.aviso, "info");
       setLineas((l) => [...l, { rol: "assistant", texto: r.respuesta || "(sin texto)", propuestas: r.propuestas }]);
       if (prefs.voz.leerRespuestas && r.respuesta) void hablar(r.respuesta, prefs.voz).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["ia"] });

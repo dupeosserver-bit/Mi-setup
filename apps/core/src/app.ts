@@ -57,6 +57,8 @@ export interface AppDeps {
   readonly logger?: boolean;
   /** Cliente de IA falso (pruebas). */
   readonly clienteIa?: ClienteIa;
+  /** IA local falsa (pruebas). */
+  readonly clienteIaLocal?: ClienteIa;
 }
 
 export interface App {
@@ -195,6 +197,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
       extras: redes.herramientas,
       contextos: [redes.contexto],
       ...(appDeps.clienteIa ? { cliente: appDeps.clienteIa } : {}),
+      ...(appDeps.clienteIaLocal ? { clienteLocal: appDeps.clienteIaLocal } : {}),
     }),
   );
   jobs.push({ nombre: "correos-24h", cadaMs: 60 * 60_000, alInicio: true, run: () => purgarCorreos(deps) });

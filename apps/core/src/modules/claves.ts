@@ -27,6 +27,8 @@ export const CLAVES: readonly DefClave[] = [
   { nombre: "ANTHROPIC_API_KEY", etiqueta: "Clave de API de Claude", grupo: "IA", secreto: true, ayuda: "console.anthropic.com → API Keys → Create Key." },
   { nombre: "AI_MODEL", etiqueta: "Modelo por defecto", grupo: "IA", secreto: false, ayuda: "Ej. claude-sonnet-5-5. Cada usuario puede elegir otro en Ajustes → Voz e IA." },
   { nombre: "AI_MONTHLY_BUDGET_USD", etiqueta: "Tope mensual (USD)", grupo: "IA", secreto: false, ayuda: "Al llegar a este gasto la IA se bloquea hasta el mes siguiente." },
+  { nombre: "OLLAMA_URL", etiqueta: "IA gratis local (Ollama)", grupo: "IA", secreto: false, ayuda: "Con el servicio ollama del docker-compose: http://misetup-ollama:11434. Se usa al elegir \"Llama local\" o al llegar al tope." },
+  { nombre: "OLLAMA_MODEL", etiqueta: "Modelo local", grupo: "IA", secreto: false, ayuda: "Ej. llama3.2:3b (ligero, ~3 GB de RAM) o qwen2.5:7b (mejor, ~6 GB). Descárgalo con: docker exec misetup-ollama ollama pull llama3.2:3b" },
   { nombre: "PTERO_URL", etiqueta: "URL del panel", grupo: "Pterodactyl", secreto: false, ayuda: "Ej. https://panel.mexicanland.org", reinicio: true },
   { nombre: "PTERO_CLIENT_KEY", etiqueta: "Clave de cliente (ptlc_…)", grupo: "Pterodactyl", secreto: true, ayuda: "Panel → tu cuenta → API Credentials." },
   { nombre: "PTERO_APP_KEY", etiqueta: "Clave de aplicación (ptla_…)", grupo: "Pterodactyl", secreto: true, ayuda: "Panel de administración → Application API." },
