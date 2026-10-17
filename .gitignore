@@ -12,3 +12,6 @@ Thumbs.db
 
 # Instaladores generados
 apps/desktop/release/
+
+# Paquete para subir al VPS
+mi-setup.tar.gz
