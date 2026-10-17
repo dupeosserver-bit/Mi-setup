@@ -116,3 +116,12 @@ core ─HTTP sobre socket Unix /run/mi-setup/wg.sock─▶ mi-setup-wg-agent (ho
      ─▶ /usr/local/sbin/mi-setup-wg add <nombre> --pubkey … --json ─▶ wg0
 core ◀─ dirección, llave del servidor, endpoint ─┘ → el dispositivo arma QR/.conf con su privada
 ```
+
+## IA (cola de propuestas)
+
+```
+usuario ─mensaje─▶ core ─(¿tope mensual?)─▶ Claude (AI_MODEL, herramientas permitidas)
+Claude ─tool_use─▶ core guarda propuesta "pendiente" (auditoría ia_propuesta) ─▶ "pendiente, no ejecutada"
+usuario ─Aprobar─▶ core: permiso + (peligrosa ⇒ EJECUTAR + reauth fuerte) ─▶ pendiente→aprobada (atómico) ─▶ ejecuta ─▶ ejecutada/fallida
+usuario ─Rechazar─▶ rechazada        tokens reales ─▶ ai_usage (costo por modelo que respondió)
+```

@@ -17,6 +17,8 @@ import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
+import { iaRoutes } from "./modules/ia/rutas.js";
+import type { ClienteIa } from "./modules/ia/servicio.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
@@ -44,6 +46,8 @@ export interface AppDeps {
   readonly now?: () => Date;
   /** false en pruebas para no ensuciar la salida. */
   readonly logger?: boolean;
+  /** Cliente de IA falso (pruebas). */
+  readonly clienteIa?: ClienteIa;
 }
 
 export interface App {
@@ -162,6 +166,9 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(bovedaRoutes(deps));
   await app.register(correoRoutes(deps));
   await app.register(vpnRoutes(deps));
+  await app.register(
+    iaRoutes(deps, { contexto: { servidores: vps.servidores, ptero: ptero.ptero }, ...(appDeps.clienteIa ? { cliente: appDeps.clienteIa } : {}) }),
+  );
   jobs.push({ nombre: "correos-24h", cadaMs: 60 * 60_000, alInicio: true, run: () => purgarCorreos(deps) });
   jobs.push(
     { nombre: "vencimientos", cadaMs: 6 * 60 * 60_000, alInicio: true, run: () => revisarVencimientos(deps) },

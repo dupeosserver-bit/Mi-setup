@@ -85,7 +85,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
 
   novedades: m("novedades", "/novedades", Newspaper),
   control_remoto: m("control_remoto", "/control-remoto", MonitorUp),
-  ia: m("ia", "/ia", Sparkles),
+  ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
 };
 

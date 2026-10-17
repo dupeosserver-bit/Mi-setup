@@ -4,6 +4,7 @@ import { asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { buildApp } from "../src/app.js";
+import type { ClienteIa } from "../src/modules/ia/servicio.js";
 import { hashSecret } from "../src/auth/password.js";
 import { loadConfig, type Config } from "../src/config.js";
 import type { Database } from "../src/db/client.js";
@@ -38,7 +39,7 @@ export function memoryNotifier(): Notifier & { sent: PushMessage[] } {
   };
 }
 
-export async function createTestContext(options: { config?: Config } = {}) {
+export async function createTestContext(options: { config?: Config; clienteIa?: ClienteIa } = {}) {
   const { db, client } = await createTestDb();
   const clock = { now: new Date("2026-03-01T12:00:00.000Z") };
   const notifier = memoryNotifier();
@@ -48,6 +49,7 @@ export async function createTestContext(options: { config?: Config } = {}) {
     notifier,
     now: () => clock.now,
     logger: false,
+    ...(options.clienteIa ? { clienteIa: options.clienteIa } : {}),
   });
   return {
     app,

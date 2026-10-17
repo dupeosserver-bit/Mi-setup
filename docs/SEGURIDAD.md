@@ -55,3 +55,12 @@
 ## Checklist de revisión
 
 Se completa en la fase 12.
+
+## IA asistente (Plan 9)
+
+- La llave `ANTHROPIC_API_KEY` solo existe en el servidor; los clientes nunca la ven.
+- La IA **solo propone**: cada acción queda pendiente y se ejecuta únicamente con "Aprobar" (transición atómica, una sola ejecución). No hay modo automático.
+- Peligrosas: escribir `EJECUTAR` + reautenticación fuerte. Permisos revisados al aprobar.
+- Tope mensual (`AI_MONTHLY_BUDGET_USD`) con tokens reales; al llegar responde 402 sin llamar a la API.
+- Nunca recibe bóveda, 2FA, llaves SSH, tokens ni contraseñas; el texto externo va marcado como no confiable.
+- Auditoría: `ia_propuesta` y `ia_ejecutada` (actor ia), `ia_aprobada` y `ia_rechazada` (actor usuario).

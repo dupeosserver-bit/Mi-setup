@@ -2,7 +2,7 @@
 
 App personal (no pública) para PC (Windows) y celular (Android), vinculadas y con todo en la nube (VPS propio), para operar el hosting **MexicanLand**: terminal SSH, métricas en vivo, panel Pterodactyl, bóveda de contraseñas, 2FA, correos temporales, VPN, IA asistente con aprobación obligatoria y más.
 
-> Estado: **Plan 8 — Correos temporales y VPN** (Email Worker con HMAC, bandeja, WireGuard con llaves generadas en el dispositivo).
+> Estado: **Plan 9 — IA asistente** (propuestas con aprobación obligatoria, doble confirmación en lo peligroso, tope mensual con tokens reales).
 
 ## Estructura
 

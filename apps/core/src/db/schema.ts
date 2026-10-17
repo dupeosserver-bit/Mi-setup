@@ -384,6 +384,72 @@ export const vpnDevices = pgTable(
   (t) => [uniqueIndex("vpn_devices_nombre").on(t.name)],
 );
 
+// ---------------------------------------------------------------- Plan 9: IA asistente
+
+export const aiConversations = pgTable("ai_conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Conversación"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    /** Secuencial: define el orden de la conversación. */
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    /** Bloques de contenido tal como los devuelve/recibe la API (solo se agregan, nunca se editan). */
+    content: jsonb("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_messages_conversacion").on(t.conversationId, t.id)],
+);
+
+export const aiProposals = pgTable(
+  "ai_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => aiConversations.id, { onDelete: "set null" }),
+    tool: text("tool").notNull(),
+    input: jsonb("input").notNull(),
+    description: text("description").notNull(),
+    dangerous: boolean("dangerous").notNull().default(false),
+    /** "pendiente", "aprobada", "rechazada", "ejecutada" o "fallida". */
+    status: text("status").notNull().default("pendiente"),
+    result: jsonb("result"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("ai_proposals_estado").on(t.userId, t.status)],
+);
+
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull(),
+    outputTokens: integer("output_tokens").notNull(),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("ai_usage_fecha").on(t.createdAt)],
+);
+
 // ---------------------------------------------------------------- Plan 7: bóveda (cifrado de extremo a extremo)
 
 /** Parámetros de la bóveda de cada cuenta. El servidor nunca ve la clave maestra. */

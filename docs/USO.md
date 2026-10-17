@@ -20,9 +20,9 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `MAIL_INBOUND_SECRET` | No | vacío | HMAC del correo entrante (fase 8) |
 | `NTFY_TOPIC` | No | vacío | Tema secreto de ntfy (avisos de seguridad) |
 | `NTFY_URL` | No | `https://NTFY_HOST` (Docker: `http://ntfy`) | Dónde publica core los avisos |
-| `ANTHROPIC_API_KEY` | No | vacío | IA asistente (fase 9) |
+| `ANTHROPIC_API_KEY` | No | vacío | IA asistente (console.anthropic.com → API Keys). Solo vive en el servidor |
 | `AI_MODEL` | No | `claude-sonnet-5-5` | Modelo de IA |
-| `AI_MONTHLY_BUDGET_USD` | No | `10` | Tope mensual de la IA |
+| `AI_MONTHLY_BUDGET_USD` | No | `10` | Tope mensual de la IA en USD; al llegar se bloquea hasta el mes siguiente |
 | `PTERO_URL` | No | `https://panel.mexicanland.org` | Panel Pterodactyl |
 | `PTERO_CLIENT_KEY` / `PTERO_APP_KEY` | No | vacío | API de Pterodactyl (`ptlc_` / `ptla_`) |
 | `DISCORD_BOT_TOKEN` | No | vacío | Bot de Discord |
@@ -162,3 +162,11 @@ Instalador de Windows y APK (fase 4), RustDesk (fase 11), WireGuard (fase 8) y c
 3. En la app, **Seguridad → VPN → Dispositivo**: escribe un nombre; la app genera las llaves y te muestra un QR y un `.conf` **una sola vez**.
 4. En el celular: app **WireGuard** → `+` → *Escanear desde código QR*. En Windows: WireGuard → *Importar túnel desde archivo*.
 5. Activa o desactiva el túnel desde la app de WireGuard ("Abrir WireGuard").
+
+## IA asistente
+
+1. Pon `ANTHROPIC_API_KEY` en `/opt/mi-setup/.env` y vuelve a desplegar.
+2. Abre el botón flotante (destello) o el apartado **IA**. Pide algo: "recuérdame renovar el dominio el viernes a las 10".
+3. La IA responde con **propuestas**. Revisa el detalle y toca **Aprobar** (o **Rechazar**). Nada se ejecuta sin ese toque.
+4. Si la propuesta es peligrosa (comando destructivo, apagar a la fuerza) se pide escribir `EJECUTAR` y tu contraseña o huella.
+5. En **IA → Pendientes / Historial** ves la cola; el gasto del mes aparece arriba. Todo queda en el registro de actividad.

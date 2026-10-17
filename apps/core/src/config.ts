@@ -45,6 +45,9 @@ const envSchema = z
     MAIL_INBOUND_SECRET: optionalString,
     /** Socket Unix del servicio del host que ejecuta /usr/local/sbin/mi-setup-wg. */
     VPN_SOCKET: z.string().default("/run/mi-setup/wg.sock"),
+    ANTHROPIC_API_KEY: optionalString,
+    AI_MODEL: optionalString.transform((v) => v ?? "claude-sonnet-5-5"),
+    AI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10_000).default(10),
     /** Carpeta de la UI compilada. En Docker: /app/public. */
     UI_DIR: optionalString,
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */
