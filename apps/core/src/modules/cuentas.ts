@@ -8,7 +8,7 @@ import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { hashSecret } from "../auth/password.js";
-import { auditLog, sessions, userModulePermissions, users } from "../db/schema.js";
+import { auditLog, sessions, userModulePermissions, userRoles, users } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "./common.js";
@@ -57,6 +57,7 @@ export function cuentasRoutes(deps: ModuleDeps) {
     app.get("/api/cuentas", { config: { acceso: { modulo: "cuentas", nivel: "lectura" } } }, async () => {
       const lista = await db.select().from(users).orderBy(users.createdAt);
       const permisos = await db.select().from(userModulePermissions);
+      const asignados = await db.select().from(userRoles);
       const activas = await db
         .select({ userId: sessions.userId, n: sql<number>`count(*)::int` })
         .from(sessions)
@@ -72,6 +73,7 @@ export function cuentasRoutes(deps: ModuleDeps) {
         sesiones: activas.find((a) => a.userId === u.id)?.n ?? 0,
         creada: u.createdAt.toISOString(),
         permisos: Object.fromEntries(permisos.filter((p) => p.userId === u.id).map((p) => [p.module, p.level])),
+        roles: asignados.filter((a) => a.userId === u.id).map((a) => a.roleId),
       }));
     });
 

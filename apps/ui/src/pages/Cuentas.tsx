@@ -1,13 +1,19 @@
-/** Cuentas y permisos: alta de cuentas, permisos por módulo, desactivar y restablecer contraseña (solo maestra). */
+/**
+ * Cuentas y permisos (solo maestra): alta de cuentas, permisos por módulo,
+ * roles tipo Discord (nombre, color y permisos), desactivar y restablecer
+ * contraseña. Los permisos de una cuenta = los suyos + los de sus roles.
+ */
 import { MODULES, MODULE_IDS, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut, Plus, ShieldCheck, UserCog } from "lucide-react";
+import { KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
 import { useState } from "react";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Selector, Tarjeta, avisar, avisarError } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
 import { fmtFecha } from "../lib/formato";
+
+type Permisos = Partial<Record<ModuleId, PermissionLevel>>;
 
 interface Cuenta {
   id: string;
@@ -18,13 +24,36 @@ interface Cuenta {
   dosPasos: boolean;
   sesiones: number;
   creada: string;
-  permisos: Partial<Record<ModuleId, PermissionLevel>>;
+  permisos: Permisos;
+  roles: string[];
+}
+
+interface Rol {
+  id: string;
+  nombre: string;
+  color: string;
+  posicion: number;
+  permisos: Permisos;
+  miembros: number;
 }
 
 const OTORGABLES = MODULE_IDS.filter((m) => !MODULES[m].masterOnly);
 const NIVEL: Record<PermissionLevel, string> = { ninguno: "Sin acceso", lectura: "Ver", escritura: "Editar", administrar: "Administrar" };
 
-function EditorPermisos({ valor, alCambiar }: { valor: Cuenta["permisos"]; alCambiar: (p: Cuenta["permisos"]) => void }) {
+function useRoles() {
+  return useQuery({ queryKey: ["cuentas", "roles"], queryFn: () => api<Rol[]>("/api/roles") });
+}
+
+export function InsigniaRol({ nombre, color }: { nombre: string; color: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: color, color }}>
+      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      {nombre}
+    </span>
+  );
+}
+
+function EditorPermisos({ valor, alCambiar }: { valor: Permisos; alCambiar: (p: Permisos) => void }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {OTORGABLES.map((m) => (
@@ -43,11 +72,39 @@ function EditorPermisos({ valor, alCambiar }: { valor: Cuenta["permisos"]; alCam
   );
 }
 
+function SelectorRoles({ valor, alCambiar }: { valor: string[]; alCambiar: (ids: string[]) => void }) {
+  const roles = useRoles();
+  if (!roles.data?.length) return <p className="text-xs text-tenue">No hay roles. Créalos en la pestaña Roles.</p>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {roles.data.map((r) => {
+        const activo = valor.includes(r.id);
+        return (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => alCambiar(activo ? valor.filter((x) => x !== r.id) : [...valor, r.id])}
+            className={cx("rounded-full border px-3 py-1 text-xs font-medium transition-opacity", !activo && "opacity-40 hover:opacity-80")}
+            style={{ borderColor: r.color, color: r.color, background: activo ? `${r.color}22` : "transparent" }}
+          >
+            {activo ? "✓ " : ""}
+            {r.nombre}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Nueva({ alCerrar }: { alCerrar: () => void }) {
   const [d, setD] = useState({ email: "", nombre: "", password: "" });
-  const [permisos, setPermisos] = useState<Cuenta["permisos"]>({});
+  const [permisos, setPermisos] = useState<Permisos>({});
+  const [roles, setRoles] = useState<string[]>([]);
   const crear = useMutation({
-    mutationFn: () => api("/api/cuentas", { metodo: "POST", cuerpo: { ...d, permisos } }),
+    mutationFn: async () => {
+      const r = await api<{ id: string }>("/api/cuentas", { metodo: "POST", cuerpo: { ...d, permisos } });
+      if (roles.length) await api(`/api/cuentas/${r.id}/roles`, { metodo: "PUT", cuerpo: { roles } });
+    },
     onSuccess: () => {
       avisar("Cuenta creada");
       void queryClient.invalidateQueries({ queryKey: ["cuentas"] });
@@ -68,10 +125,13 @@ function Nueva({ alCerrar }: { alCerrar: () => void }) {
       <Campo etiqueta="Correo">
         <Entrada type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} required />
       </Campo>
-      <Campo etiqueta="Contraseña inicial" ayuda="Mínimo 12 caracteres. Compártela por un medio seguro.">
+      <Campo etiqueta="Contraseña inicial" ayuda="Mínimo 12 caracteres. Compártela por un medio seguro; la persona puede cambiarla en Ajustes → Cuenta.">
         <Entrada type="password" autoComplete="new-password" value={d.password} onChange={(e) => setD({ ...d, password: e.target.value })} required />
       </Campo>
-      <p className="text-sm font-medium">Permisos</p>
+      <Campo etiqueta="Roles">
+        <SelectorRoles valor={roles} alCambiar={setRoles} />
+      </Campo>
+      <p className="text-sm font-medium">Permisos extra (además de los de sus roles)</p>
       <EditorPermisos valor={permisos} alCambiar={setPermisos} />
       <ErrorCaja error={crear.error} />
       <Boton type="submit" variante="primario" cargando={crear.isPending}>
@@ -83,12 +143,21 @@ function Nueva({ alCerrar }: { alCerrar: () => void }) {
 
 function Detalle({ c }: { c: Cuenta }) {
   const [permisos, setPermisos] = useState(c.permisos);
+  const [roles, setRoles] = useState(c.roles);
   const [clave, setClave] = useState<string | null>(null);
   const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["cuentas"] });
   const cambiar = useMutation({
     mutationFn: (cuerpo: Record<string, unknown>) => api(`/api/cuentas/${c.id}`, { metodo: "PATCH", cuerpo }),
     onSuccess: () => {
       avisar("Guardado");
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  const guardarRoles = useMutation({
+    mutationFn: () => api(`/api/cuentas/${c.id}/roles`, { metodo: "PUT", cuerpo: { roles } }),
+    onSuccess: () => {
+      avisar("Roles guardados");
       refrescar();
     },
     onError: avisarError,
@@ -110,31 +179,48 @@ function Detalle({ c }: { c: Cuenta }) {
     },
     onError: avisarError,
   });
-  const cambiado = JSON.stringify(permisos) !== JSON.stringify(c.permisos);
+  const cambioPermisos = JSON.stringify(permisos) !== JSON.stringify(c.permisos);
+  const cambioRoles = [...roles].sort().join() !== [...c.roles].sort().join();
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Interruptor
-          activo={c.activo}
-          alCambiar={async (v) => {
-            if (!v && !(await confirmar({ titulo: `Desactivar a ${c.nombre}`, mensaje: "No podrá entrar y se cierran sus sesiones al momento.", peligroso: true, boton: "Desactivar" })))
-              return;
-            cambiar.mutate({ activo: v });
-          }}
-          etiqueta={c.activo ? "Activa" : "Desactivada"}
-        />
-        <Boton tamano="sm" icono={LogOut} onClick={() => cerrar.mutate()} cargando={cerrar.isPending}>
-          Cerrar sesiones ({c.sesiones})
-        </Boton>
-        <Boton tamano="sm" icono={KeyRound} onClick={() => setClave("")}>
-          Restablecer contraseña
-        </Boton>
+      <div>
+        <p className="mb-2 text-sm font-medium">Roles</p>
+        <SelectorRoles valor={roles} alCambiar={setRoles} />
+        {cambioRoles ? (
+          <Boton className="mt-2" tamano="sm" variante="primario" cargando={guardarRoles.isPending} onClick={() => guardarRoles.mutate()}>
+            Guardar roles
+          </Boton>
+        ) : null}
       </div>
-      <EditorPermisos valor={permisos} alCambiar={setPermisos} />
-      <Boton variante="primario" disabled={!cambiado} cargando={cambiar.isPending} onClick={() => cambiar.mutate({ permisos })}>
-        Guardar permisos
-      </Boton>
+      {c.rol === "maestra" ? (
+        <p className="text-xs text-tenue">La cuenta maestra tiene acceso total; los roles solo se muestran como insignia.</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Interruptor
+              activo={c.activo}
+              alCambiar={async (v) => {
+                if (!v && !(await confirmar({ titulo: `Desactivar a ${c.nombre}`, mensaje: "No podrá entrar y se cierran sus sesiones al momento.", peligroso: true, boton: "Desactivar" })))
+                  return;
+                cambiar.mutate({ activo: v });
+              }}
+              etiqueta={c.activo ? "Activa" : "Desactivada"}
+            />
+            <Boton tamano="sm" icono={LogOut} onClick={() => cerrar.mutate()} cargando={cerrar.isPending}>
+              Cerrar sesiones ({c.sesiones})
+            </Boton>
+            <Boton tamano="sm" icono={KeyRound} onClick={() => setClave("")}>
+              Restablecer contraseña
+            </Boton>
+          </div>
+          <p className="text-sm font-medium">Permisos extra (además de los de sus roles)</p>
+          <EditorPermisos valor={permisos} alCambiar={setPermisos} />
+          <Boton variante="primario" disabled={!cambioPermisos} cargando={cambiar.isPending} onClick={() => cambiar.mutate({ permisos })}>
+            Guardar permisos
+          </Boton>
+        </>
+      )}
       <Modal abierto={clave !== null} titulo="Nueva contraseña" alCerrar={() => setClave(null)}>
         <form
           className="space-y-3"
@@ -153,61 +239,193 @@ function Detalle({ c }: { c: Cuenta }) {
   );
 }
 
-export default function Cuentas() {
+function ListaCuentas() {
   const lista = useQuery({ queryKey: ["cuentas"], queryFn: () => api<Cuenta[]>("/api/cuentas") });
+  const roles = useRoles();
   const [abierta, setAbierta] = useState<string | null>(null);
   const [nueva, setNueva] = useState(false);
+  const rolPorId = new Map((roles.data ?? []).map((r) => [r.id, r]));
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Boton variante="primario" icono={Plus} onClick={() => setNueva(true)}>
+          Nueva cuenta
+        </Boton>
+      </div>
+      {lista.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={lista.error} />
+      {lista.data?.map((c) => (
+        <Tarjeta
+          key={c.id}
+          icono={c.rol === "maestra" ? ShieldCheck : UserCog}
+          titulo={
+            <span>
+              {c.nombre} <span className="font-normal text-tenue">· {c.email}</span>
+            </span>
+          }
+          acciones={
+            <>
+              {c.rol === "maestra" ? <Insignia tono="ok">Maestra</Insignia> : null}
+              {!c.activo ? <Insignia tono="peligro">Desactivada</Insignia> : null}
+              {c.dosPasos ? <Insignia>2FA</Insignia> : null}
+              <Boton tamano="sm" variante="fantasma" onClick={() => setAbierta(abierta === c.id ? null : c.id)}>
+                {abierta === c.id ? "Cerrar" : "Editar"}
+              </Boton>
+            </>
+          }
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {c.roles.map((id) => {
+              const r = rolPorId.get(id);
+              return r ? <InsigniaRol key={id} nombre={r.nombre} color={r.color} /> : null;
+            })}
+            <span className="text-xs text-tenue">
+              Creada {fmtFecha(c.creada)} · {c.sesiones} sesión(es) activa(s)
+              {c.rol === "maestra" ? " · acceso total" : ""}
+            </span>
+          </div>
+          {abierta === c.id ? (
+            <div className="mt-4">
+              <Detalle c={c} />
+            </div>
+          ) : null}
+        </Tarjeta>
+      ))}
+      <Modal abierto={nueva} titulo="Nueva cuenta" alCerrar={() => setNueva(false)} ancho="max-w-2xl">
+        <Nueva alCerrar={() => setNueva(false)} />
+      </Modal>
+    </div>
+  );
+}
+
+const COLORES = ["#f5c542", "#5ab4ff", "#30d158", "#ff453a", "#b794ff", "#ff9f0a", "#64d2ff", "#ff6482", "#8e8e93"];
+
+function EditorRol({ inicial, alCerrar }: { inicial: Rol | null; alCerrar: () => void }) {
+  const [d, setD] = useState({ nombre: inicial?.nombre ?? "", color: inicial?.color ?? COLORES[0]!, posicion: inicial?.posicion ?? 10 });
+  const [permisos, setPermisos] = useState<Permisos>(inicial?.permisos ?? {});
+  const guardar = useMutation({
+    mutationFn: () =>
+      inicial
+        ? api(`/api/roles/${inicial.id}`, { metodo: "PATCH", cuerpo: { ...d, permisos } })
+        : api("/api/roles", { metodo: "POST", cuerpo: { ...d, permisos } }),
+    onSuccess: () => {
+      avisar("Rol guardado");
+      void queryClient.invalidateQueries({ queryKey: ["cuentas"] });
+      alCerrar();
+    },
+  });
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        guardar.mutate();
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <Campo etiqueta="Nombre del rol">
+          <Entrada value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} placeholder="Ej. Moderador" required maxLength={40} />
+        </Campo>
+        <Campo etiqueta="Orden">
+          <Entrada type="number" min={0} max={1000} value={d.posicion} onChange={(e) => setD({ ...d, posicion: Number(e.target.value) })} className="w-24" />
+        </Campo>
+      </div>
+      <Campo etiqueta="Color">
+        <div className="flex flex-wrap items-center gap-2">
+          {COLORES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setD({ ...d, color: c })}
+              className={cx("h-8 w-8 rounded-full border-2", d.color === c ? "border-texto" : "border-transparent")}
+              style={{ background: c }}
+              aria-label={`Color ${c}`}
+            />
+          ))}
+          <input type="color" value={d.color} onChange={(e) => setD({ ...d, color: e.target.value })} className="h-8 w-10 cursor-pointer rounded bg-transparent" aria-label="Otro color" />
+          <InsigniaRol nombre={d.nombre || "Vista previa"} color={d.color} />
+        </div>
+      </Campo>
+      <p className="text-sm font-medium">Permisos del rol</p>
+      <EditorPermisos valor={permisos} alCambiar={setPermisos} />
+      <ErrorCaja error={guardar.error} />
+      <Boton type="submit" variante="primario" cargando={guardar.isPending}>
+        Guardar rol
+      </Boton>
+    </form>
+  );
+}
+
+function ListaRoles() {
+  const roles = useRoles();
+  const [editando, setEditando] = useState<Rol | null | "nuevo">(null);
+  const borrar = useMutation({
+    mutationFn: (id: string) => api(`/api/roles/${id}`, { metodo: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["cuentas"] }),
+    onError: avisarError,
+  });
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-tenue">Como en Discord: crea roles con color y permisos y asígnalos a las cuentas. Si alguien tiene varios roles, se suman sus permisos.</p>
+        <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>
+          Nuevo rol
+        </Boton>
+      </div>
+      {roles.isLoading ? <Cargando /> : null}
+      {roles.data?.length === 0 ? <Vacio icono={Users} texto="Sin roles todavía." /> : null}
+      {roles.data?.map((r) => (
+        <Tarjeta
+          key={r.id}
+          titulo={<InsigniaRol nombre={r.nombre} color={r.color} />}
+          acciones={
+            <>
+              <span className="text-xs text-tenue">{r.miembros} miembro(s)</span>
+              <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Editar rol" onClick={() => setEditando(r)} />
+              <Boton
+                tamano="icono"
+                variante="fantasma"
+                icono={Trash2}
+                aria-label="Borrar rol"
+                onClick={async () => {
+                  if (await confirmar({ titulo: `Borrar el rol ${r.nombre}`, mensaje: "Las cuentas que lo tienen pierden los permisos que les daba.", boton: "Borrar" })) borrar.mutate(r.id);
+                }}
+              />
+            </>
+          }
+        >
+          <p className="text-xs text-tenue">
+            {Object.entries(r.permisos)
+              .filter(([, n]) => n && n !== "ninguno")
+              .map(([m, n]) => `${MODULES[m as ModuleId]?.label ?? m}: ${NIVEL[n as PermissionLevel]}`)
+              .join(" · ") || "Sin permisos"}
+          </p>
+        </Tarjeta>
+      ))}
+      <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo rol" : "Editar rol"} alCerrar={() => setEditando(null)} ancho="max-w-2xl">
+        {editando !== null ? <EditorRol inicial={editando === "nuevo" ? null : editando} alCerrar={() => setEditando(null)} /> : null}
+      </Modal>
+    </div>
+  );
+}
+
+export default function Cuentas() {
+  const [pestana, setPestana] = useState<"cuentas" | "roles">("cuentas");
   return (
     <div className="space-y-4">
       <Encabezado
         titulo="Cuentas y permisos"
         descripcion="Las cuentas no se borran: se desactivan. Bóveda, VPS, control remoto y demás apartados solo-maestra no se pueden otorgar."
-        acciones={
-          <Boton variante="primario" icono={Plus} onClick={() => setNueva(true)}>
-            Nueva cuenta
-          </Boton>
-        }
       />
-      {lista.isLoading ? <Cargando /> : null}
-      <ErrorCaja error={lista.error} />
-      <div className="space-y-3">
-        {lista.data?.map((c) => (
-          <Tarjeta
-            key={c.id}
-            icono={c.rol === "maestra" ? ShieldCheck : UserCog}
-            titulo={
-              <span>
-                {c.nombre} <span className="font-normal text-tenue">· {c.email}</span>
-              </span>
-            }
-            acciones={
-              <>
-                {c.rol === "maestra" ? <Insignia tono="ok">Maestra</Insignia> : null}
-                {!c.activo ? <Insignia tono="peligro">Desactivada</Insignia> : null}
-                {c.dosPasos ? <Insignia>2FA</Insignia> : null}
-                {c.rol !== "maestra" ? (
-                  <Boton tamano="sm" variante="fantasma" onClick={() => setAbierta(abierta === c.id ? null : c.id)}>
-                    {abierta === c.id ? "Cerrar" : "Editar"}
-                  </Boton>
-                ) : null}
-              </>
-            }
-          >
-            <p className="text-xs text-tenue">
-              Creada {fmtFecha(c.creada)} · {c.sesiones} sesión(es) activa(s) ·{" "}
-              {c.rol === "maestra" ? "acceso total" : `${Object.keys(c.permisos).length} módulo(s) con acceso`}
-            </p>
-            {abierta === c.id ? (
-              <div className="mt-4">
-                <Detalle c={c} />
-              </div>
-            ) : null}
-          </Tarjeta>
-        ))}
-      </div>
-      <Modal abierto={nueva} titulo="Nueva cuenta" alCerrar={() => setNueva(false)} ancho="max-w-2xl">
-        <Nueva alCerrar={() => setNueva(false)} />
-      </Modal>
+      <Pestanas
+        valor={pestana}
+        alCambiar={setPestana}
+        opciones={[
+          { id: "cuentas", texto: "Cuentas" },
+          { id: "roles", texto: "Roles" },
+        ]}
+      />
+      {pestana === "cuentas" ? <ListaCuentas /> : <ListaRoles />}
     </div>
   );
 }

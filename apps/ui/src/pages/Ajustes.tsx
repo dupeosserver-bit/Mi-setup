@@ -15,13 +15,14 @@ import {
   type TemaApp,
   type TemaTerminal,
 } from "@mi-setup/shared";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Fingerprint, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
 import { Logo } from "../components/Logo";
-import { Boton, Campo, Encabezado, Entrada, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
+import { InsigniaRol } from "./Cuentas";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
@@ -126,6 +127,7 @@ function Cuenta() {
             <p className="truncate text-sm text-tenue">{me?.usuario.email}</p>
             <div className="mt-1 flex gap-1">
               <Insignia tono={me?.usuario.role === "maestra" ? "ok" : "neutro"}>{me?.usuario.role === "maestra" ? "Cuenta maestra" : "Usuario"}</Insignia>
+              {me?.roles.map((r) => <InsigniaRol key={r.id} nombre={r.nombre} color={r.color} />)}
             </div>
           </div>
         </div>
@@ -491,12 +493,113 @@ function Seguridad() {
   );
 }
 
+// ---------------------------------------------------------------- servicios (claves de API)
+
+interface ClaveServicio {
+  nombre: string;
+  etiqueta: string;
+  grupo: string;
+  secreto: boolean;
+  ayuda: string;
+  reinicio: boolean;
+  configurada: boolean;
+  origen: "ajustes" | "env" | null;
+  valor: string;
+}
+
+function FilaClave({ c }: { c: ClaveServicio }) {
+  const [valor, setValor] = useState(c.secreto ? "" : c.valor);
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["claves"] });
+  const guardar = useMutation({
+    mutationFn: () => api<{ reinicio: boolean }>(`/api/claves/${c.nombre}`, { metodo: "PUT", cuerpo: { valor } }),
+    onSuccess: (r) => {
+      avisar(r.reinicio ? `${c.etiqueta} guardado. Se aplica al reiniciar el servidor.` : `${c.etiqueta} guardado y aplicado`);
+      if (c.secreto) setValor("");
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  const quitar = useMutation({
+    mutationFn: () => api(`/api/claves/${c.nombre}`, { metodo: "DELETE" }),
+    onSuccess: () => {
+      avisar("Quitado: se usa el valor del .env (si hay)");
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <form
+      className="space-y-1.5 rounded-xl bg-fondo p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        guardar.mutate();
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{c.etiqueta}</span>
+        <code className="text-[10px] text-tenue">{c.nombre}</code>
+        {c.origen === "ajustes" ? <Insignia tono="ok">Configurada aquí</Insignia> : c.origen === "env" ? <Insignia>Desde .env</Insignia> : <Insignia tono="aviso">Sin configurar</Insignia>}
+        {c.secreto && c.valor ? <span className="font-mono text-xs text-tenue">{c.valor}</span> : null}
+      </div>
+      <div className="flex gap-2">
+        <Entrada
+          type={c.secreto ? "password" : "text"}
+          autoComplete="off"
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          placeholder={c.secreto && c.configurada ? "Escribe para reemplazarla" : ""}
+        />
+        <Boton type="submit" icono={Save} disabled={!valor.trim() || (!c.secreto && valor === c.valor)} cargando={guardar.isPending}>
+          Guardar
+        </Boton>
+        {c.origen === "ajustes" ? (
+          <Boton variante="fantasma" icono={RotateCcw} aria-label="Quitar" cargando={quitar.isPending} onClick={() => quitar.mutate()} />
+        ) : null}
+      </div>
+      <p className="text-xs text-tenue">
+        {c.ayuda}
+        {c.reinicio ? " (se aplica al reiniciar el servidor)" : ""}
+      </p>
+    </form>
+  );
+}
+
+function Servicios() {
+  const claves = useQuery({ queryKey: ["claves"], queryFn: () => api<ClaveServicio[]>("/api/claves") });
+  const grupos = [...new Set((claves.data ?? []).map((c) => c.grupo))];
+  return (
+    <div className="space-y-4">
+      <p className="rounded-xl border border-borde bg-superficie p-3 text-sm text-tenue">
+        Aquí pones las claves de API y datos de los servicios sin tocar el servidor. Se guardan cifradas, tienen prioridad sobre el archivo .env y nunca se vuelven a mostrar
+        completas. Guardar o quitar una clave pide tu contraseña o huella. Las claves internas (base de datos, JWT_SECRET, SERVER_ENC_KEY) solo se cambian en el .env del VPS.
+      </p>
+      {claves.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={claves.error} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        {grupos.map((g) => (
+          <Tarjeta key={g} titulo={g}>
+            <div className="space-y-2">
+              {claves.data
+                ?.filter((c) => c.grupo === g)
+                .map((c) => (
+                  <FilaClave key={`${c.nombre}-${c.origen}-${c.valor}`} c={c} />
+                ))}
+            </div>
+          </Tarjeta>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- página
 
-type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad";
+type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad" | "servicios";
 
 export default function Ajustes() {
   const [pestana, setPestana] = useState<Pestana>("cuenta");
+  const { data: me } = useMe();
+  const esMaestra = me?.usuario.role === "maestra";
   return (
     <>
       <Encabezado titulo="Ajustes" descripcion="Tus cambios se guardan en tu cuenta y se aplican en la PC y el celular." />
@@ -509,6 +612,7 @@ export default function Ajustes() {
           { id: "terminal", texto: "Terminal" },
           { id: "voz", texto: "Voz e IA" },
           { id: "seguridad", texto: "Seguridad" },
+          ...(esMaestra ? [{ id: "servicios" as const, texto: "Servicios y claves" }] : []),
         ]}
       />
       {pestana === "cuenta" ? <Cuenta /> : null}
@@ -516,6 +620,7 @@ export default function Ajustes() {
       {pestana === "terminal" ? <TerminalAjustes /> : null}
       {pestana === "voz" ? <VozIa /> : null}
       {pestana === "seguridad" ? <Seguridad /> : null}
+      {pestana === "servicios" && esMaestra ? <Servicios /> : null}
     </>
   );
 }
