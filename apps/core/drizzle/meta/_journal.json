@@ -50,6 +50,13 @@
       "when": 1792207677146,
       "tag": "0006_panel_y_negocio",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792208134893,
+      "tag": "0007_boveda",
+      "breakpoints": true
     }
   ]
 }

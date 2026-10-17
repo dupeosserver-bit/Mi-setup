@@ -103,3 +103,16 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 70 | Avisos de vencimiento y de cobros: como máximo uno al día por elemento; los cobros avisan 3 días antes y cuando ya vencieron. | Sin spam. | `vencimientos.ts`, `negocio.ts`. |
 | 71 | Montos con `numeric(12,2)`; el resumen de finanzas se calcula por moneda (por defecto MXN). Un cobro mensual del día 31 pasa al último día del mes siguiente. | Sin errores de redondeo ni mezclar monedas. | `negocio.ts`. |
 | 72 | Respaldos de la base: el script del VPS los deja en `BACKUP_HOST_DIR` (por defecto `/opt/mi-setup/backups`), que se monta en core de solo lectura; "al día" = el último tiene menos de 26 h. | No se conoce la carpeta exacta del script; es configurable. | `docker-compose.yml`, `respaldos.ts`. |
+
+## Plan 7 — Bóveda
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 73 | Argon2id con 3 pasadas y 64 MiB (`crypto_pwhash` de libsodium) en el cliente; clave de 32 bytes; XChaCha20-Poly1305 con nonce aleatorio y el tipo del elemento como dato asociado. | Seguro y usable también en el celular; un elemento no se puede mover de colección. | `apps/ui/src/lib/boveda/cripto.ts`. |
+| 74 | Todo el contenido va cifrado, incluidos el nombre, la carpeta y la URL; el servidor solo conoce el tipo (login, nota o totp) y las fechas. | Mínimo de metadatos. | `boveda.ts`, `Boveda.tsx`. |
+| 75 | Contraseñas y 2FA comparten la misma clave maestra (una sola bóveda) pero son módulos y rutas distintos (`/api/boveda`, `/api/2fa`). | Un solo desbloqueo. | `modules/boveda.ts`. |
+| 76 | Leer la bóveda exige reautenticación fuerte (5 min); guardar o borrar no, porque los datos ya van cifrados. La bóveda se bloquea sola tras 5 min sin actividad y la clave se borra de memoria. | "Abrir bóveda" pide reautenticación. | `boveda.ts`, `lib/boveda/estado.ts`. |
+| 77 | Exportar descarga los datos tal como están en el servidor (siguen cifrados) junto con la sal y los parámetros; importar pide la clave maestra del archivo, descifra y vuelve a cifrar con la actual. | Respaldo seguro y portable. | `lib/boveda/utilidades.ts`. |
+| 78 | Cambiar la clave maestra re-cifra todo en el cliente y el servidor lo reemplaza en una sola transacción (si la bóveda cambió mientras tanto, se rechaza). | Nunca queda a medias. | `/api/boveda/cambiar-clave`. |
+| 79 | Portapapeles: se borra a los 20 s solo si todavía contiene lo copiado. | No borrar algo que copiaste después. | `copiarSeguro`. |
+| 80 | Se usa la versión CommonJS de `libsodium-wrappers-sumo` (alias en Vite), porque su versión ESM importa un archivo que el paquete no incluye. | Error de empaquetado de la librería. | `apps/ui/vite.config.ts`. |

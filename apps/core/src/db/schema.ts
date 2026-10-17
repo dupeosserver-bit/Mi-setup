@@ -329,6 +329,38 @@ export const discordBots = pgTable("discord_bots", {
 
 export type VpsServerRow = typeof vpsServers.$inferSelect;
 
+// ---------------------------------------------------------------- Plan 7: bóveda (cifrado de extremo a extremo)
+
+/** Parámetros de la bóveda de cada cuenta. El servidor nunca ve la clave maestra. */
+export const vault = pgTable("vault", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  salt: text("salt").notNull(),
+  /** Parámetros de Argon2id usados en el cliente. */
+  kdf: jsonb("kdf").notNull(),
+  /** Texto conocido cifrado con la clave derivada (para comprobar la clave maestra). */
+  verifier: text("verifier").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const vaultItems = pgTable(
+  "vault_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "login", "nota" (gestor de contraseñas) o "totp" (autenticador 2FA). */
+    kind: text("kind").notNull(),
+    /** XChaCha20-Poly1305: v1.<nonce>.<cifrado> en base64url. Todo el contenido (incluida la carpeta) va cifrado. */
+    data: text("data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("vault_items_usuario").on(t.userId, t.kind)],
+);
+
 // ---------------------------------------------------------------- Plan 6: panel y negocio
 
 export const expirations = pgTable("expirations", {

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -15,6 +16,9 @@ export default defineConfig(({ mode }) => ({
       // La UI usa siempre el código fuente de shared (Vite lo compila).
       "@mi-setup/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // La versión ESM de libsodium-wrappers-sumo importa un archivo que no incluye:
+      // se usa su versión CommonJS (Vite la convierte).
+      "libsodium-wrappers-sumo": createRequire(import.meta.url).resolve("libsodium-wrappers-sumo"),
     },
   },
   server: {

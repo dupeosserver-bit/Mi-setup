@@ -12,6 +12,7 @@ import type { Database } from "./db/client.js";
 import { HttpError } from "./http-error.js";
 import type { Job } from "./jobs.js";
 import { aparienciaRoutes } from "./modules/apariencia.js";
+import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
 import { equiposModule } from "./modules/equipos.js";
@@ -156,6 +157,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(vencimientosRoutes(deps));
   await app.register(negocioRoutes(deps));
   await app.register(respaldosRoutes(deps));
+  await app.register(bovedaRoutes(deps));
   jobs.push(
     { nombre: "vencimientos", cadaMs: 6 * 60 * 60_000, alInicio: true, run: () => revisarVencimientos(deps) },
     { nombre: "cobros", cadaMs: 6 * 60 * 60_000, alInicio: true, run: async () => void (await recordarCobros(deps)) },

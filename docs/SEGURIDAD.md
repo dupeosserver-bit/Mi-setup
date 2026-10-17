@@ -24,7 +24,9 @@
 | Robo de tokens | accessToken de 15 min; refresh rotativo con detección de reutilización (revoca la sesión y avisa). ✅ |
 | Dispositivo desbloqueado en manos de otro | Reautenticación de 5 min para acciones sensibles; el PIN no basta para las fuertes; 5 fallos cierran la sesión. ✅ |
 | Ruta olvidada sin permisos | Toda ruta `/api` debe declarar `config.acceso`, o core no arranca. ✅ |
-| Lectura de la bóveda por el servidor | Fase 7: cifrado de extremo a extremo (Argon2id + XChaCha20-Poly1305). ⏳ |
+| Lectura de la bóveda por el servidor | Cifrado de extremo a extremo: Argon2id (3 pasadas, 64 MiB) + XChaCha20-Poly1305 en el cliente; el servidor guarda solo cifrado, sal y parámetros. ✅ |
+| Robo de credenciales SSH | AES-256-GCM con `SERVER_ENC_KEY`; nunca se devuelven al cliente; huella del host verificada (TOFU). ✅ |
+| Comandos destructivos | Lista de patrones peligrosos → doble confirmación + reautenticación fuerte, comprobado en el servidor. ✅ |
 | Robo de credenciales de infraestructura | Fase 5: AES-256-GCM con `SERVER_ENC_KEY`, nunca devueltas en claro. ⏳ |
 | Inyección contra la IA | Fase 9: texto externo marcado como no confiable, sin herramientas que lean secretos. ⏳ |
 
