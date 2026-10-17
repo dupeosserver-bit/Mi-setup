@@ -6,7 +6,8 @@
   "scripts": {
     "sincronizar": "pnpm --filter @mi-setup/ui build:movil && cap sync android",
     "abrir": "cap open android",
-    "apk": "cd android && gradlew assembleDebug"
+    "apk": "cd android && gradlew assembleDebug",
+    "apk:release": "cd android && gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

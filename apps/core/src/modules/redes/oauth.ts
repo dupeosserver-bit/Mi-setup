@@ -35,7 +35,9 @@ interface Plataforma {
 
 /** Petición JSON a una API externa con errores en español. */
 export async function pedirJson<T>(servicio: string, url: string, init: RequestInit = {}): Promise<T> {
-  const r = await fetch(url, { ...init, signal: AbortSignal.timeout(15_000) });
+  // Algunas APIs (p. ej. CheapShark) rechazan peticiones sin un User-Agent descriptivo.
+  const headers = { "user-agent": "MiSetup/0.1 (+https://setup.mexicanland.net)", ...(init.headers as Record<string, string> | undefined) };
+  const r = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(15_000) });
   const texto = await r.text();
   if (!r.ok) {
     if (r.status === 401) throw new HttpError(502, `${servicio}: la sesión expiró o fue revocada. Vuelve a conectar la cuenta.`, "token_invalido");

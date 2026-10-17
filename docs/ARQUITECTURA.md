@@ -23,14 +23,17 @@
  wg0 10.66.66.0/24  → WireGuard en el host (script del VPS)
 ```
 
-Clientes: app de PC (Electron) y de celular (Capacitor) cargan la misma UI (React) y hablan con `core` por HTTPS y un WebSocket autenticado (a partir de las fases 2 a 4).
+Clientes: app de PC (Electron) y de celular (Capacitor) cargan la misma UI (React) y hablan con `core` por HTTPS y un WebSocket autenticado .
 
 ## Monorepo
 
 | Paquete | Rol |
 |---|---|
 | `packages/shared` | Catálogo de módulos, modelo de permisos (RBAC), esquemas Zod. Sin dependencias de servidor. |
-| `apps/core` | API Fastify, migraciones Drizzle, auditoría, chequeo de permisos. |
+| `apps/core` | API Fastify, migraciones Drizzle, auditoría, chequeo de permisos, tareas programadas. |
+| `apps/ui` | Interfaz React (una sola para web, Electron y Capacitor). |
+| `apps/desktop` | Electron: ventana de la app, bandeja, agente de métricas, navegador privado, panel de Pterodactyl. |
+| `apps/mobile` | Capacitor (Android): biometría, notificaciones locales, métricas del celular. |
 
 ## core
 
@@ -93,10 +96,6 @@ Temas: `dispositivos`, `equipo:<id>:metricas`, `usuario:<id>` (sincronización),
 ## UI (`apps/ui`)
 
 React + Vite + Tailwind. Una sola UI para web, Electron y Capacitor. `src/modulos.tsx` registra cada apartado (ruta, ícono, página); el menú se construye con los permisos de `/api/auth/me`. Las peticiones pasan por `lib/api.ts`, que renueva el token y abre el diálogo de reautenticación cuando el servidor responde `reauth_requerida`.
-
-## Flujos pendientes (se documentan en su fase)
-
-- WebSocket multiplexado (fases 3–4), SSH/terminal (fase 5), correo entrante con HMAC y VPN (fase 8), IA con cola de propuestas (fase 9).
 
 ## Correo entrante
 

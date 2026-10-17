@@ -9,3 +9,6 @@ coverage/
 Thumbs.db
 .claude/worktrees/
 .data/
+
+# Instaladores generados
+apps/desktop/release/

@@ -145,10 +145,6 @@ Genera la llave con `keytool -genkey -v -keystore mi-setup.jks -alias mi-setup -
 
 Huella o rostro: en la app de Android, **Ajustes → Seguridad → Activar huella** (pide tu contraseña antes). Las notificaciones locales necesitan aceptar el permiso la primera vez.
 
-## Pendiente por fase
-
-Instalador de Windows y APK (fase 4), RustDesk (fase 11), WireGuard (fase 8) y cada integración en su fase.
-
 ## Correos temporales (Cloudflare Email Routing)
 
 1. En Cloudflare → *Email* → *Email Routing*, activa el dominio `mexicanland.net`.

@@ -54,7 +54,55 @@
 
 ## Checklist de revisión
 
-Se completa en la fase 12.
+Revisado en el Plan 12. `[x]` = verificado en código y con prueba automática; `[~]` = verificado en código, sin prueba automática; `[ ]` = depende del despliegue (hazlo tú en el VPS).
+
+**Secretos**
+- [x] Ningún secreto en el código, logs, commits ni documentación (búsqueda de patrones de llaves: solo valores de prueba en `test/`).
+- [x] `.env.example` con todos los secretos vacíos; `.env` y `.data/` en `.gitignore`.
+- [x] Configuración validada al arrancar; en producción faltan `POSTGRES_PASSWORD`, `JWT_SECRET` o `SERVER_ENC_KEY` ⇒ no arranca. `DB_EMBEBIDA` prohibido en producción.
+- [x] Tokens OAuth, credenciales SSH, secretos TOTP, contraseñas RustDesk: cifrados con AES-256-GCM (`SERVER_ENC_KEY`).
+- [x] Bóveda y 2FA: cifrado de extremo a extremo (el servidor solo guarda texto cifrado).
+- [x] La IA nunca recibe bóveda, 2FA, llaves SSH, tokens ni contraseñas.
+
+**Autenticación y sesiones**
+- [x] Argon2id para contraseñas y PIN; TOTP con anti-repetición en la cuenta maestra.
+- [x] Bloqueo por intentos (correo e IP) y aviso push.
+- [x] Access token de 15 min; refresh rotativo con detección de reutilización (revoca la sesión).
+- [x] Reautenticación (PIN o fuerte) para acciones sensibles; fuerte para bóveda, cuentas, OAuth, control remoto, comandos peligrosos, exportar auditoría.
+- [x] Desactivar una cuenta corta sus sesiones al momento.
+
+**Permisos**
+- [x] Guardia global: toda ruta `/api` declara su acceso (si falta, la app no arranca).
+- [x] Permisos por módulo; los módulos solo-maestra no se pueden otorgar.
+- [x] Temas del WebSocket autorizados por módulo y revalidados cada minuto.
+
+**IA**
+- [x] Solo propone; ejecuta únicamente con "Aprobar" (transición atómica, una sola vez).
+- [x] Peligrosas: escribir `EJECUTAR` + reautenticación fuerte; permisos revisados al aprobar.
+- [x] Tope mensual con tokens reales; bloquea sin llamar a la API.
+- [x] Texto externo marcado como no confiable; auditoría de propuesta, aprobación, rechazo y resultado.
+
+**Entradas externas**
+- [x] Correo entrante: HMAC-SHA256 con ventana de ±5 min y comparación en tiempo constante.
+- [x] OAuth: `state` de un solo uso, PKCE donde aplica.
+- [x] Vigilante de precios: protección SSRF (sin red interna, límites de tiempo, tamaño y redirecciones).
+- [x] Discord sin menciones masivas; X con costo confirmado.
+- [x] Validación Zod en todas las entradas; errores en español sin trazas.
+
+**Comandos y servidores**
+- [x] Comandos peligrosos (`rm -rf`, `dd`, `mkfs`, `shutdown`, `iptables -F`…) con doble confirmación y reautenticación.
+- [~] Agente de VPN: socket Unix con permisos 660, sin shell, argumentos validados.
+
+**Web y clientes**
+- [x] Helmet con CSP cerrada (scripts solo propios; imágenes `https:` por las portadas de ofertas), CORS con lista cerrada.
+- [~] Electron: `contextIsolation`, sin `nodeIntegration`, IPC solo desde la app, enlaces externos con lista de esquemas, navegador privado con partición en memoria.
+- [x] Auditoría inmutable (triggers que impiden UPDATE/DELETE/TRUNCATE); CSV con escape de fórmulas.
+
+**Despliegue (pendiente en el VPS)**
+- [ ] Solo los puertos 80/443 (Caddy) y los de RustDesk/WireGuard abiertos en el firewall.
+- [ ] `.env` del VPS con permisos 600 y secretos generados con `openssl rand -base64 48`.
+- [ ] Respaldos de la base funcionando (el script del VPS) y prueba de restauración.
+- [ ] Rotar `JWT_SECRET` cierra todas las sesiones; rotar `SERVER_ENC_KEY` requiere volver a guardar los secretos cifrados.
 
 ## IA asistente (Plan 9)
 
