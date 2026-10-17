@@ -97,3 +97,22 @@ React + Vite + Tailwind. Una sola UI para web, Electron y Capacitor. `src/modulo
 ## Flujos pendientes (se documentan en su fase)
 
 - WebSocket multiplexado (fases 3–4), SSH/terminal (fase 5), correo entrante con HMAC y VPN (fase 8), IA con cola de propuestas (fase 9).
+
+## Correo entrante
+
+```
+remitente → Cloudflare Email Routing (catch-all) → Email Worker
+   → POST https://setup.mexicanland.net/api/mail/inbound
+        x-mi-setup-fecha: <unix>   x-mi-setup-firma: HMAC-SHA256(secreto, "<unix>.<cuerpo>")
+   → core: firma y fecha (±5 min) → alias activo → guarda → aviso por WebSocket
+   tarea cada hora: borra los no guardados de más de 24 h
+```
+
+## VPN
+
+```
+dispositivo: genera llave privada/pública/PSK (libsodium) ─ solo pública + PSK ─▶ core
+core ─HTTP sobre socket Unix /run/mi-setup/wg.sock─▶ mi-setup-wg-agent (host, root)
+     ─▶ /usr/local/sbin/mi-setup-wg add <nombre> --pubkey … --json ─▶ wg0
+core ◀─ dirección, llave del servidor, endpoint ─┘ → el dispositivo arma QR/.conf con su privada
+```

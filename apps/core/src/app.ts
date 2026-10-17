@@ -15,6 +15,8 @@ import { aparienciaRoutes } from "./modules/apariencia.js";
 import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
+import { correoRoutes, purgarCorreos } from "./modules/correo.js";
+import { vpnRoutes } from "./modules/vpn.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
@@ -158,6 +160,9 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(negocioRoutes(deps));
   await app.register(respaldosRoutes(deps));
   await app.register(bovedaRoutes(deps));
+  await app.register(correoRoutes(deps));
+  await app.register(vpnRoutes(deps));
+  jobs.push({ nombre: "correos-24h", cadaMs: 60 * 60_000, alInicio: true, run: () => purgarCorreos(deps) });
   jobs.push(
     { nombre: "vencimientos", cadaMs: 6 * 60 * 60_000, alInicio: true, run: () => revisarVencimientos(deps) },
     { nombre: "cobros", cadaMs: 6 * 60 * 60_000, alInicio: true, run: async () => void (await recordarCobros(deps)) },

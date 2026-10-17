@@ -329,6 +329,61 @@ export const discordBots = pgTable("discord_bots", {
 
 export type VpsServerRow = typeof vpsServers.$inferSelect;
 
+// ---------------------------------------------------------------- Plan 8: correos temporales y VPN
+
+export const mailAliases = pgTable(
+  "mail_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Parte local de la dirección (alias@DOMAIN), en minúsculas. */
+    alias: text("alias").notNull(),
+    label: text("label").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("mail_aliases_alias").on(t.alias)],
+);
+
+export const mailMessages = pgTable(
+  "mail_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    aliasId: uuid("alias_id")
+      .notNull()
+      .references(() => mailAliases.id, { onDelete: "cascade" }),
+    messageId: text("message_id").notNull(),
+    from: text("from_addr").notNull(),
+    to: text("to_addr").notNull(),
+    subject: text("subject").notNull().default(""),
+    text: text("text_body").notNull().default(""),
+    html: text("html_body"),
+    size: integer("size").notNull().default(0),
+    saved: boolean("saved").notNull().default(false),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("mail_messages_unico").on(t.aliasId, t.messageId), index("mail_messages_fecha").on(t.receivedAt)],
+);
+
+export const vpnDevices = pgTable(
+  "vpn_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Nombre del peer en wg0 (también lo usa mi-setup-wg). */
+    name: text("name").notNull(),
+    /** Solo la llave PÚBLICA: la privada nunca sale del dispositivo. */
+    publicKey: text("public_key").notNull(),
+    address: text("address").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("vpn_devices_nombre").on(t.name)],
+);
+
 // ---------------------------------------------------------------- Plan 7: bóveda (cifrado de extremo a extremo)
 
 /** Parámetros de la bóveda de cada cuenta. El servidor nunca ve la clave maestra. */

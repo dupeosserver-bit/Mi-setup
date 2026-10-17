@@ -116,3 +116,16 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 78 | Cambiar la clave maestra re-cifra todo en el cliente y el servidor lo reemplaza en una sola transacción (si la bóveda cambió mientras tanto, se rechaza). | Nunca queda a medias. | `/api/boveda/cambiar-clave`. |
 | 79 | Portapapeles: se borra a los 20 s solo si todavía contiene lo copiado. | No borrar algo que copiaste después. | `copiarSeguro`. |
 | 80 | Se usa la versión CommonJS de `libsodium-wrappers-sumo` (alias en Vite), porque su versión ESM importa un archivo que el paquete no incluye. | Error de empaquetado de la librería. | `apps/ui/vite.config.ts`. |
+
+## Plan 8 — Correos temporales y VPN
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 81 | Firma del Worker: `hex(HMAC-SHA256(MAIL_INBOUND_SECRET, "<unix_segundos>.<cuerpo>"))` en `x-mi-setup-firma` y la fecha en `x-mi-setup-fecha`; se rechaza si la fecha difiere más de 5 min. El cuerpo se firma tal cual llega (sin volver a serializarlo). | Lo pide el prompt; evita reenvíos viejos. | `modules/correo.ts`, `deploy/cloudflare-email-worker.js`. |
+| 82 | Un correo para un alias inexistente o desactivado se responde `202 {aceptado:false}`: no revela qué direcciones existen. Mismo `Message-ID` dos veces = un solo correo. | Privacidad y reintentos de Cloudflare. | `correo.ts`. |
+| 83 | El HTML del correo se muestra en un `iframe` con `sandbox` vacío (sin scripts, formularios ni navegación); por defecto se ve el texto. | Contenido no confiable. | `Correos.tsx`. |
+| 84 | La purga de correos no guardados corre cada hora (borra los de más de 24 h). | "Los demás se borran a las 24 h". | `purgarCorreos`. |
+| 85 | VPN: core habla con un **servicio mínimo del host** (`deploy/wg-agent`, Python, systemd, root) por el socket Unix `/run/mi-setup/wg.sock` (grupo 1000 = usuario `node` del contenedor, modo 660). Solo permite estado, alta y baja, con argumentos validados y sin shell. | Opción más simple y segura; nunca se monta el socket de Docker. | `deploy/host-install.sh`, `modules/vpn.ts`. |
+| 86 | Se asume que `mi-setup-wg add <nombre> --pubkey K [--psk K] --json` devuelve JSON con la dirección (`address`), la llave pública del servidor (`server_public_key`) y el `endpoint` (se aceptan variantes de nombre); y que existe `mi-setup-wg remove <nombre> --json`. El DNS por defecto es 1.1.1.1 y `AllowedIPs = 0.0.0.0/0, ::/0` si no vienen. | El contrato del script solo describe `add`. | `interpretarAlta` en `vpn.ts`, `mi-setup-wg-agent.py`. |
+| 87 | Las llaves WireGuard (privada "clampeada", pública con `crypto_scalarmult_base` y PSK) se generan en el dispositivo; la privada solo aparece una vez en el QR o el `.conf`. | La privada no sale del dispositivo. | `Vpn.tsx`. |
+| 88 | "Conectar/desconectar" abre la app oficial de WireGuard (en Android con un intent; en Windows se indica abrirla), porque el túnel lo maneja esa app. Un dispositivo cuenta como conectado si su último saludo fue hace menos de 3 min. | Una sola ubicación, app oficial. | `Vpn.tsx`, `vpn.ts`. |

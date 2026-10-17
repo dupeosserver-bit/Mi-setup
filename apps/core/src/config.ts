@@ -41,6 +41,10 @@ const envSchema = z
     PTERO_APP_KEY: optionalString,
     /** Carpeta (montada de solo lectura) con los respaldos de la base que hace el script del VPS. */
     BACKUP_DIR: optionalString,
+    /** Secreto compartido con el Email Worker de Cloudflare (firma HMAC-SHA256). */
+    MAIL_INBOUND_SECRET: optionalString,
+    /** Socket Unix del servicio del host que ejecuta /usr/local/sbin/mi-setup-wg. */
+    VPN_SOCKET: z.string().default("/run/mi-setup/wg.sock"),
     /** Carpeta de la UI compilada. En Docker: /app/public. */
     UI_DIR: optionalString,
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */

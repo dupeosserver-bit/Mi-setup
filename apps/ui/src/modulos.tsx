@@ -73,8 +73,8 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
 
   boveda: m("boveda", "/seguridad/boveda", KeyRound, lazy(() => import("./pages/Boveda"))),
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck, lazy(() => import("./pages/Autenticador"))),
-  correos_temporales: m("correos_temporales", "/seguridad/correos", Mail),
-  vpn: m("vpn", "/seguridad/vpn", Shield),
+  correos_temporales: m("correos_temporales", "/seguridad/correos", Mail, lazy(() => import("./pages/Correos"))),
+  vpn: m("vpn", "/seguridad/vpn", Shield, lazy(() => import("./pages/Vpn"))),
   navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe),
   auditoria: m("auditoria", "/seguridad/actividad", ScrollText),
   cuentas: m("cuentas", "/seguridad/cuentas", UserCog),

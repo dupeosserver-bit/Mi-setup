@@ -146,3 +146,19 @@ Huella o rostro: en la app de Android, **Ajustes → Seguridad → Activar huell
 ## Pendiente por fase
 
 Instalador de Windows y APK (fase 4), RustDesk (fase 11), WireGuard (fase 8) y cada integración en su fase.
+
+## Correos temporales (Cloudflare Email Routing)
+
+1. En Cloudflare → *Email* → *Email Routing*, activa el dominio `mexicanland.net`.
+2. Crea un Worker con `deploy/cloudflare-email-worker.js` (`npm i postal-mime`, `wrangler deploy`).
+3. En el Worker: variable `MI_SETUP_URL = https://setup.mexicanland.net` y secreto `MAIL_INBOUND_SECRET` (el **mismo** valor que en `/opt/mi-setup/.env`; genera uno con `openssl rand -hex 32`).
+4. En *Email Routing → Routes*, la regla **catch-all** envía a ese Worker.
+5. En la app, **Seguridad → Correos temporales → Dirección** crea `alias@mexicanland.net`. Los correos se borran a las 24 h salvo los que marques con **Guardar**.
+
+## VPN (WireGuard)
+
+1. El script del VPS ya configura `wg0` (10.66.66.0/24, 51820/udp) y `/usr/local/sbin/mi-setup-wg`.
+2. Ejecuta una vez como root `bash deploy/host-install.sh` (el script del VPS puede hacerlo): instala el servicio `mi-setup-wg-agent` que crea `/run/mi-setup/wg.sock`.
+3. En la app, **Seguridad → VPN → Dispositivo**: escribe un nombre; la app genera las llaves y te muestra un QR y un `.conf` **una sola vez**.
+4. En el celular: app **WireGuard** → `+` → *Escanear desde código QR*. En Windows: WireGuard → *Importar túnel desde archivo*.
+5. Activa o desactiva el túnel desde la app de WireGuard ("Abrir WireGuard").
