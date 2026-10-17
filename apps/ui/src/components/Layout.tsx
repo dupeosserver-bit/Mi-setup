@@ -8,10 +8,11 @@
  */
 import { MODULES, temas, type ModuleId } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ChevronsLeft, ChevronsRight, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X } from "lucide-react";
+import { Bell, ChevronsLeft, ChevronsRight, CircleHelp, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { AYUDA } from "../lib/ayuda";
 import { queryClient, useApariencia, useMe } from "../lib/consultas";
 import { olvidarDispositivo } from "../lib/dispositivo";
 import { mostrarNotificacion, prepararNotificaciones } from "../lib/notificaciones";
@@ -23,7 +24,7 @@ import { CATEGORIAS, MODULOS_UI, moduloPorRuta } from "../modulos";
 import { AsistenteFlotante } from "./Asistente";
 import { Buscador } from "./Buscador";
 import { Logo } from "./Logo";
-import { Cargando, Punto, cx } from "./ui";
+import { Cargando, Modal, Punto, cx } from "./ui";
 
 const CLAVE_RECIENTES = "mi-setup.recientes";
 const CLAVE_LATERAL = "mi-setup.lateral";
@@ -258,6 +259,29 @@ function BotonMas({ visibles }: { visibles: Set<ModuleId> }) {
   );
 }
 
+/** "¿Cómo se usa?": abre los pasos del apartado actual. */
+function BotonAyuda({ modulo }: { modulo: ModuleId }) {
+  const [abierto, setAbierto] = useState(false);
+  const ayuda = AYUDA[modulo];
+  return (
+    <>
+      <div className="mb-2 flex justify-end">
+        <button type="button" onClick={() => setAbierto(true)} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-tenue hover:bg-tarjeta hover:text-texto">
+          <CircleHelp className="h-3.5 w-3.5" /> ¿Cómo se usa?
+        </button>
+      </div>
+      <Modal abierto={abierto} titulo={`Cómo usar: ${MODULES[modulo].label}`} alCerrar={() => setAbierto(false)}>
+        <ol className="list-decimal space-y-2 pl-5 text-sm">
+          {ayuda.pasos.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ol>
+        {ayuda.nota ? <p className="mt-3 rounded-xl bg-fondo p-3 text-xs text-tenue">{ayuda.nota}</p> : null}
+      </Modal>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- estructura
 
 export function Layout() {
@@ -354,6 +378,7 @@ export function Layout() {
         <BarraLateral grupos={grupos} compacta={compacta} alternar={alternarLateral} />
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl p-4 pb-28 md:p-6">
+            {actual ? <BotonAyuda modulo={actual.id} /> : null}
             <Suspense fallback={<Cargando />}>
               <Outlet />
             </Suspense>
