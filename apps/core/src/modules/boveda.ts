@@ -29,7 +29,8 @@ const configSchema = z.object({
 });
 
 const COLECCIONES: { prefijo: string; modulo: ModuleId; tipos: readonly string[] }[] = [
-  { prefijo: "/api/boveda", modulo: "boveda", tipos: ["login", "nota"] },
+  // "generada": historial de las últimas contraseñas generadas (máx. 10, lo limpia el cliente).
+  { prefijo: "/api/boveda", modulo: "boveda", tipos: ["login", "nota", "generada"] },
   { prefijo: "/api/2fa", modulo: "autenticador", tipos: ["totp"] },
 ];
 

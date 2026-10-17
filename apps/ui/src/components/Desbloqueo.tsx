@@ -62,11 +62,11 @@ export function Desbloqueo({ children }: { children: ReactNode }) {
 
   return (
     <div className="mx-auto max-w-md py-6">
-      <Tarjeta titulo={crear ? "Crear la bóveda" : "Bóveda bloqueada"} icono={crear ? KeyRound : Lock}>
+      <Tarjeta titulo={crear ? "Primer paso: crea tu bóveda" : "Bóveda bloqueada"} icono={crear ? KeyRound : Lock}>
         <form onSubmit={enviar} className="space-y-3">
           <p className="text-sm text-tenue">
             {crear
-              ? "Elige una clave maestra. Con ella se cifran tus contraseñas y códigos 2FA en este dispositivo antes de enviarlos."
+              ? "Esto se hace una sola vez. La bóveda es una caja fuerte cifrada donde se guardan tus contraseñas y tus códigos 2FA. Elige UNA clave maestra para abrirla; después, adentro, podrás guardar contraseñas y generar nuevas. (Si solo quieres generar una contraseña, usa la pestaña Generador.)"
               : "Escribe tu clave maestra para descifrar la bóveda en este dispositivo. Se bloquea sola tras 5 minutos sin uso."}
           </p>
           <Campo etiqueta="Clave maestra">

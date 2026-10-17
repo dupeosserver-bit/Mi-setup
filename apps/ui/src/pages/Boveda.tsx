@@ -1,13 +1,13 @@
 /** Gestor de contraseñas (cifrado de extremo a extremo). */
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
+import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { AVISO_SIN_RECUPERACION, Desbloqueo, MedidorFortaleza } from "../components/Desbloqueo";
-import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Interruptor, Modal, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { cifrar, contextoDe } from "../lib/boveda/cripto";
-import { recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
-import { generarContrasena, OPCIONES_POR_DEFECTO, type OpcionesGenerador } from "../lib/boveda/generador";
+import { leerColeccion, recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
+import { generarContrasena, OPCIONES_POR_DEFECTO, SIMBOLOS_POR_DEFECTO, type OpcionesGenerador } from "../lib/boveda/generador";
 import { cambiarClaveMaestra, copiarSeguro, exportar, importar } from "../lib/boveda/utilidades";
 import { confirmar } from "../lib/confirmar";
 import { usePuede } from "../lib/consultas";
@@ -24,9 +24,28 @@ interface Datos {
 
 type Item = Elemento<Datos>;
 
-function Generador({ alUsar }: { alUsar: (c: string) => void }) {
+const MAX_HISTORIAL = 10;
+
+interface Generada {
+  contrasena: string;
+  fecha: string;
+  para?: string;
+}
+
+/** Guarda una contraseña generada en el historial cifrado y deja solo las últimas 10. */
+async function guardarGenerada(clave: Uint8Array, contrasena: string, para?: string): Promise<void> {
+  const valor: Generada = { contrasena, fecha: new Date().toISOString(), ...(para ? { para } : {}) };
+  await api("/api/boveda/items", { cuerpo: { tipo: "generada", datos: await cifrar(clave, valor, contextoDe("generada")) } });
+  const todas = (await leerColeccion<Generada>("boveda", clave)).filter((e) => e.tipo === "generada").sort((a, b) => b.valor.fecha.localeCompare(a.valor.fecha));
+  for (const vieja of todas.slice(MAX_HISTORIAL)) await api(`/api/boveda/items/${vieja.id}`, { metodo: "DELETE" }).catch(() => undefined);
+  await recargarElementos();
+}
+
+function Generador({ alUsar, botonUsar = "Usar esta contraseña" }: { alUsar?: (c: string) => void; botonUsar?: string }) {
+  const clave = useBoveda((s) => s.clave);
   const [o, setO] = useState<OpcionesGenerador>(OPCIONES_POR_DEFECTO);
   const [valor, setValor] = useState(() => generarContrasena(OPCIONES_POR_DEFECTO));
+  const [para, setPara] = useState("");
   const regenerar = (n: OpcionesGenerador) => {
     setO(n);
     try {
@@ -35,29 +54,109 @@ function Generador({ alUsar }: { alUsar: (c: string) => void }) {
       avisarError(err);
     }
   };
+  const recordar = () => {
+    if (clave) void guardarGenerada(clave, valor, para.trim() || undefined).catch(() => undefined);
+  };
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
         <Entrada value={valor} readOnly className="font-mono" />
         <Boton tamano="icono" icono={RefreshCw} onClick={() => regenerar(o)} aria-label="Generar otra" />
+        <Boton
+          tamano="icono"
+          icono={Copy}
+          aria-label="Copiar"
+          onClick={() => {
+            void copiarSeguro(valor, "Contraseña copiada").catch(avisarError);
+            recordar();
+          }}
+        />
       </div>
       <MedidorFortaleza clave={valor} />
-      <Campo etiqueta={`Longitud: ${o.longitud}`}>
-        <input type="range" min={8} max={64} value={o.longitud} onChange={(e) => regenerar({ ...o, longitud: Number(e.target.value) })} className="w-full accent-[#E5E5EA]" />
+      <Campo etiqueta={`Longitud: ${o.longitud} caracteres`}>
+        <input type="range" min={8} max={128} value={o.longitud} onChange={(e) => regenerar({ ...o, longitud: Number(e.target.value) })} className="w-full" />
       </Campo>
       <div className="grid grid-cols-2 gap-2">
         {([
-          ["mayusculas", "Mayúsculas"],
-          ["minusculas", "Minúsculas"],
-          ["numeros", "Números"],
+          ["mayusculas", "Mayúsculas (A-Z)"],
+          ["minusculas", "Minúsculas (a-z)"],
+          ["numeros", "Números (0-9)"],
           ["simbolos", "Símbolos"],
           ["sinAmbiguos", "Sin ambiguos (l, 1, O, 0)"],
         ] as const).map(([k, t]) => (
           <Interruptor key={k} activo={o[k]} alCambiar={(v) => regenerar({ ...o, [k]: v })} etiqueta={t} />
         ))}
       </div>
-      <Boton variante="primario" className="w-full" icono={Wand2} onClick={() => alUsar(valor)}>Usar esta contraseña</Boton>
+      {o.simbolos ? (
+        <Campo etiqueta="Símbolos permitidos" ayuda="Quita los que el sitio no acepte.">
+          <div className="flex gap-2">
+            <Entrada value={o.simbolosTexto} onChange={(e) => regenerar({ ...o, simbolosTexto: e.target.value })} className="font-mono" />
+            <Boton tamano="sm" variante="fantasma" onClick={() => regenerar({ ...o, simbolosTexto: SIMBOLOS_POR_DEFECTO })}>
+              Todos
+            </Boton>
+          </div>
+        </Campo>
+      ) : null}
+      <Campo etiqueta="¿Para qué es? (opcional, se guarda en el historial)">
+        <Entrada value={para} onChange={(e) => setPara(e.target.value)} placeholder="Ej. cuenta de Steam" />
+      </Campo>
+      {clave ? (
+        <p className="text-xs text-tenue">Cada contraseña que copies o uses se guarda cifrada en el historial (las últimas {MAX_HISTORIAL}).</p>
+      ) : (
+        <p className="text-xs text-aviso">La bóveda está bloqueada: esta contraseña no se guardará en el historial. Ábrela en "Mis contraseñas" para guardarlas.</p>
+      )}
+      {alUsar ? (
+        <Boton
+          variante="primario"
+          className="w-full"
+          icono={Wand2}
+          onClick={() => {
+            recordar();
+            alUsar(valor);
+          }}
+        >
+          {botonUsar}
+        </Boton>
+      ) : null}
     </div>
+  );
+}
+
+function HistorialGeneradas() {
+  const { data, isLoading } = useElementos<Generada>("boveda");
+  const [ver, setVer] = useState<string | null>(null);
+  const lista = (data ?? []).filter((e) => e.tipo === "generada").sort((a, b) => b.valor.fecha.localeCompare(a.valor.fecha));
+  if (isLoading) return <Cargando texto="Descifrando…" />;
+  return (
+    <Tarjeta titulo={`Últimas ${MAX_HISTORIAL} contraseñas generadas`} icono={History}>
+      {lista.length === 0 ? <Vacio texto="Aún no has generado contraseñas. Ve a la pestaña Generador." /> : null}
+      <div className="space-y-2">
+        {lista.map((g) => (
+          <div key={g.id} className="flex items-center gap-2 rounded-xl bg-fondo p-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-mono text-sm">{ver === g.id ? g.valor.contrasena : "••••••••••••••••"}</p>
+              <p className="text-xs text-tenue">
+                {g.valor.para ? `${g.valor.para} · ` : ""}
+                {new Date(g.valor.fecha).toLocaleString("es-MX")}
+              </p>
+            </div>
+            <Boton tamano="icono" variante="fantasma" icono={ver === g.id ? EyeOff : Eye} onClick={() => setVer(ver === g.id ? null : g.id)} aria-label="Mostrar u ocultar" />
+            <Boton tamano="icono" variante="fantasma" icono={Copy} onClick={() => void copiarSeguro(g.valor.contrasena, "Contraseña copiada").catch(avisarError)} aria-label="Copiar" />
+            <Boton
+              tamano="icono"
+              variante="fantasma"
+              icono={Trash2}
+              aria-label="Borrar"
+              onClick={async () => {
+                await api(`/api/boveda/items/${g.id}`, { metodo: "DELETE" }).catch(avisarError);
+                await recargarElementos();
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-tenue">Si una contraseña ya la usaste en un sitio, guárdala como elemento en "Mis contraseñas" para no perderla cuando salga del historial.</p>
+    </Tarjeta>
   );
 }
 
@@ -260,7 +359,8 @@ function Herramientas() {
 function Contenido() {
   const puede = usePuede("boveda", "escritura");
   const bloquear = useBoveda((s) => s.bloquear);
-  const { data, isLoading, error } = useElementos<Datos>("boveda");
+  const { data: todos, isLoading, error } = useElementos<Datos>("boveda");
+  const data = useMemo(() => todos?.filter((i) => i.tipo !== "generada"), [todos]);
   const [q, setQ] = useState("");
   const [carpeta, setCarpeta] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -335,9 +435,38 @@ function Contenido() {
 }
 
 export default function Boveda() {
+  const [pestana, setPestana] = useState<"contrasenas" | "generador" | "historial">("contrasenas");
   return (
-    <Desbloqueo>
-      <Contenido />
-    </Desbloqueo>
+    <>
+      <Pestanas
+        valor={pestana}
+        alCambiar={setPestana}
+        opciones={[
+          { id: "contrasenas", texto: "Mis contraseñas" },
+          { id: "generador", texto: "Generador" },
+          { id: "historial", texto: "Historial (10)" },
+        ]}
+      />
+      {pestana === "contrasenas" ? (
+        <Desbloqueo>
+          <Contenido />
+        </Desbloqueo>
+      ) : null}
+      {pestana === "generador" ? (
+        <div className="mx-auto max-w-xl">
+          <Encabezado titulo="Generador de contraseñas" descripcion="Crea contraseñas fuertes al azar. No necesitas abrir la bóveda para generarlas." />
+          <Tarjeta>
+            <Generador />
+          </Tarjeta>
+        </div>
+      ) : null}
+      {pestana === "historial" ? (
+        <Desbloqueo>
+          <div className="mx-auto max-w-2xl">
+            <HistorialGeneradas />
+          </div>
+        </Desbloqueo>
+      ) : null}
+    </>
   );
 }

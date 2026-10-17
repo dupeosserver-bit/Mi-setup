@@ -7,9 +7,21 @@ export interface OpcionesGenerador {
   numeros: boolean;
   simbolos: boolean;
   sinAmbiguos: boolean;
+  /** Símbolos que se pueden usar (algunos sitios solo aceptan ciertos). */
+  simbolosTexto: string;
 }
 
-export const OPCIONES_POR_DEFECTO: OpcionesGenerador = { longitud: 20, mayusculas: true, minusculas: true, numeros: true, simbolos: true, sinAmbiguos: true };
+export const SIMBOLOS_POR_DEFECTO = "!@#$%^&*()-_=+[]{};:,.?/~";
+
+export const OPCIONES_POR_DEFECTO: OpcionesGenerador = {
+  longitud: 20,
+  mayusculas: true,
+  minusculas: true,
+  numeros: true,
+  simbolos: true,
+  sinAmbiguos: true,
+  simbolosTexto: SIMBOLOS_POR_DEFECTO,
+};
 
 const CONJUNTOS = {
   mayusculas: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -33,7 +45,12 @@ function aleatorio(max: number): number {
 export function generarContrasena(o: OpcionesGenerador): string {
   const elegidos = (Object.keys(CONJUNTOS) as (keyof typeof CONJUNTOS)[])
     .filter((k) => o[k])
-    .map((k) => [...CONJUNTOS[k]].filter((c) => !o.sinAmbiguos || !AMBIGUOS.has(c)).join(""));
+    .map((k) => {
+      // Símbolos elegidos por el usuario (sin letras, números ni espacios; sin repetidos).
+      const base = k === "simbolos" ? [...new Set(o.simbolosTexto.replace(/[\sA-Za-z0-9]/g, ""))].join("") || CONJUNTOS.simbolos : CONJUNTOS[k];
+      return [...base].filter((c) => !o.sinAmbiguos || !AMBIGUOS.has(c)).join("");
+    })
+    .filter((c) => c.length > 0);
   if (elegidos.length === 0) throw new Error("Elige al menos un tipo de carácter");
   const longitud = Math.max(elegidos.length, Math.min(128, Math.floor(o.longitud)));
   const todos = elegidos.join("");
