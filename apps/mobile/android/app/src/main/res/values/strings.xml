@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mi Setup</string>
+    <string name="title_activity_main">Mi Setup</string>
+    <string name="package_name">net.mexicanland.misetup</string>
+    <string name="custom_url_scheme">net.mexicanland.misetup</string>
+</resources>

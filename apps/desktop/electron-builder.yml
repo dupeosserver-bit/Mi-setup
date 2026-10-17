@@ -1,0 +1,23 @@
+# Instalador de Windows (.exe NSIS). Antes: `pnpm branding` para generar build/icon.ico.
+appId: net.mexicanland.misetup
+productName: Mi Setup
+copyright: MexicanLand
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - static/**/*
+  - package.json
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+win:
+  target: nsis
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Mi Setup

@@ -51,10 +51,10 @@ function m(id: ModuleId, ruta: string, icono: LucideIcon, Pagina: LazyExoticComp
 }
 
 export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
-  recordatorios: m("recordatorios", "/recordatorios", Bell),
-  notas: m("notas", "/notas", NotebookPen),
+  recordatorios: m("recordatorios", "/recordatorios", Bell, lazy(() => import("./pages/Recordatorios"))),
+  notas: m("notas", "/notas", NotebookPen, lazy(() => import("./pages/Notas"))),
   equipos: m("equipos", "/equipos", MonitorSmartphone, lazy(() => import("./pages/Equipos"))),
-  chat: m("chat", "/chat", MessagesSquare),
+  chat: m("chat", "/chat", MessagesSquare, lazy(() => import("./pages/Chat"))),
 
   vps_terminal: m("vps_terminal", "/vps/terminal", TerminalSquare),
   vps_rendimiento: m("vps_rendimiento", "/vps/rendimiento", Activity),

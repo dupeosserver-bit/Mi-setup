@@ -23,6 +23,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { api } from "../lib/api";
 import { queryClient, useApariencia, useMe } from "../lib/consultas";
 import { olvidarDispositivo } from "../lib/dispositivo";
+import { mostrarNotificacion, prepararNotificaciones } from "../lib/notificaciones";
 import { escritorio } from "../lib/plataforma";
 import { useSesion } from "../lib/sesion";
 import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
@@ -143,6 +144,8 @@ function BarraSuperior({
       <Link to="/" className="mr-2 flex items-center">
         <Logo tamano="sm" />
       </Link>
+      {pc ? null : (
+      <>
       <Menu_ titulo="Archivo">
         {(c) => (
           <>
@@ -202,13 +205,20 @@ function BarraSuperior({
             <ItemMenu atajo="Ctrl+K" onClick={() => (c(), alBuscar())}>Buscar apartado</ItemMenu>
             <ItemMenu onClick={() => (c(), alternarLateral())}>Mostrar u ocultar barra lateral</ItemMenu>
             <Separador />
-            <ItemMenu atajo="F5" onClick={() => (c(), pc ? pc.ventana("recargar") : window.location.reload())}>Recargar</ItemMenu>
+            <ItemMenu
+              atajo="F5"
+              onClick={() => {
+                c();
+                window.location.reload();
+              }}
+            >
+              Recargar
+            </ItemMenu>
             <ItemMenu
               atajo="F11"
               onClick={() => {
                 c();
-                if (pc) pc.ventana("pantallaCompleta");
-                else if (document.fullscreenElement) void document.exitFullscreen();
+                if (document.fullscreenElement) void document.exitFullscreen();
                 else void document.documentElement.requestFullscreen();
               }}
             >
@@ -218,27 +228,28 @@ function BarraSuperior({
         )}
       </Menu_>
       <Menu_ titulo="Ventana">
-        {(c) =>
-          pc ? (
-            <>
-              <ItemMenu onClick={() => (c(), pc.ventana("minimizar"))}>Minimizar</ItemMenu>
-              <ItemMenu onClick={() => (c(), pc.ventana("maximizar"))}>Maximizar o restaurar</ItemMenu>
-              <ItemMenu onClick={() => (c(), pc.ventana("cerrar"))}>Cerrar ventana (sigue en la bandeja)</ItemMenu>
-            </>
-          ) : (
-            <ItemMenu onClick={() => (c(), window.open(window.location.href, "_blank", "noopener"))}>Abrir en una ventana nueva</ItemMenu>
-          )
-        }
+        {(c) => (
+          <ItemMenu
+            onClick={() => {
+              c();
+              window.open(window.location.href, "_blank", "noopener");
+            }}
+          >
+            Abrir en una ventana nueva
+          </ItemMenu>
+        )}
       </Menu_>
       <Menu_ titulo="Ayuda">
         {(c) => (
           <>
             <ItemMenu onClick={() => (c(), alBuscar())}>Atajos: Ctrl+K busca apartados</ItemMenu>
             <Separador />
-            <div className="px-3 py-1.5 text-xs text-tenue">Mi Setup {pc ? `· PC ${pc.version}` : ""}</div>
+            <div className="px-3 py-1.5 text-xs text-tenue">Mi Setup</div>
           </>
         )}
       </Menu_>
+      </>
+      )}
 
       <div className="ml-auto flex items-center gap-3">
         <button type="button" onClick={alBuscar} className="flex h-7 items-center gap-2 rounded-lg border border-borde px-2.5 text-xs text-tenue hover:text-texto">
@@ -417,13 +428,30 @@ export function Layout() {
   const [buscar, setBuscar] = useState(false);
   const [lateral, setLateral] = useState(() => localStorage.getItem(CLAVE_LATERAL) !== "no");
 
-  // Sincronización entre dispositivos: el servidor avisa qué recurso cambió.
-  useTema<{ recurso: string }>(me ? temas.usuario(me.usuario.id) : null, ({ recurso }) => {
+  // Sincronización entre dispositivos: el servidor avisa qué recurso cambió
+  // (y, si trae aviso, se muestra como notificación local).
+  useTema<{ recurso: string; aviso?: { titulo: string; cuerpo: string } }>(me ? temas.usuario(me.usuario.id) : null, ({ recurso, aviso }) => {
     void queryClient.invalidateQueries({ queryKey: [recurso] });
+    if (aviso) void mostrarNotificacion(aviso.titulo, aviso.cuerpo);
   });
+
+  useEffect(() => {
+    void prepararNotificaciones();
+  }, []);
+
+  // En la app de PC el menú superior es nativo (Electron).
+  useEffect(() => {
+    escritorio()?.establecerMenu(
+      grupos.map((g) => ({ titulo: g.titulo, items: g.modulos.map((mod) => ({ etiqueta: MODULES[mod.id].label, ruta: mod.ruta })) })),
+    );
+  }, [grupos]);
   useTema("apariencia", () => void queryClient.invalidateQueries({ queryKey: ["apariencia"] }));
 
-  useEffect(() => escritorio()?.alNavegar((ruta) => navegar(ruta)), [navegar]);
+  useEffect(() => {
+    const pc = escritorio();
+    if (!pc) return;
+    return pc.alNavegar((ruta) => navegar(ruta));
+  }, [navegar]);
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {

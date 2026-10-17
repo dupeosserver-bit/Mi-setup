@@ -42,7 +42,7 @@ export async function createTestContext(options: { config?: Config } = {}) {
   const { db, client } = await createTestDb();
   const clock = { now: new Date("2026-03-01T12:00:00.000Z") };
   const notifier = memoryNotifier();
-  const { app, auth } = await buildApp({
+  const { app, auth, deps } = await buildApp({
     config: options.config ?? testConfig,
     db,
     notifier,
@@ -52,6 +52,7 @@ export async function createTestContext(options: { config?: Config } = {}) {
   return {
     app,
     auth,
+    deps,
     db,
     clock,
     notifier,

@@ -1,0 +1,24 @@
+{
+  "name": "@mi-setup/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mi Setup para Android (Capacitor): biometría y notificaciones",
+  "scripts": {
+    "sincronizar": "pnpm --filter @mi-setup/ui build:movil && cap sync android",
+    "abrir": "cap open android",
+    "apk": "cd android && gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/device": "^6.0.2",
+    "@capacitor/local-notifications": "^6.1.1",
+    "@capacitor/network": "^6.0.3",
+    "capacitor-native-biometric": "^4.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -175,6 +175,97 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ---------------------------------------------------------------- Plan 4: biometría, notas, recordatorios, chat
+
+/** Llaves de reautenticación biométrica (una por celular). Solo se guarda el hash. */
+export const biometricKeys = pgTable("biometric_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  deviceName: text("device_name").notNull(),
+  secretHash: text("secret_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+export const notes = pgTable(
+  "notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    content: text("content").notNull().default(""),
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notes_usuario").on(t.userId, t.updatedAt)],
+);
+
+export const reminderRepeat = pgEnum("repeticion", ["nunca", "diario", "semanal", "mensual"]);
+
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes").notNull().default(""),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    repeat: reminderRepeat("repeat").notNull().default("nunca"),
+    done: boolean("done").notNull().default(false),
+    lastFiredAt: timestamp("last_fired_at", { withTimezone: true }),
+    createdBy: auditActorType("created_by").notNull().default("usuario"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reminders_pendientes").on(t.done, t.dueAt)],
+);
+
+export const chatChannels = pgTable("chat_channels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  /** "personal" = canal entre los dispositivos de una misma cuenta. */
+  kind: text("kind").notNull().default("grupo"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const chatMembers = pgTable(
+  "chat_members",
+  {
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => chatChannels.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.channelId, t.userId] })],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => chatChannels.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    deviceId: uuid("device_id").references(() => devices.id, { onDelete: "set null" }),
+    kind: text("kind").notNull().default("texto"),
+    body: text("body").notNull(),
+    meta: jsonb("meta").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("chat_messages_canal").on(t.channelId, t.createdAt)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type AuditRow = typeof auditLog.$inferSelect;

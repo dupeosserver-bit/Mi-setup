@@ -29,6 +29,13 @@
       "when": 1792204671124,
       "tag": "0003_equipos_y_ajustes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792205889025,
+      "tag": "0004_notas_recordatorios_chat",
+      "breakpoints": true
     }
   ]
 }

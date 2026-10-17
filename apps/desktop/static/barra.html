@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'" />
+    <title>Navegador privado</title>
+    <style>
+      body {
+        margin: 0;
+        height: 44px;
+        background: #1c1c1e;
+        color: #f2f2f7;
+        font: 13px Inter, system-ui, sans-serif;
+        border-bottom: 1px solid #3a3a3c;
+        box-sizing: border-box;
+      }
+      form {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 44px;
+        padding: 0 8px;
+      }
+      button {
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #f2f2f7;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        background: #2c2c2e;
+      }
+      button:disabled {
+        color: #48484a;
+        cursor: default;
+      }
+      input {
+        flex: 1;
+        height: 30px;
+        padding: 0 12px;
+        border: 1px solid #3a3a3c;
+        border-radius: 10px;
+        background: #121212;
+        color: #f2f2f7;
+        outline: none;
+      }
+      input:focus {
+        border-color: #e5e5ea;
+      }
+      .privado {
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #2c2c2e;
+        color: #8e8e93;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="formulario">
+      <button type="button" id="atras" title="Atrás" disabled>‹</button>
+      <button type="button" id="adelante" title="Adelante" disabled>›</button>
+      <button type="button" id="recargar" title="Recargar">↻</button>
+      <input id="direccion" placeholder="Escribe una dirección o busca" autocomplete="off" spellcheck="false" />
+      <span class="privado">Privado · sin historial · rastreadores bloqueados</span>
+    </form>
+  </body>
+</html>

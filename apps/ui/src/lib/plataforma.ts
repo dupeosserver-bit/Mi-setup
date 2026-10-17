@@ -16,6 +16,8 @@ export interface PuenteEscritorio {
   abrirExterno(url: string): void;
   notificar(titulo: string, cuerpo: string): void;
   alNavegar(cb: (ruta: string) => void): () => void;
+  /** Construye el menú nativo (Archivo · categorías · Ver · Ventana · Ayuda) con los apartados permitidos. */
+  establecerMenu(grupos: { titulo: string; items: { etiqueta: string; ruta: string }[] }[]): void;
   ventana(accion: "minimizar" | "maximizar" | "cerrar" | "recargar" | "pantallaCompleta"): void;
 }
 

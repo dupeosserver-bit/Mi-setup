@@ -13,7 +13,10 @@ import { HttpError } from "./http-error.js";
 import type { Job } from "./jobs.js";
 import { aparienciaRoutes } from "./modules/apariencia.js";
 import type { ModuleDeps } from "./modules/common.js";
+import { chatRoutes } from "./modules/chat.js";
 import { equiposModule } from "./modules/equipos.js";
+import { notasRoutes } from "./modules/notas.js";
+import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
 import { createNtfyNotifier, type Notifier } from "./notify/notifier.js";
 import { Hub } from "./realtime/hub.js";
 import { realtimeRoutes } from "./realtime/routes.js";
@@ -125,13 +128,19 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   });
 
   const equipos = equiposModule(deps);
-  jobs.push({ nombre: "presencia", cadaMs: 5_000, run: () => equipos.presencia.tick() });
+  jobs.push(
+    { nombre: "presencia", cadaMs: 5_000, run: () => equipos.presencia.tick() },
+    { nombre: "recordatorios", cadaMs: 30_000, alInicio: true, run: async () => void (await dispararRecordatorios(deps)) },
+  );
 
   await app.register(healthRoutes);
   await app.register(authRoutes(auth));
   await app.register(realtimeRoutes({ ...deps, verificarDispositivo: equipos.verificarDispositivo }));
   await app.register(equipos.routes);
   await app.register(aparienciaRoutes(deps));
+  await app.register(notasRoutes(deps));
+  await app.register(recordatoriosRoutes(deps));
+  await app.register(chatRoutes(deps));
 
   return { app, auth, hub, deps, jobs };
 }

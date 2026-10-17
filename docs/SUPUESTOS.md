@@ -63,3 +63,17 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 45 | Modo de desarrollo `DB_EMBEBIDA=1`: Postgres embebido (PGlite) en `.data/pglite`, prohibido en producción. | Poder usar `pnpm dev` completo sin Docker. | `db/open.ts`, `config.ts`. |
 | 46 | El "+" flotante del celular ofrece crear nota, recordatorio o mensaje. | Acciones rápidas más comunes. | `BotonMas` en `Layout.tsx`. |
 | 47 | Los navegadores web también se registran como equipo (`web`), además de PC y celular. | Ver desde dónde hay sesiones abiertas. | `lib/dispositivo.ts`. |
+
+## Plan 4 — Apps de PC y celular
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 48 | La app de PC (Electron) carga la UI desde `https://setup.mexicanland.net` (configurable con `MI_SETUP_URL`); no la empaqueta. | Mismo origen que la API: sin CORS y siempre actualizada. | `apps/desktop/src/main.ts`. |
+| 49 | En PC el menú superior es el **nativo** de Electron (Archivo · categorías · Ver · Ventana · Ayuda) y se construye con los apartados permitidos; la UI oculta su menú HTML dentro de Electron. | Barra superior nativa estilo LP, sin menús duplicados. | `construirMenu` en `main.ts`, `Layout.tsx`. |
+| 50 | El agente de la PC vive en el proceso principal (`systeminformation`); la UI envía el latido cada 15 s y las métricas cada 2 s solo mientras alguien mira las gráficas. Al cerrar la ventana, la app queda en la bandeja y sigue latiendo. | Sin un servicio aparte. | `metricas.ts`, `lib/dispositivo.ts`. |
+| 51 | Sin `build/icon.png` (de `pnpm branding`) no se crea ícono de bandeja y `pnpm --filter @mi-setup/desktop dist` se detiene con un aviso. | Nunca usar el ícono genérico de Electron. | `verificar-icono.ts`. |
+| 52 | La app de Android (Capacitor) empaqueta la UI (`build:movil`) y habla con `https://setup.mexicanland.net` (o `MI_SETUP_API` al compilar). | Abre rápido y funciona aunque el servidor tarde. | `apps/ui/vite.config.ts`, `capacitor.config.ts`. |
+| 53 | Huella o rostro: al activarla (requiere contraseña reciente), el servidor entrega una llave aleatoria que se guarda en el almacén seguro de Android (`capacitor-native-biometric`); para usarla hay que pasar la huella. El servidor solo guarda su SHA-256. Cuenta como reautenticación **fuerte**. | La biometría vive en el teléfono; el servidor necesita algo verificable. | `lib/biometria.ts`, `AuthService.reauth`. |
+| 54 | Los recordatorios se revisan cada 30 s; al vencer se envían por ntfy y por WebSocket (notificación local en PC/Android). Los repetidos pasan a la siguiente fecha; uno mensual del día 31 cae en el último día del mes. | Lo pide el prompt. | `modules/recordatorios.ts`. |
+| 55 | Cada cuenta tiene un canal de chat personal "Mis dispositivos"; los mensajes que son solo una URL se marcan como enlace, y un mensaje puede crear un recordatorio. | Chat entre celular y PC; el modelo ya admite grupos. | `modules/chat.ts`. |
+| 56 | El APK de depuración se firma con la llave de depuración de Android; el de release se firma si existe `android/keystore.properties` (no se sube al repo). | APK "firmable" sin guardar secretos en el repo. | `apps/mobile/android/app/build.gradle`. |

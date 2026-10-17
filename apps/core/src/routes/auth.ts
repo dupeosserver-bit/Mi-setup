@@ -5,6 +5,7 @@ import {
   setPinRequestSchema,
 } from "@mi-setup/shared";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
 import type { AuthService, ClientInfo } from "../auth/service.js";
 import { currentUser } from "../security/rbac.js";
 
@@ -34,6 +35,18 @@ export function authRoutes(auth: AuthService) {
     app.post("/api/auth/reauth", { config: { acceso: { autenticado: true } } }, async (request) =>
       auth.reauth(currentUser(request), reauthRequestSchema.parse(request.body), clientInfo(request)),
     );
+
+    // Activar la huella exige haber confirmado con contraseña en los últimos 5 min.
+    app.post("/api/auth/biometria", { config: { acceso: { autenticado: true, reauth: "fuerte" } } }, async (request) => {
+      const { dispositivo } = z.object({ dispositivo: z.string().trim().min(1).max(60) }).parse(request.body);
+      return auth.crearLlaveBiometrica(currentUser(request), dispositivo, clientInfo(request));
+    });
+
+    app.delete("/api/auth/biometria/:id", { config: { acceso: { autenticado: true } } }, async (request) => {
+      const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+      await auth.revocarLlaveBiometrica(currentUser(request), id);
+      return { ok: true };
+    });
 
     // Configurar o cambiar el PIN exige haber confirmado con contraseña o huella.
     app.put("/api/auth/pin", { config: { acceso: { autenticado: true, reauth: "fuerte" } } }, async (request) => {

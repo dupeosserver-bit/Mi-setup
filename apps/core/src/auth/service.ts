@@ -2,7 +2,7 @@
  * Servicio de autenticación: inicio de sesión (contraseña + TOTP), bloqueo
  * temporal, sesiones con refresh rotativo, reautenticación y PIN.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   isModuleId,
   MODULE_IDS,
@@ -21,7 +21,7 @@ import {
 import { and, count, eq, gt, isNull, lt, min, or, sql } from "drizzle-orm";
 import type { AuditWriter } from "../audit/audit.js";
 import type { Database } from "../db/client.js";
-import { loginAttempts, sessions, userModulePermissions, users, type UserRow } from "../db/schema.js";
+import { biometricKeys, loginAttempts, sessions, userModulePermissions, users, type UserRow } from "../db/schema.js";
 import { HttpError, missingConfig } from "../http-error.js";
 import type { Notifier } from "../notify/notifier.js";
 import type { ServerCipher } from "../security/crypto.js";
@@ -67,6 +67,12 @@ const CREDENCIALES_INVALIDAS = "Correo, contraseña o código incorrectos";
 
 function publicUser(user: Pick<UserRow, "id" | "email" | "displayName" | "role">): PublicUser {
   return { id: user.id, email: user.email, displayName: user.displayName, role: user.role };
+}
+
+function iguales(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
 }
 
 /** Recorta texto que viene del cliente antes de ponerlo en un aviso. */
@@ -393,12 +399,20 @@ export class AuthService {
       .where(eq(users.id, user.id))
       .limit(1);
 
-    const ok =
-      input.metodo === "password"
-        ? await verifySecret(fila?.passwordHash ?? (await dummyHash()), input.password)
-        : fila?.pinHash
-          ? await verifySecret(fila.pinHash, input.pin)
-          : false;
+    let ok = false;
+    if (input.metodo === "password") {
+      ok = await verifySecret(fila?.passwordHash ?? (await dummyHash()), input.password);
+    } else if (input.metodo === "pin") {
+      ok = fila?.pinHash ? await verifySecret(fila.pinHash, input.pin) : false;
+    } else {
+      const [llave] = await db
+        .select({ hash: biometricKeys.secretHash })
+        .from(biometricKeys)
+        .where(and(eq(biometricKeys.id, input.llaveId), eq(biometricKeys.userId, user.id), isNull(biometricKeys.revokedAt)))
+        .limit(1);
+      ok = Boolean(llave && iguales(llave.hash, hashToken(input.secreto)));
+      if (ok) await db.update(biometricKeys).set({ lastUsedAt: now }).where(eq(biometricKeys.id, input.llaveId));
+    }
 
     if (ok) {
       await db
@@ -450,6 +464,37 @@ export class AuthService {
       "reauth_fallida",
       { intentosRestantes: MAX_REAUTH_FAILURES - fallos },
     );
+  }
+
+  /** Activa la huella en un celular: devuelve una llave que solo ve ese celular. */
+  async crearLlaveBiometrica(
+    user: AuthUser,
+    dispositivo: string,
+    client: ClientInfo,
+  ): Promise<{ id: string; secreto: string }> {
+    const secreto = newRefreshSecret();
+    const [llave] = await this.deps.db
+      .insert(biometricKeys)
+      .values({ userId: user.id, deviceName: dispositivo, secretHash: hashToken(secreto) })
+      .returning({ id: biometricKeys.id });
+    if (!llave) throw new HttpError(500, "No se pudo activar la huella");
+    await this.deps.audit.record({
+      actorType: "usuario",
+      actorUserId: user.id,
+      action: "biometria_activada",
+      outcome: "ok",
+      ip: client.ip,
+      userAgent: client.userAgent,
+      details: { dispositivo },
+    });
+    return { id: llave.id, secreto };
+  }
+
+  async revocarLlaveBiometrica(user: AuthUser, id: string): Promise<void> {
+    await this.deps.db
+      .update(biometricKeys)
+      .set({ revokedAt: this.deps.now() })
+      .where(and(eq(biometricKeys.id, id), eq(biometricKeys.userId, user.id)));
   }
 
   async setPin(user: AuthUser, pin: string, client: ClientInfo): Promise<void> {

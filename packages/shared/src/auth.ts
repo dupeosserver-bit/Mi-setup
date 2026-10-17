@@ -57,6 +57,8 @@ export const refreshRequestSchema = z.object({
 export const reauthRequestSchema = z.discriminatedUnion("metodo", [
   z.object({ metodo: z.literal("password"), password: z.string().min(1).max(256) }),
   z.object({ metodo: z.literal("pin"), pin: pinSchema }),
+  /** Llave guardada en el almacén seguro del celular, liberada con huella o rostro. */
+  z.object({ metodo: z.literal("biometria"), llaveId: z.string().uuid(), secreto: z.string().min(20).max(200) }),
 ]);
 export type ReauthRequest = z.infer<typeof reauthRequestSchema>;
 

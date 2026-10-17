@@ -93,6 +93,38 @@ Ver `README.md`. Sin Docker: pon `DB_EMBEBIDA=1` en tu `.env` y crea la cuenta c
 - Avisos que llegan desde la fase 2: intento fallido de inicio de sesión, bloqueo temporal, posible robo de sesión y sesión cerrada por fallos de reautenticación.
 - Las notificaciones vía Capacitor se documentan en la fase 4.
 
+## App de Windows (Electron)
+
+Requisitos: haber ejecutado `pnpm branding` (ícono de MexicanLand).
+
+```bash
+pnpm --filter @mi-setup/desktop dist
+```
+
+El instalador queda en `apps/desktop/release/Mi Setup Setup <versión>.exe`. La app carga `https://setup.mexicanland.net`; para probar contra otro servidor: variable `MI_SETUP_URL` (por ejemplo `http://localhost:5173` con `pnpm --filter @mi-setup/desktop dev`). Al cerrar la ventana queda en la bandeja y sigue enviando el estado de la PC; "Salir" la cierra del todo.
+
+## App de Android (Capacitor)
+
+Requisitos: JDK 17+ y Android SDK (Android Studio).
+
+```bash
+pnpm --filter @mi-setup/mobile sincronizar
+pnpm --filter @mi-setup/mobile apk
+```
+
+El APK de depuración queda en `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`. Para un APK de release firmado crea `apps/mobile/android/keystore.properties` (no se sube al repo):
+
+```
+storeFile=../mi-setup.jks
+storePassword=…
+keyAlias=mi-setup
+keyPassword=…
+```
+
+Genera la llave con `keytool -genkey -v -keystore mi-setup.jks -alias mi-setup -keyalg RSA -keysize 2048 -validity 10000` y compila con `gradlew assembleRelease`. Para otro servidor: `MI_SETUP_API=https://… pnpm --filter @mi-setup/ui build:movil`.
+
+Huella o rostro: en la app de Android, **Ajustes → Seguridad → Activar huella** (pide tu contraseña antes). Las notificaciones locales necesitan aceptar el permiso la primera vez.
+
 ## Pendiente por fase
 
 Instalador de Windows y APK (fase 4), RustDesk (fase 11), WireGuard (fase 8) y cada integración en su fase.
