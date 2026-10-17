@@ -1,24 +1,19 @@
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
-import { createDbAuditWriter } from "./audit/audit.js";
 import { loadConfig } from "./config.js";
 import { createDb } from "./db/client.js";
 import { runMigrations } from "./db/migrate.js";
+import { loadLocalEnv } from "./env-file.js";
 
-// En local se lee el .env de la raíz del repo si existe. En Docker las
-// variables llegan por docker-compose.
-const localEnv = fileURLToPath(new URL("../../../.env", import.meta.url));
-if (process.env.NODE_ENV !== "production" && existsSync(localEnv)) {
-  process.loadEnvFile(localEnv);
-}
+loadLocalEnv();
 
 const config = loadConfig();
 const { db, pool } = createDb(config.databaseUrl);
-const app = await buildApp({ config, audit: createDbAuditWriter(db) });
+const { app, auth } = await buildApp({ config, db });
 
+let dbLista = false;
 try {
-  await runMigrations(db);
+  await runMigrations(pool);
+  dbLista = true;
   app.log.info("Migraciones aplicadas");
 } catch (err) {
   if (config.isProduction) {
@@ -28,7 +23,15 @@ try {
   app.log.warn({ err }, "Base de datos no disponible: core arranca sin migrar (solo en desarrollo)");
 }
 
+if (!config.env.JWT_SECRET) app.log.warn("Falta configurar: JWT_SECRET (el inicio de sesión no funcionará)");
+if (!config.env.SERVER_ENC_KEY) app.log.warn("Falta configurar: SERVER_ENC_KEY (2FA no funcionará)");
+
 await app.listen({ host: config.env.HOST, port: config.env.PORT });
+
+// Limpieza diaria de intentos de login y sesiones viejas.
+const limpiar = () => auth.purge().catch((err: unknown) => app.log.warn({ err }, "Falló la limpieza de sesiones"));
+if (dbLista) void limpiar();
+setInterval(limpiar, 24 * 60 * 60 * 1000).unref();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {

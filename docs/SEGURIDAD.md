@@ -19,7 +19,11 @@
 | Arranque con configuración insegura | En producción, core no arranca sin `POSTGRES_PASSWORD`, `JWT_SECRET`, `SERVER_ENC_KEY`. ✅ |
 | Peticiones de otros orígenes | CORS cerrado al host de la app. ✅ |
 | Cabeceras HTTP | helmet (nosniff, frame-ancestors, HSTS en producción, etc.). ✅ |
-| Robo de sesión / fuerza bruta | Fase 2: JWT cortos, refresh rotativo, límite de intentos, aviso push. ⏳ |
+| Fuerza bruta en el login | Argon2id, 5 fallos/correo o 20/IP en 15 min → bloqueo temporal, aviso push en cada fallo, mismo error para correo, contraseña o código incorrectos. ✅ |
+| Contraseña robada | 2FA (TOTP) obligatorio para la maestra, con anti-repetición de códigos. ✅ |
+| Robo de tokens | accessToken de 15 min; refresh rotativo con detección de reutilización (revoca la sesión y avisa). ✅ |
+| Dispositivo desbloqueado en manos de otro | Reautenticación de 5 min para acciones sensibles; el PIN no basta para las fuertes; 5 fallos cierran la sesión. ✅ |
+| Ruta olvidada sin permisos | Toda ruta `/api` debe declarar `config.acceso`, o core no arranca. ✅ |
 | Lectura de la bóveda por el servidor | Fase 7: cifrado de extremo a extremo (Argon2id + XChaCha20-Poly1305). ⏳ |
 | Robo de credenciales de infraestructura | Fase 5: AES-256-GCM con `SERVER_ENC_KEY`, nunca devueltas en claro. ⏳ |
 | Inyección contra la IA | Fase 9: texto externo marcado como no confiable, sin herramientas que lean secretos. ⏳ |
@@ -32,6 +36,13 @@
 | Bóveda / 2FA | En claro (tras desbloquear) | Solo cifrado | Solo cifrado | Nunca |
 | Credenciales SSH / tokens de API | Nunca en claro | En memoria al usar | Cifradas (AES-256-GCM) | Nunca |
 | Auditoría | Lectura (maestra) | Inserta | Solo inserción | Nunca la modifica |
+
+## Autenticación
+
+- Contraseña: Argon2id (19 MiB, t=2, p=1). Correo inexistente: se verifica contra un hash de relleno para que tarde lo mismo.
+- 2FA de la app: TOTP RFC 6238; el secreto se guarda cifrado (AES-256-GCM, clave HKDF de `SERVER_ENC_KEY`).
+- Sesiones en la tabla `sessions`: solo se guarda el SHA-256 del refresh token.
+- Reautenticación: `pin` (PIN, contraseña o huella) o `fuerte` (contraseña o huella), válida 5 min.
 
 ## Permisos
 

@@ -15,6 +15,13 @@
       "when": 1792194338025,
       "tag": "0001_auditoria_inmutable",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792203064811,
+      "tag": "0002_sesiones_y_reauth",
+      "breakpoints": true
     }
   ]
 }

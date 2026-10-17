@@ -18,7 +18,8 @@ Plantilla completa en `.env.example`. En el VPS las genera `mi-setup-vps.sh` en 
 | `JWT_SECRET` | **Sí** (producción) | — | Firma de sesiones (fase 2) |
 | `SERVER_ENC_KEY` | **Sí** (producción) | — | Cifrado de credenciales de infraestructura (fases 2 y 5) |
 | `MAIL_INBOUND_SECRET` | No | vacío | HMAC del correo entrante (fase 8) |
-| `NTFY_TOPIC` | No | vacío | Tema secreto de ntfy (fase 2 en adelante) |
+| `NTFY_TOPIC` | No | vacío | Tema secreto de ntfy (avisos de seguridad) |
+| `NTFY_URL` | No | `https://NTFY_HOST` (Docker: `http://ntfy`) | Dónde publica core los avisos |
 | `ANTHROPIC_API_KEY` | No | vacío | IA asistente (fase 9) |
 | `AI_MODEL` | No | `claude-sonnet-5-5` | Modelo de IA |
 | `AI_MONTHLY_BUDGET_USD` | No | `10` | Tope mensual de la IA |
@@ -43,6 +44,33 @@ Datos persistentes en volúmenes con nombre: `misetup_pgdata`, `misetup_uploads`
 
 Respaldo manual de la base: `docker exec misetup-db pg_dump -U misetup misetup > respaldo.sql`.
 
+## Crear la cuenta maestra (una sola vez)
+
+No hay registro público. Tras el primer despliegue:
+
+```bash
+docker exec -it misetup-core node dist/cli/crear-maestra.js
+```
+
+En local: `pnpm --filter @mi-setup/core crear-maestra`.
+
+El comando pide correo, nombre y contraseña (mínimo 12 caracteres), y muestra una clave 2FA (y su enlace `otpauth://`) para tu app autenticadora (Aegis, Google Authenticator…). Confirma con un código de 6 dígitos y la cuenta queda creada. **Guarda la clave 2FA en un lugar seguro**: sin ella no podrás entrar.
+
+## Inicio de sesión y seguridad (API)
+
+| Ruta | Acceso | Uso |
+|---|---|---|
+| `POST /api/auth/login` | público | `{email, password, totp, dispositivo}` → `accessToken` (15 min) + `refreshToken` (30 días) |
+| `POST /api/auth/refresh` | público | `{refreshToken}` → tokens nuevos (el anterior deja de valer) |
+| `POST /api/auth/logout` | sesión | Cierra la sesión actual |
+| `GET /api/auth/me` | sesión | Usuario, permisos por módulo, PIN configurado y reautenticación vigente |
+| `POST /api/auth/reauth` | sesión | `{metodo:"password", password}` o `{metodo:"pin", pin}` → válido 5 min |
+| `PUT /api/auth/pin` | sesión + contraseña reciente | `{pin}` de 6 a 12 dígitos |
+
+- 5 intentos fallidos en 15 min bloquean el correo (20 bloquean la IP). Cada fallo envía un aviso push con el correo, la IP y el dispositivo.
+- Reutilizar un refresh token viejo cierra la sesión y avisa ("posible robo de sesión").
+- 5 fallos de PIN o contraseña al reautenticarse cierran la sesión.
+
 ## Desarrollo local
 
 Ver `README.md`. Postgres local: `docker compose -f docker-compose.dev.yml up -d` (con `POSTGRES_PASSWORD=misetup-dev` en tu `.env`, o la que pongas en ambos).
@@ -51,6 +79,7 @@ Ver `README.md`. Postgres local: `docker compose -f docker-compose.dev.yml up -d
 
 - Servidor: `https://ntfy.mexicanland.net`. El tema es `NTFY_TOPIC` (secreto, largo y aleatorio; quien lo conozca puede leer y publicar).
 - Android: instala la app oficial **ntfy**, agrega el servidor `https://ntfy.mexicanland.net` y suscríbete al tema `NTFY_TOPIC`.
+- Avisos que llegan desde la fase 2: intento fallido de inicio de sesión, bloqueo temporal, posible robo de sesión y sesión cerrada por fallos de reautenticación.
 - Las notificaciones vía Capacitor se documentan en la fase 4.
 
 ## Pendiente por fase

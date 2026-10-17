@@ -30,8 +30,18 @@ const envSchema = z
 
     JWT_SECRET: optionalString,
     SERVER_ENC_KEY: optionalString,
+
+    NTFY_TOPIC: optionalString,
+    /** URL a la que core publica avisos. En Docker: http://ntfy (red interna). */
+    NTFY_URL: optionalString,
   })
   .superRefine((env, ctx) => {
+    for (const key of ["JWT_SECRET", "SERVER_ENC_KEY"] as const) {
+      const value = env[key];
+      if (value && value.length < 32) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${key} debe tener al menos 32 caracteres` });
+      }
+    }
     if (env.NODE_ENV !== "production") return;
     for (const key of ["POSTGRES_PASSWORD", "JWT_SECRET", "SERVER_ENC_KEY"] as const) {
       if (!env[key]) {
@@ -48,6 +58,7 @@ export interface Config {
   readonly databaseUrl: string;
   /** Orígenes permitidos por CORS (lista cerrada). */
   readonly corsOrigins: readonly string[];
+  readonly ntfyUrl: string;
 }
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
@@ -69,5 +80,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   const corsOrigins = [`https://${env.APP_HOST}`];
   if (!isProduction) corsOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
 
-  return { env, isProduction, databaseUrl: url.toString(), corsOrigins };
+  const ntfyUrl = env.NTFY_URL ?? `https://${env.NTFY_HOST}`;
+
+  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl };
 }

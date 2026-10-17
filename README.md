@@ -2,7 +2,7 @@
 
 App personal (no pública) para PC (Windows) y celular (Android), vinculadas y con todo en la nube (VPS propio), para operar el hosting **MexicanLand**: terminal SSH, métricas en vivo, panel Pterodactyl, bóveda de contraseñas, 2FA, correos temporales, VPN, IA asistente con aprobación obligatoria y más.
 
-> Estado: **Plan 1 — Cimientos** (monorepo, backend base, base de datos, permisos, auditoría, despliegue).
+> Estado: **Plan 2 — Autenticación y seguridad** (login con 2FA, sesiones, bloqueo, reautenticación, permisos en todas las rutas).
 
 ## Estructura
 
@@ -45,6 +45,7 @@ Sin base de datos, `pnpm dev` arranca igual y avisa en el log (solo en desarroll
 | `pnpm test` | Pruebas (Vitest) |
 | `pnpm lint` | ESLint |
 | `pnpm --filter @mi-setup/core db:generate` | Genera una migración tras cambiar el esquema |
+| `pnpm --filter @mi-setup/core crear-maestra` | Crea la cuenta maestra con 2FA (una sola vez) |
 
 ## Despliegue
 

@@ -4,5 +4,9 @@ import { VERSION } from "../version.js";
 
 /** GET /api/health — sin autenticación, lo usa el script del VPS y Docker. */
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/health", async (): Promise<HealthResponse> => ({ ok: true, version: VERSION }));
+  app.get(
+    "/api/health",
+    { config: { acceso: { publico: true } } },
+    async (): Promise<HealthResponse> => ({ ok: true, version: VERSION }),
+  );
 }

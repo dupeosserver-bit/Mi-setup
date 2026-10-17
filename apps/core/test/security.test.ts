@@ -46,9 +46,13 @@ describe("configuración", () => {
       NODE_ENV: "production",
       APP_HOST: "setup.mexicanland.net",
       POSTGRES_PASSWORD: "a",
-      JWT_SECRET: "b",
-      SERVER_ENC_KEY: "c",
+      JWT_SECRET: "b".repeat(32),
+      SERVER_ENC_KEY: "c".repeat(32),
     });
     expect(config.corsOrigins).toEqual(["https://setup.mexicanland.net"]);
+  });
+
+  it("rechaza secretos de menos de 32 caracteres", () => {
+    expect(() => loadConfig({ NODE_ENV: "development", JWT_SECRET: "corto" })).toThrow(/al menos 32/);
   });
 });

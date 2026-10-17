@@ -1,8 +1,10 @@
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import pg from "pg";
 import * as schema from "./schema.js";
 
-export type Database = NodePgDatabase<typeof schema>;
+/** Tipo común para Postgres real (node-postgres) y el embebido de las pruebas (PGlite). */
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 export interface DbHandle {
   readonly db: Database;

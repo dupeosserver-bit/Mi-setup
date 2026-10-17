@@ -11,6 +11,7 @@ import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -24,6 +25,7 @@ import {
 export const userRole = pgEnum("rol_usuario", ["maestra", "usuario"]);
 /** "ninguno" no se guarda: la ausencia de fila equivale a sin acceso. */
 export const permissionLevel = pgEnum("nivel_permiso", ["lectura", "escritura", "administrar"]);
+export const reauthMethodEnum = pgEnum("metodo_reauth", ["password", "pin", "biometria"]);
 export const auditActorType = pgEnum("tipo_actor", ["usuario", "ia", "sistema"]);
 export const auditOutcome = pgEnum("resultado_auditoria", [
   "ok",
@@ -46,6 +48,10 @@ export const users = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     /** Secreto TOTP de la app, cifrado con SERVER_ENC_KEY (fase 2). */
     totpSecretEnc: text("totp_secret_enc"),
+    /** Último paso TOTP aceptado (evita reutilizar un código). */
+    totpLastStep: bigint("totp_last_step", { mode: "number" }),
+    /** Hash Argon2id del PIN de reautenticación (6+ dígitos). */
+    pinHash: text("pin_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -97,5 +103,50 @@ export const auditLog = pgTable(
   ],
 );
 
+/**
+ * Sesiones (una por dispositivo con sesión iniciada). El refresh token se
+ * rota en cada uso; si llega el anterior (`prev_refresh_hash`) se considera
+ * robado y la sesión se revoca.
+ */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    refreshHash: text("refresh_hash").notNull(),
+    prevRefreshHash: text("prev_refresh_hash"),
+    deviceName: text("device_name"),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    reauthAt: timestamp("reauth_at", { withTimezone: true }),
+    reauthMethod: reauthMethodEnum("reauth_method"),
+    reauthFailures: integer("reauth_failures").notNull().default(0),
+  },
+  (t) => [index("sessions_usuario").on(t.userId)],
+);
+
+/** Intentos de inicio de sesión, para el bloqueo temporal. */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    email: text("email").notNull(),
+    ip: text("ip"),
+    success: boolean("success").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index("login_attempts_email").on(t.email, t.createdAt),
+    index("login_attempts_ip").on(t.ip, t.createdAt),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;
 export type AuditRow = typeof auditLog.$inferSelect;

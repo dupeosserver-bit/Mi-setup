@@ -41,14 +41,32 @@ Clientes: app de PC (Electron) y de celular (Capacitor) cargan la misma UI (Reac
 - `src/security/rbac.ts`: `requirePermission(modulo, nivel)` para cada ruta protegida.
 - `src/audit/audit.ts`: inserta eventos de auditoría con detalles redactados.
 
-### Flujo de una petición protegida (desde la fase 2)
+- `src/auth/service.ts`: login, bloqueo, sesiones, refresh rotativo, reautenticación, PIN.
+- `src/auth/{password,totp,tokens}.ts`: Argon2id, TOTP, JWT y refresh tokens.
+- `src/notify/notifier.ts`: avisos push a ntfy.
+- `src/cli/crear-maestra.ts`: alta de la cuenta maestra por consola.
+
+### Flujo de una petición protegida
 
 ```
-petición → helmet/CORS → autenticación (fase 2: rellena request.authUser)
-        → requirePermission(modulo, nivel)
-             sin usuario  → 401
-             sin permiso  → 403 + auditoría "denegado"
-             permitido    → handler (validación Zod) → respuesta
+petición → helmet/CORS → guardia global (preHandler) según config.acceso de la ruta
+   publico                → handler
+   autenticado / modulo   → Bearer JWT → sesión vigente + usuario activo (BD)
+        sin sesión válida → 401
+        sin permiso       → 403 + auditoría "acceso_denegado"
+        reauth requerida y vencida → 403 codigo "reauth_requerida"
+        permitido         → handler (validación Zod) → respuesta
+```
+
+### Flujo de inicio de sesión
+
+```
+login {correo, contraseña, totp}
+  ¿bloqueado? (fallos en 15 min) ─ sí → 429 + aviso push
+  Argon2id + TOTP (anti-repetición)
+     falla → intento registrado + auditoría + aviso push → 401
+     ok    → sesión nueva (refresh hash) → accessToken 15 min + refreshToken
+refresh {token} → rota el secreto; token viejo reutilizado → revoca sesión + aviso
 ```
 
 ## Base de datos
@@ -56,6 +74,8 @@ petición → helmet/CORS → autenticación (fase 2: rellena request.authUser)
 - `users`: cuentas. Una sola `maestra` (índice único parcial). Email único sin distinguir mayúsculas.
 - `user_module_permissions`: (usuario, módulo) → nivel. Sin fila = sin acceso.
 - `audit_log`: solo inserción. Triggers impiden UPDATE/DELETE/TRUNCATE.
+- `sessions`: una por dispositivo; hash del refresh actual y del anterior, reautenticación y fallos.
+- `login_attempts`: intentos de login para el bloqueo temporal (se purgan a los 30 días).
 
 ## Flujos pendientes (se documentan en su fase)
 

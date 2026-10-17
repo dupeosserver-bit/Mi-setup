@@ -1,53 +1,67 @@
-import { describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { requirePermission, type AuthUser } from "../src/security/rbac.js";
-import { memoryAudit, testConfig } from "./helpers.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
+import { auditRows, bearer, createTestContext, seedUser } from "./helpers.js";
 
-const usuarios: Record<string, AuthUser> = {
-  maestra: { id: "u-maestra", email: "m@x.test", role: "maestra", isActive: true, permissions: {} },
-  lector: { id: "u-lector", email: "l@x.test", role: "usuario", isActive: true, permissions: { notas: "lectura" } },
-};
+type Ctx = Awaited<ReturnType<typeof createTestContext>>;
 
-async function appDePrueba() {
-  const audit = memoryAudit();
-  const app = await buildApp({ config: testConfig, audit, logger: false });
-  // Solo en pruebas: simula la autenticación de la fase 2 con una cabecera.
-  app.addHook("onRequest", async (request) => {
-    const quien = request.headers["x-prueba-usuario"];
-    request.authUser = typeof quien === "string" ? (usuarios[quien] ?? null) : null;
-  });
-  app.get("/api/notas", { preHandler: requirePermission("notas", "lectura") }, async () => ({ ok: true }));
-  app.post("/api/notas", { preHandler: requirePermission("notas", "escritura") }, async () => ({ ok: true }));
-  app.get("/api/boveda", { preHandler: requirePermission("boveda", "lectura") }, async () => ({ ok: true }));
-  return { app, audit };
+async function token(ctx: Ctx, email: string, password: string, totp?: string): Promise<string> {
+  const res = await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email, password, totp } });
+  expect(res.statusCode).toBe(200);
+  return res.json<{ accessToken: string }>().accessToken;
 }
 
-describe("RBAC en rutas", () => {
+function rutasDePrueba(ctx: Ctx) {
+  const ok = async () => ({ ok: true });
+  ctx.app.get("/api/notas", { config: { acceso: { modulo: "notas", nivel: "lectura" } } }, ok);
+  ctx.app.post("/api/notas", { config: { acceso: { modulo: "notas", nivel: "escritura" } } }, ok);
+  ctx.app.get("/api/boveda", { config: { acceso: { modulo: "boveda", nivel: "lectura" } } }, ok);
+}
+
+describe("RBAC activo en todas las rutas", () => {
+  let ctx: Ctx | undefined;
+  afterEach(async () => ctx?.close());
+
+  it("una ruta /api sin config.acceso impide arrancar", async () => {
+    ctx = await createTestContext();
+    expect(() => ctx!.app.get("/api/sin-acceso", async () => ({}))).toThrow(/config\.acceso/);
+  });
+
   it("sin sesión responde 401", async () => {
-    const { app } = await appDePrueba();
-    const res = await app.inject({ method: "GET", url: "/api/notas" });
-    expect(res.statusCode).toBe(401);
+    ctx = await createTestContext();
+    rutasDePrueba(ctx);
+    expect((await ctx.app.inject({ method: "GET", url: "/api/notas" })).statusCode).toBe(401);
+    const falso = await ctx.app.inject({ method: "GET", url: "/api/notas", headers: bearer("no.es.valido") });
+    expect(falso.statusCode).toBe(401);
   });
 
-  it("permite el nivel asignado y niega el superior con 403 y auditoría", async () => {
-    const { app, audit } = await appDePrueba();
-    const headers = { "x-prueba-usuario": "lector" };
-    expect((await app.inject({ method: "GET", url: "/api/notas", headers })).statusCode).toBe(200);
-    expect((await app.inject({ method: "POST", url: "/api/notas", headers })).statusCode).toBe(403);
-    expect(audit.entries).toHaveLength(1);
-    expect(audit.entries[0]).toMatchObject({
-      actorUserId: "u-lector",
-      action: "acceso_denegado",
-      module: "notas",
-      outcome: "denegado",
+  it("permite el nivel asignado, niega el superior con 403 y lo audita", async () => {
+    ctx = await createTestContext();
+    rutasDePrueba(ctx);
+    const id = await seedUser(ctx.db, {
+      email: "lector@x.test",
+      password: "clave-de-lector-123",
+      permissions: { notas: "lectura", boveda: "administrar" },
     });
+    const headers = bearer(await token(ctx, "lector@x.test", "clave-de-lector-123"));
+
+    expect((await ctx.app.inject({ method: "GET", url: "/api/notas", headers })).statusCode).toBe(200);
+    const escribir = await ctx.app.inject({ method: "POST", url: "/api/notas", headers });
+    expect(escribir.statusCode).toBe(403);
+    expect(escribir.json()).toMatchObject({ codigo: "sin_permiso" });
+    // La bóveda es solo-maestra aunque haya una asignación guardada.
+    expect((await ctx.app.inject({ method: "GET", url: "/api/boveda", headers })).statusCode).toBe(403);
+
+    const denegados = (await auditRows(ctx.db)).filter((r) => r.action === "acceso_denegado");
+    expect(denegados).toHaveLength(2);
+    expect(denegados[0]).toMatchObject({ actorUserId: id, module: "notas", outcome: "denegado" });
   });
 
-  it("la bóveda solo es accesible para la cuenta maestra", async () => {
-    const { app } = await appDePrueba();
-    const lector = await app.inject({ method: "GET", url: "/api/boveda", headers: { "x-prueba-usuario": "lector" } });
-    const maestra = await app.inject({ method: "GET", url: "/api/boveda", headers: { "x-prueba-usuario": "maestra" } });
-    expect(lector.statusCode).toBe(403);
-    expect(maestra.statusCode).toBe(200);
+  it("la cuenta maestra accede a la bóveda", async () => {
+    ctx = await createTestContext();
+    rutasDePrueba(ctx);
+    const secret = generateTotpSecret();
+    await seedUser(ctx.db, { email: "m@x.test", password: "clave-maestra-123", role: "maestra", totpSecret: secret });
+    const headers = bearer(await token(ctx, "m@x.test", "clave-maestra-123", totpAt(secret, ctx.clock.now)));
+    expect((await ctx.app.inject({ method: "GET", url: "/api/boveda", headers })).statusCode).toBe(200);
   });
 });
