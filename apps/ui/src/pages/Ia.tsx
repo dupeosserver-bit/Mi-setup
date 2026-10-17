@@ -1,12 +1,15 @@
 /** Apartado IA: conversaciones, cola de propuestas pendientes, historial y gasto del mes. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MessagesSquare, Send, Trash2 } from "lucide-react";
+import { MessagesSquare, Paperclip, Trash2, Volume2 } from "lucide-react";
 import { useState } from "react";
-import { AreaTexto, Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, cx } from "../components/ui";
+import { EntradaIa, type AdjuntoIa } from "../components/EntradaIa";
+import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
 import { TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
+import { usePreferencias } from "../lib/preferencias";
+import { hablar } from "../lib/voz";
 
 interface Conversacion {
   id: string;
@@ -16,7 +19,7 @@ interface Conversacion {
 interface Detalle {
   id: string;
   titulo: string;
-  mensajes: { id: number; rol: string; texto: string; fecha: string }[];
+  mensajes: { id: number; rol: string; texto: string; adjuntos: number; fecha: string }[];
   propuestas: Propuesta[];
 }
 
@@ -39,7 +42,6 @@ function Uso() {
 
 function Chat() {
   const [actual, setActual] = useState<string | null>(null);
-  const [texto, setTexto] = useState("");
   const lista = useQuery({ queryKey: ["ia", "conversaciones"], queryFn: () => api<Conversacion[]>("/api/ia/conversaciones") });
   const detalle = useQuery({
     queryKey: ["ia", "conversacion", actual],
@@ -49,12 +51,16 @@ function Chat() {
   const propuestas = usePropuestas();
   const estado = new Map((propuestas.data ?? []).map((p) => [p.id, p]));
 
+  const prefs = usePreferencias();
   const enviar = useMutation({
-    mutationFn: (mensaje: string) =>
-      api<RespuestaChat>("/api/ia/chat", { metodo: "POST", cuerpo: { mensaje, conversacionId: actual ?? undefined, modulo: "ia" } }),
+    mutationFn: ({ mensaje, adjuntos }: { mensaje: string; adjuntos: AdjuntoIa[] }) =>
+      api<RespuestaChat>("/api/ia/chat", {
+        metodo: "POST",
+        cuerpo: { mensaje, conversacionId: actual ?? undefined, modulo: "ia", adjuntos: adjuntos.map(({ nombre, tipo, datos }) => ({ nombre, tipo, datos })) },
+      }),
     onSuccess: (r) => {
       setActual(r.conversacionId);
-      setTexto("");
+      if (prefs.voz.leerRespuestas && r.respuesta) void hablar(r.respuesta, prefs.voz).catch(() => undefined);
       void queryClient.invalidateQueries({ queryKey: ["ia"] });
     },
   });
@@ -65,9 +71,6 @@ function Chat() {
       void queryClient.invalidateQueries({ queryKey: ["ia"] });
     },
   });
-  const mandar = () => {
-    if (texto.trim() && !enviar.isPending) enviar.mutate(texto.trim());
-  };
 
   return (
     <div className="grid gap-4 md:grid-cols-[240px_1fr]">
@@ -112,10 +115,20 @@ function Chat() {
               <p
                 className={cx(
                   "inline-block max-w-[90%] whitespace-pre-wrap rounded-xl px-3 py-2 text-left text-sm",
-                  m.rol === "user" ? "bg-acento/15" : "bg-tarjeta",
+                  m.rol === "user" ? "border border-borde bg-fondo" : "bg-tarjeta",
                 )}
               >
                 {m.texto}
+                {m.adjuntos ? (
+                  <span className="mt-1 flex items-center gap-1 text-xs text-tenue">
+                    <Paperclip className="h-3 w-3" /> {m.adjuntos} archivo(s)
+                  </span>
+                ) : null}
+                {m.rol === "assistant" ? (
+                  <button type="button" className="mt-1 block text-tenue hover:text-texto" aria-label="Leer en voz alta" onClick={() => void hablar(m.texto, prefs.voz)}>
+                    <Volume2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </p>
             </div>
           ))}
@@ -123,20 +136,8 @@ function Chat() {
           {enviar.isPending ? <p className="text-sm text-tenue">Pensando…</p> : null}
           <ErrorCaja error={enviar.error} />
         </div>
-        <div className="mt-3 flex items-end gap-2">
-          <AreaTexto
-            rows={2}
-            value={texto}
-            placeholder="Escribe tu mensaje…"
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                mandar();
-              }
-            }}
-          />
-          <Boton variante="primario" tamano="icono" icono={Send} aria-label="Enviar" cargando={enviar.isPending} disabled={!texto.trim()} onClick={mandar} />
+        <div className="mt-3">
+          <EntradaIa cargando={enviar.isPending} alEnviar={(mensaje, adjuntos) => enviar.mutate({ mensaje, adjuntos })} />
         </div>
       </Tarjeta>
     </div>
