@@ -12,6 +12,7 @@ import type { Database } from "./db/client.js";
 import { HttpError } from "./http-error.js";
 import type { Job } from "./jobs.js";
 import { aparienciaRoutes } from "./modules/apariencia.js";
+import { cuentaRoutes } from "./modules/cuenta.js";
 import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
@@ -155,6 +156,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(realtimeRoutes({ ...deps, verificarDispositivo: equipos.verificarDispositivo }));
   await app.register(equipos.routes);
   await app.register(aparienciaRoutes(deps));
+  await app.register(cuentaRoutes(deps));
   await app.register(notasRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));

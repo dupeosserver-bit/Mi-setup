@@ -26,15 +26,9 @@ const DEV = process.argv.includes("--dev");
 const URL_APP = process.env["MI_SETUP_URL"] ?? (DEV ? "http://localhost:5173" : "https://setup.mexicanland.net");
 const ORIGEN = new URL(URL_APP).origin;
 
-interface Grupo {
-  titulo: string;
-  items: { etiqueta: string; ruta: string }[];
-}
-
 let ventana: BrowserWindow | null = null;
 let bandeja: Tray | null = null;
 let saliendo = false;
-let grupos: Grupo[] = [];
 
 function icono(): string | null {
   const candidatos = [join(process.resourcesPath ?? "", "icon.png"), join(__dirname, "..", "build", "icon.png")];
@@ -183,9 +177,6 @@ function construirMenu(): void {
         { label: "Salir", accelerator: "Ctrl+Q", click: salir },
       ],
     },
-    ...grupos
-      .filter((g) => g.titulo !== "Ajustes")
-      .map((g) => ({ label: g.titulo, submenu: g.items.map((i) => ({ label: i.etiqueta, click: () => navegar(i.ruta) })) })),
     {
       label: "Ver",
       submenu: [
@@ -264,18 +255,6 @@ function registrarIpc(): void {
     if (accion === "cerrar") ventana.close();
     if (accion === "recargar") ventana.reload();
     if (accion === "pantallaCompleta") ventana.setFullScreen(!ventana.isFullScreen());
-  });
-  ipcMain.on("menu", (e, datos: unknown) => {
-    if (!deLaApp(e) || !Array.isArray(datos)) return;
-    grupos = (datos as Grupo[])
-      .filter((g) => typeof g?.titulo === "string" && Array.isArray(g.items))
-      .map((g) => ({
-        titulo: g.titulo.slice(0, 40),
-        items: g.items
-          .filter((i) => typeof i?.etiqueta === "string" && typeof i?.ruta === "string" && i.ruta.startsWith("/"))
-          .map((i) => ({ etiqueta: i.etiqueta.slice(0, 60), ruta: i.ruta })),
-      }));
-    construirMenu();
   });
 }
 

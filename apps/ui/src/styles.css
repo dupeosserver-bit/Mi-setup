@@ -13,7 +13,93 @@
   --ok: #30d158;
   --aviso: #ffd60a;
   --error: #ff453a;
+  --seleccion: #48484a;
+  --fuente: Inter, system-ui, sans-serif;
   color-scheme: dark;
+}
+
+/* Temas (Ajustes → Apariencia). "Sistema" elige claro u oscuro desde JS. */
+:root[data-tema="gris"] {
+  --fondo: #2b2b2b;
+  --superficie: #333333;
+  --tarjeta: #3d3d3d;
+  --borde: #4a4a4a;
+  --texto: #ececec;
+  --texto-2: #a3a3a3;
+  --acento: #f0f0f0;
+  --seleccion: #5a5a5a;
+}
+:root[data-tema="amoled"] {
+  --fondo: #000000;
+  --superficie: #0a0a0a;
+  --tarjeta: #161616;
+  --borde: #262626;
+  --texto: #f5f5f5;
+  --texto-2: #8a8a8a;
+  --acento: #ffffff;
+  --seleccion: #333333;
+}
+:root[data-tema="oceano"] {
+  --fondo: #0b1622;
+  --superficie: #102030;
+  --tarjeta: #16293d;
+  --borde: #22394f;
+  --texto: #e6f1fb;
+  --texto-2: #8aa4bd;
+  --acento: #5ab4ff;
+  --seleccion: #23415e;
+}
+:root[data-tema="violeta"] {
+  --fondo: #14101f;
+  --superficie: #1b1529;
+  --tarjeta: #251d38;
+  --borde: #342a4d;
+  --texto: #f0eaff;
+  --texto-2: #a497c4;
+  --acento: #b794ff;
+  --seleccion: #3d3060;
+}
+:root[data-tema="bosque"] {
+  --fondo: #0f1612;
+  --superficie: #151f19;
+  --tarjeta: #1d2a22;
+  --borde: #2a3b30;
+  --texto: #e8f3ec;
+  --texto-2: #8fa898;
+  --acento: #6fdc8c;
+  --seleccion: #2d4636;
+}
+:root[data-tema="alto-contraste"] {
+  --fondo: #000000;
+  --superficie: #000000;
+  --tarjeta: #111111;
+  --borde: #ffffff;
+  --texto: #ffffff;
+  --texto-2: #e0e0e0;
+  --acento: #ffff00;
+  --ok: #00ff66;
+  --aviso: #ffff00;
+  --error: #ff4040;
+  --seleccion: #0050ff;
+}
+:root[data-tema="claro"] {
+  --fondo: #f2f2f7;
+  --superficie: #ffffff;
+  --tarjeta: #e9e9ee;
+  --borde: #d1d1d6;
+  --texto: #1c1c1e;
+  --texto-2: #6c6c70;
+  --acento: #1c1c1e;
+  --ok: #248a3d;
+  --aviso: #b25000;
+  --error: #d70015;
+  --seleccion: #c7c7cc;
+  color-scheme: light;
+}
+/* En el tema claro el acento es oscuro: el texto encima va en blanco. */
+:root[data-tema="claro"] .bg-acento.text-black,
+:root[data-tema="claro"] .bg-acento .text-black {
+  color: #ffffff;
 }
 
 html,
@@ -26,7 +112,7 @@ body {
   margin: 0;
   background: var(--fondo);
   color: var(--texto);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--fuente);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -38,18 +124,18 @@ h3 {
 }
 
 ::selection {
-  background: #48484a;
+  background: var(--seleccion);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #48484a transparent;
+  scrollbar-color: var(--borde) transparent;
 }
 
 input,
 textarea,
 select {
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .safe-top {

@@ -16,7 +16,7 @@ export default {
         peligro: "var(--error)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--fuente)"],
         titulo: ["Montserrat", "Inter", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
       },

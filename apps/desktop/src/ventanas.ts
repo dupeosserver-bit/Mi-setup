@@ -95,7 +95,9 @@ export function abrirNavegadorPrivado(inicio?: string): void {
 
   const vista = new WebContentsView({ webPreferences: { session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false } });
   ventana.contentView.addChildView(vista);
-  vistas.set(ventana.webContents.id, vista);
+  // El id se guarda ahora: al cerrar, la ventana ya está destruida y no se puede leer.
+  const idBarra = ventana.webContents.id;
+  vistas.set(idBarra, vista);
 
   const ajustar = () => {
     const [ancho = 0, alto = 0] = ventana.getContentSize();
@@ -128,10 +130,10 @@ export function abrirNavegadorPrivado(inicio?: string): void {
   }
 
   ventana.on("closed", () => {
-    vistas.delete(ventana.webContents.id);
+    vistas.delete(idBarra);
     void ses.clearStorageData();
     void ses.clearCache();
-    wc.close();
+    if (!wc.isDestroyed()) wc.close();
   });
 
   void wc.loadURL(normalizar(inicio ?? "https://duckduckgo.com"));

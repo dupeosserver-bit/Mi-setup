@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld("miSetup", {
   abrirExterno: (url: string) => ipcRenderer.send("externo", url),
   notificar: (titulo: string, cuerpo: string) => ipcRenderer.send("notificar", titulo, cuerpo),
   ventana: (accion: AccionVentana) => ipcRenderer.send("ventana", accion),
-  establecerMenu: (grupos: unknown) => ipcRenderer.send("menu", grupos),
   alNavegar: (cb: (ruta: string) => void) => {
     const fn = (_e: unknown, ruta: string) => cb(ruta);
     ipcRenderer.on("navegar", fn);

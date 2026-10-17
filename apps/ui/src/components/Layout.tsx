@@ -1,30 +1,22 @@
 /**
  * Estructura de la app.
- * - PC: barra superior estilo LP (Archivo · categorías · Ver · Ventana · Ayuda)
- *   con menús desplegables y barra lateral compacta.
+ * - PC: barra superior mínima (logo, buscar, conexión, cuenta) y barra lateral
+ *   con ícono y nombre de cada apartado, agrupados por categoría; se puede
+ *   compactar a solo íconos.
  * - Celular: botón de tres rayas → panel lateral con íconos y texto, lupa,
  *   equipos con indicador conectado/desconectado y botón "+" flotante.
  */
 import { MODULES, temas, type ModuleId } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Bell,
-  LogOut,
-  Menu,
-  MessagesSquare,
-  NotebookPen,
-  PanelLeftClose,
-  Plus,
-  Search,
-  X,
-} from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bell, ChevronsLeft, ChevronsRight, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { queryClient, useApariencia, useMe } from "../lib/consultas";
 import { olvidarDispositivo } from "../lib/dispositivo";
 import { mostrarNotificacion, prepararNotificaciones } from "../lib/notificaciones";
 import { escritorio } from "../lib/plataforma";
+import { usePreferencias } from "../lib/preferencias";
 import { useSesion } from "../lib/sesion";
 import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
 import { CATEGORIAS, MODULOS_UI, moduloPorRuta } from "../modulos";
@@ -72,192 +64,23 @@ function useEquipos(activo: boolean) {
   return useQuery({ queryKey: ["equipos"], queryFn: () => api<Equipo[]>("/api/equipos"), enabled: activo });
 }
 
-// ---------------------------------------------------------------- menú desplegable
-
-function Menu_({ titulo, children }: { titulo: ReactNode; children: (cerrar: () => void) => ReactNode }) {
-  const [abierto, setAbierto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!abierto) return;
-    const fuera = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setAbierto(false);
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAbierto(false);
-    document.addEventListener("mousedown", fuera);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", fuera);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [abierto]);
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setAbierto((v) => !v)}
-        className={cx("flex h-7 items-center gap-1 whitespace-nowrap rounded-md px-2.5 text-[13px]", abierto ? "bg-tarjeta text-texto" : "text-tenue hover:text-texto")}
-      >
-        {titulo}
-      </button>
-      {abierto ? (
-        <div className="absolute left-0 top-8 z-40 min-w-56 rounded-xl border border-borde bg-superficie p-1 shadow-2xl">
-          {children(() => setAbierto(false))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ItemMenu({ onClick, children, atajo }: { onClick: () => void; children: ReactNode; atajo?: string }) {
-  return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] hover:bg-tarjeta">
-      <span className="flex flex-1 items-center gap-2">{children}</span>
-      {atajo ? <span className="text-xs text-tenue">{atajo}</span> : null}
-    </button>
-  );
-}
-
-const Separador = () => <div className="my-1 h-px bg-borde" />;
-
 // ---------------------------------------------------------------- PC
 
-function BarraSuperior({
-  grupos,
-  alBuscar,
-  alternarLateral,
-  avatar,
-}: {
-  grupos: ReturnType<typeof agruparVisibles>;
-  alBuscar: () => void;
-  alternarLateral: () => void;
-  avatar: string | null;
-}) {
-  const navegar = useNavigate();
+function BarraSuperior({ alBuscar, avatar }: { alBuscar: () => void; avatar: string | null }) {
   const { data: me } = useMe();
   const conexion = useEstadoConexion();
-  const pc = escritorio();
-  const ir = (cerrar: () => void, ruta: string) => {
-    cerrar();
-    navegar(ruta);
-  };
-
   return (
-    <div className="hidden h-11 shrink-0 items-center gap-1 border-b border-borde bg-superficie px-3 md:flex">
-      <Link to="/" className="mr-2 flex items-center">
+    <div className="hidden h-12 shrink-0 items-center gap-3 border-b border-borde bg-superficie px-4 md:flex">
+      <Link to="/" className="flex items-center">
         <Logo tamano="sm" />
       </Link>
-      {pc ? null : (
-      <>
-      <Menu_ titulo="Archivo">
-        {(c) => (
-          <>
-            <ItemMenu onClick={() => ir(c, "/notas?nueva=1")}>Nueva nota</ItemMenu>
-            <ItemMenu onClick={() => ir(c, "/recordatorios?nuevo=1")}>Nuevo recordatorio</ItemMenu>
-            <Separador />
-            <ItemMenu onClick={() => ir(c, "/ajustes")}>Ajustes</ItemMenu>
-            <ItemMenu
-              onClick={() => {
-                c();
-                void cerrarSesion().then(() => navegar("/login"));
-              }}
-            >
-              Cerrar sesión
-            </ItemMenu>
-          </>
-        )}
-      </Menu_>
-      {grupos
-        .filter((g) => g.id !== "ajustes")
-        .map((g) => (
-          <div key={g.id} className="hidden xl:block">
-            <Menu_ titulo={g.titulo}>
-              {(c) =>
-                g.modulos.map((mod) => (
-                  <ItemMenu key={mod.id} onClick={() => ir(c, mod.ruta)}>
-                    <mod.icono className="h-4 w-4 text-tenue" />
-                    {MODULES[mod.id].label}
-                  </ItemMenu>
-                ))
-              }
-            </Menu_>
-          </div>
-        ))}
-      <div className="xl:hidden">
-        <Menu_ titulo="Apartados">
-          {(c) => (
-            <div className="max-h-[70vh] overflow-y-auto">
-              {grupos.map((g) => (
-                <div key={g.id}>
-                  <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-tenue">{g.titulo}</div>
-                  {g.modulos.map((mod) => (
-                    <ItemMenu key={mod.id} onClick={() => ir(c, mod.ruta)}>
-                      <mod.icono className="h-4 w-4 text-tenue" />
-                      {MODULES[mod.id].label}
-                    </ItemMenu>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </Menu_>
-      </div>
-      <Menu_ titulo="Ver">
-        {(c) => (
-          <>
-            <ItemMenu atajo="Ctrl+K" onClick={() => (c(), alBuscar())}>Buscar apartado</ItemMenu>
-            <ItemMenu onClick={() => (c(), alternarLateral())}>Mostrar u ocultar barra lateral</ItemMenu>
-            <Separador />
-            <ItemMenu
-              atajo="F5"
-              onClick={() => {
-                c();
-                window.location.reload();
-              }}
-            >
-              Recargar
-            </ItemMenu>
-            <ItemMenu
-              atajo="F11"
-              onClick={() => {
-                c();
-                if (document.fullscreenElement) void document.exitFullscreen();
-                else void document.documentElement.requestFullscreen();
-              }}
-            >
-              Pantalla completa
-            </ItemMenu>
-          </>
-        )}
-      </Menu_>
-      <Menu_ titulo="Ventana">
-        {(c) => (
-          <ItemMenu
-            onClick={() => {
-              c();
-              window.open(window.location.href, "_blank", "noopener");
-            }}
-          >
-            Abrir en una ventana nueva
-          </ItemMenu>
-        )}
-      </Menu_>
-      <Menu_ titulo="Ayuda">
-        {(c) => (
-          <>
-            <ItemMenu onClick={() => (c(), alBuscar())}>Atajos: Ctrl+K busca apartados</ItemMenu>
-            <Separador />
-            <div className="px-3 py-1.5 text-xs text-tenue">Mi Setup</div>
-          </>
-        )}
-      </Menu_>
-      </>
-      )}
-
       <div className="ml-auto flex items-center gap-3">
-        <button type="button" onClick={alBuscar} className="flex h-7 items-center gap-2 rounded-lg border border-borde px-2.5 text-xs text-tenue hover:text-texto">
+        <button type="button" onClick={alBuscar} className="flex h-8 items-center gap-2 rounded-lg border border-borde px-3 text-xs text-tenue hover:text-texto">
           <Search className="h-3.5 w-3.5" /> Buscar <span className="text-[10px]">Ctrl+K</span>
         </button>
         <Punto conectado={conexion === "conectado"} texto />
         <Link to="/ajustes" className="flex items-center gap-2 text-xs text-tenue hover:text-texto">
-          {avatar ? <img src={avatar} alt="" className="h-6 w-6 rounded-full object-cover" /> : null}
+          {avatar ? <img src={avatar} alt="" className="h-7 w-7 rounded-full object-cover" /> : null}
           {me?.usuario.displayName}
         </Link>
       </div>
@@ -265,26 +88,47 @@ function BarraSuperior({
   );
 }
 
-function BarraLateral({ grupos }: { grupos: ReturnType<typeof agruparVisibles> }) {
+function BarraLateral({ grupos, compacta, alternar }: { grupos: ReturnType<typeof agruparVisibles>; compacta: boolean; alternar: () => void }) {
   return (
-    <nav className="hidden w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-borde bg-superficie py-3 md:flex">
-      {grupos.map((g, i) => (
-        <div key={g.id} className="flex flex-col items-center gap-1">
-          {i > 0 ? <div className="my-1 h-px w-6 bg-borde" /> : null}
-          {g.modulos.map((mod) => (
-            <NavLink
-              key={mod.id}
-              to={mod.ruta}
-              title={MODULES[mod.id].label}
-              className={({ isActive }) =>
-                cx("flex h-9 w-9 items-center justify-center rounded-xl transition-colors", isActive ? "bg-acento text-black" : "text-tenue hover:bg-tarjeta hover:text-texto")
-              }
-            >
-              <mod.icono className="h-[18px] w-[18px]" />
-            </NavLink>
-          ))}
-        </div>
-      ))}
+    <nav className={cx("hidden shrink-0 flex-col border-r border-borde bg-superficie md:flex", compacta ? "w-16" : "w-60")}>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+        {grupos.map((g, i) => (
+          <div key={g.id} className={cx(i > 0 && "mt-3")}>
+            {compacta ? (
+              i > 0 ? <div className="mx-auto mb-2 h-px w-8 bg-borde" /> : null
+            ) : (
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tenue">{g.titulo}</div>
+            )}
+            {g.modulos.map((mod) => (
+              <NavLink
+                key={mod.id}
+                to={mod.ruta}
+                end={mod.ruta === "/"}
+                title={MODULES[mod.id].label}
+                className={({ isActive }) =>
+                  cx(
+                    "flex items-center gap-3 rounded-xl text-sm transition-colors",
+                    compacta ? "mx-auto h-10 w-10 justify-center" : "px-3 py-2",
+                    isActive ? "bg-acento text-black" : "text-tenue hover:bg-tarjeta hover:text-texto",
+                  )
+                }
+              >
+                <mod.icono className="h-[18px] w-[18px] shrink-0" />
+                {compacta ? null : <span className="truncate">{MODULES[mod.id].label}</span>}
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={alternar}
+        className={cx("flex items-center gap-2 border-t border-borde px-4 py-3 text-xs text-tenue hover:text-texto", compacta && "justify-center px-0")}
+        title={compacta ? "Mostrar nombres" : "Solo íconos"}
+      >
+        {compacta ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        {compacta ? null : "Solo íconos"}
+      </button>
     </nav>
   );
 }
@@ -421,12 +265,13 @@ export function Layout() {
   const navegar = useNavigate();
   const { data: me } = useMe();
   const { data: apariencia } = useApariencia();
+  usePreferencias();
   const conexion = useEstadoConexion();
   const visibles = useVisibles();
   const grupos = useMemo(() => agruparVisibles(visibles), [visibles]);
   const [panel, setPanel] = useState(false);
   const [buscar, setBuscar] = useState(false);
-  const [lateral, setLateral] = useState(() => localStorage.getItem(CLAVE_LATERAL) !== "no");
+  const [compacta, setCompacta] = useState(() => localStorage.getItem(CLAVE_LATERAL) === "iconos");
 
   // Sincronización entre dispositivos: el servidor avisa qué recurso cambió
   // (y, si trae aviso, se muestra como notificación local).
@@ -438,13 +283,6 @@ export function Layout() {
   useEffect(() => {
     void prepararNotificaciones();
   }, []);
-
-  // En la app de PC el menú superior es nativo (Electron).
-  useEffect(() => {
-    escritorio()?.establecerMenu(
-      grupos.map((g) => ({ titulo: g.titulo, items: g.modulos.map((mod) => ({ etiqueta: MODULES[mod.id].label, ruta: mod.ruta })) })),
-    );
-  }, [grupos]);
   useTema("apariencia", () => void queryClient.invalidateQueries({ queryKey: ["apariencia"] }));
 
   useEffect(() => {
@@ -481,19 +319,23 @@ export function Layout() {
   );
 
   const alternarLateral = () => {
-    setLateral((v) => {
-      localStorage.setItem(CLAVE_LATERAL, v ? "no" : "si");
+    setCompacta((v) => {
+      localStorage.setItem(CLAVE_LATERAL, v ? "nombres" : "iconos");
       return !v;
     });
   };
 
   const fondo = apariencia?.fondo
-    ? { backgroundImage: `linear-gradient(rgba(18,18,18,.9), rgba(18,18,18,.95)), url(${apariencia.fondo})`, backgroundSize: "cover", backgroundPosition: "center" }
+    ? {
+        backgroundImage: `linear-gradient(color-mix(in srgb, var(--fondo) 90%, transparent), color-mix(in srgb, var(--fondo) 95%, transparent)), url(${apariencia.fondo})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }
     : undefined;
 
   return (
     <div className="flex h-full flex-col" style={fondo}>
-      <BarraSuperior grupos={grupos} alBuscar={() => setBuscar(true)} alternarLateral={alternarLateral} avatar={apariencia?.avatar ?? null} />
+      <BarraSuperior alBuscar={() => setBuscar(true)} avatar={apariencia?.avatar ?? null} />
 
       <header className="safe-top flex h-14 shrink-0 items-center gap-2 border-b border-borde bg-superficie px-2 md:hidden">
         <button type="button" onClick={() => setPanel(true)} className="rounded-lg p-2" aria-label="Abrir menú">
@@ -509,7 +351,7 @@ export function Layout() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {lateral ? <BarraLateral grupos={grupos} /> : null}
+        <BarraLateral grupos={grupos} compacta={compacta} alternar={alternarLateral} />
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl p-4 pb-28 md:p-6">
             <Suspense fallback={<Cargando />}>
@@ -519,16 +361,6 @@ export function Layout() {
         </main>
       </div>
 
-      {!lateral ? (
-        <button
-          type="button"
-          onClick={alternarLateral}
-          title="Mostrar barra lateral"
-          className="fixed bottom-4 left-4 z-20 hidden rounded-xl border border-borde bg-superficie p-2 text-tenue md:block"
-        >
-          <PanelLeftClose className="h-4 w-4 rotate-180" />
-        </button>
-      ) : null}
       <PanelMovil abierto={panel} alCerrar={() => setPanel(false)} grupos={grupos} visibles={visibles} />
       <BotonMas visibles={visibles} />
       <Buscador abierto={buscar} alCerrar={() => setBuscar(false)} visibles={visibles} />
