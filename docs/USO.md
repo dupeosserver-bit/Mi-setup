@@ -329,3 +329,8 @@ La imagen de Docker ahora incluye **ffmpeg** (convertidor) y un volumen nuevo pa
 - **Alexa**: Amazon no deja controlarla desde apps de otros (solo con "skills" propias); hay accesos directos a su página.
 - **Chat de YouTube** en modo streamer: su API cobra por cuota; ábrelo en otra ventana.
 - **Panel para clientes de MexicanLand** (que ellos entren a ver sus servidores): queda para una versión siguiente; por ahora tú los administras en Clientes y cobros.
+
+## Versión 0.5.1
+
+- **Terminal de tu PC** (solo app de Windows): en VPS → Terminal se abre **PowerShell** por defecto y la tarjeta *Esta PC* abre PowerShell 7 (si lo tienes), PowerShell o CMD. Las pestañas siguen vivas aunque cambies de pantalla; la X las cierra. Los comandos guardados (`/nombre`) también funcionan ahí; lo que escribes en tu PC no se guarda en el historial del servidor.
+- **VPN**: `deploy/host-install.sh` ahora instala WireGuard completo (ver sección VPN).

@@ -1,6 +1,6 @@
 {
   "name": "@mi-setup/desktop",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Mi Setup para Windows (Electron): ventana, menú nativo y agente de métricas de la PC",
   "author": "MexicanLand",
@@ -13,6 +13,7 @@
     "dist": "tsc -p tsconfig.json && node dist/verificar-icono.js && electron-builder --win nsis --publish never"
   },
   "dependencies": {
+    "@lydell/node-pty": "1.1.0",
     "electron-updater": "6.3.9",
     "systeminformation": "^5.23.0"
   },

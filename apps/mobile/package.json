@@ -1,6 +1,6 @@
 {
   "name": "@mi-setup/mobile",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Mi Setup para Android (Capacitor): biometría y notificaciones",
   "scripts": {

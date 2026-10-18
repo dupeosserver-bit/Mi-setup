@@ -23,6 +23,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { leerMetricas, leerSistema } from "./metricas";
+import { registrarTerminalLocal } from "./terminal-local";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
 const DEV = process.argv.includes("--dev");
@@ -45,6 +46,7 @@ const ORIGEN = new URL(URL_APP).origin;
 let ventana: BrowserWindow | null = null;
 let bandeja: Tray | null = null;
 let saliendo = false;
+let cerrarTerminales: () => void = () => undefined;
 
 function icono(): string | null {
   const candidatos = [join(process.resourcesPath ?? "", "icon.png"), join(__dirname, "..", "build", "icon.png")];
@@ -291,6 +293,7 @@ function crearBandeja(): void {
 }
 
 function registrarIpc(): void {
+  cerrarTerminales = registrarTerminalLocal(deLaApp, () => ventana).cerrarTodas;
   ipcMain.on("version", (e) => {
     e.returnValue = app.getVersion();
   });
@@ -328,6 +331,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", mostrar);
   app.on("before-quit", () => {
     saliendo = true;
+    cerrarTerminales();
   });
   app.on("window-all-closed", () => {
     if (!bandeja) app.quit();

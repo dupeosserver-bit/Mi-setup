@@ -1,6 +1,6 @@
 {
   "name": "@mi-setup/shared",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Tipos, esquemas Zod, constantes y permisos compartidos",

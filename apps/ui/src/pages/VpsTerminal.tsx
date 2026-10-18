@@ -9,7 +9,7 @@ import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, Eye, EyeOff, History, KeyRound, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
+import { ClipboardPaste, Eye, EyeOff, History, KeyRound, Laptop, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Punto, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { Desbloqueo } from "../components/Desbloqueo";
@@ -19,7 +19,7 @@ import { codigoTotp, type CuentaTotp } from "../lib/boveda/totp";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
-import { esMovil } from "../lib/plataforma";
+import { escritorio, esMovil } from "../lib/plataforma";
 import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { pedirReauth } from "../lib/reauth";
 import { tiempoReal } from "../lib/tiempo-real";
@@ -57,6 +57,156 @@ function anotar(servidorId: string, comando: string) {
 
 /** Pestañas que el usuario cerró con la X: esas sí cierran la sesión SSH; las demás solo se sueltan. */
 const cierresExplicitos = new Set<string>();
+
+/**
+ * Ctrl+V / Ctrl+Shift+V pegan; Ctrl+C copia si hay texto seleccionado (si no, va
+ * a la terminal como siempre). Clic derecho: copia si hay selección; si no, pega.
+ */
+function atajosPortapapeles(term: Terminal, contenedor: HTMLElement): () => void {
+  const pegar = async () => {
+    const texto = await navigator.clipboard.readText().catch(() => "");
+    if (texto) term.paste(texto);
+    else avisar("No hay texto en el portapapeles (o no se dio permiso para leerlo)", "info");
+  };
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== "keydown") return true;
+    const tecla = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && tecla === "v") {
+      e.preventDefault();
+      void pegar();
+      return false;
+    }
+    if ((e.ctrlKey || e.metaKey) && tecla === "c" && (e.shiftKey || term.hasSelection())) {
+      void navigator.clipboard.writeText(term.getSelection());
+      term.clearSelection();
+      return false;
+    }
+    return true;
+  });
+  const menu = (e: MouseEvent) => {
+    e.preventDefault();
+    if (term.hasSelection()) {
+      void navigator.clipboard.writeText(term.getSelection());
+      term.clearSelection();
+      avisar("Copiado", "info");
+    } else void pegar();
+  };
+  contenedor.addEventListener("contextmenu", menu);
+  return () => contenedor.removeEventListener("contextmenu", menu);
+}
+
+/** Pestañas locales cerradas con la X: esas terminan PowerShell/CMD; cambiar de pantalla las deja vivas. */
+const cierresLocales = new Set<string>();
+
+/** PowerShell o CMD de esta PC (solo en la app de Windows). */
+function ConsolaLocal({
+  clave,
+  shell,
+  ptyInicial,
+  visible,
+  registrar,
+  alId,
+}: {
+  clave: string;
+  shell: string;
+  /** Sesión que sigue viva en la app (se retoma con lo último que mostró). */
+  ptyInicial?: string;
+  visible: boolean;
+  registrar: (enviar: ((texto: string) => void) | null) => void;
+  alId: (id: string) => void;
+}) {
+  const caja = useRef<HTMLDivElement>(null);
+  const ajuste = useRef<FitAddon | null>(null);
+  const terminal = useRef<Terminal | null>(null);
+  const prefs = usePreferencias();
+  const opciones = opcionesTerminal(prefs);
+  const opcionesIniciales = useRef(opciones);
+
+  useEffect(() => {
+    const contenedor = caja.current;
+    const puente = escritorio()?.terminalLocal;
+    if (!contenedor || !puente) return;
+    const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true });
+    terminal.current = term;
+    const fit = new FitAddon();
+    ajuste.current = fit;
+    term.loadAddon(fit);
+    term.open(contenedor);
+    fit.fit();
+    const quitarAtajos = atajosPortapapeles(term, contenedor);
+
+    let id: string | null = null;
+    let vivo = true;
+    const offs = [
+      puente.alDatos((pid, datos) => {
+        if (pid === id) term.write(datos);
+      }),
+      puente.alSalida((pid, codigo) => {
+        if (pid === id) term.writeln(`\r\n\x1b[90m[terminal cerrada${codigo ? ` (código ${codigo})` : ""}]\x1b[0m`);
+      }),
+    ];
+    const conectar = async () => {
+      try {
+        if (ptyInicial) {
+          id = ptyInicial;
+          term.write(await puente.historial(ptyInicial));
+          puente.tamano(ptyInicial, term.cols, term.rows);
+        } else {
+          const r = await puente.abrir(shell, term.cols, term.rows);
+          if (!vivo) return puente.cerrar(r.id);
+          id = r.id;
+        }
+        alId(id);
+        term.focus();
+      } catch (err) {
+        term.writeln(`\x1b[31m${err instanceof Error ? err.message : "No se pudo abrir la terminal"}\x1b[0m`);
+      }
+    };
+    void conectar();
+
+    const entrada = term.onData((datos) => {
+      if (id) puente.escribir(id, datos);
+    });
+    registrar((texto) => {
+      if (id) puente.escribir(id, texto);
+      term.focus();
+    });
+    const tamano = term.onResize(({ cols, rows }) => {
+      if (id) puente.tamano(id, cols, rows);
+    });
+    const observador = new ResizeObserver(() => fit.fit());
+    observador.observe(contenedor);
+
+    return () => {
+      vivo = false;
+      registrar(null);
+      if (id && cierresLocales.has(clave)) puente.cerrar(id);
+      cierresLocales.delete(clave);
+      offs.forEach((off) => off());
+      quitarAtajos();
+      entrada.dispose();
+      tamano.dispose();
+      observador.disconnect();
+      term.dispose();
+      terminal.current = null;
+    };
+  }, [shell, registrar]);
+
+  useEffect(() => {
+    const term = terminal.current;
+    if (!term) return;
+    term.options.theme = opciones.theme;
+    term.options.fontFamily = opciones.fontFamily;
+    term.options.fontSize = opciones.fontSize;
+    ajuste.current?.fit();
+  }, [opciones.theme, opciones.fontFamily, opciones.fontSize]);
+
+  useEffect(() => {
+    if (visible) requestAnimationFrame(() => ajuste.current?.fit());
+  }, [visible]);
+
+  return <div ref={caja} className={cx("h-full w-full p-1", !visible && "hidden")} style={{ background: opciones.theme.background }} />;
+}
 
 function Consola({
   clave,
@@ -96,38 +246,7 @@ function Consola({
     term.open(contenedor);
     if (movil) term.textarea?.setAttribute("inputmode", "none");
     fit.fit();
-
-    const pegar = async () => {
-      const texto = await navigator.clipboard.readText().catch(() => "");
-      if (texto) term.paste(texto);
-      else avisar("No hay texto en el portapapeles (o no se dio permiso para leerlo)", "info");
-    };
-    // Ctrl+V / Ctrl+Shift+V pegan; Ctrl+C copia si hay texto seleccionado (si no, va al servidor como siempre).
-    term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return true;
-      const tecla = e.key.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && tecla === "v") {
-        e.preventDefault();
-        void pegar();
-        return false;
-      }
-      if ((e.ctrlKey || e.metaKey) && tecla === "c" && (e.shiftKey || term.hasSelection())) {
-        void navigator.clipboard.writeText(term.getSelection());
-        term.clearSelection();
-        return false;
-      }
-      return true;
-    });
-    // Clic derecho: copia si hay selección; si no, pega.
-    const menu = (e: MouseEvent) => {
-      e.preventDefault();
-      if (term.hasSelection()) {
-        void navigator.clipboard.writeText(term.getSelection());
-        term.clearSelection();
-        avisar("Copiado", "info");
-      } else void pegar();
-    };
-    contenedor.addEventListener("contextmenu", menu);
+    const quitarAtajos = atajosPortapapeles(term, contenedor);
 
     const ref = crypto.randomUUID();
     let id: string | null = null;
@@ -211,7 +330,7 @@ function Consola({
       if (id) tiempoReal.enviar(cierresExplicitos.has(clave) ? { tipo: "terminal.cerrar", id } : { tipo: "terminal.soltar", id });
       cierresExplicitos.delete(clave);
       offs.forEach((off) => off());
-      contenedor.removeEventListener("contextmenu", menu);
+      quitarAtajos();
       entrada.dispose();
       tamano.dispose();
       observador.disconnect();
@@ -295,7 +414,7 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
   const sugerencias = busqueda !== null ? (comandos.data ?? []).filter((c) => normalizar(c.nombre).includes(busqueda)).slice(0, 6) : [];
 
   const ejecutar = async (comando: string, nombre?: string) => {
-    if (!enviar || !servidorId) return avisar("Abre primero una sesión de terminal", "info");
+    if (!enviar) return avisar("Abre primero una sesión de terminal", "info");
     const analisis = analizarComando(comando);
     if (analisis.peligroso) {
       const ok = await confirmar({
@@ -309,8 +428,8 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
       if (!ok) return;
     }
     enviar(`${comando}\r`);
-    // Lo escrito en modo oculto (contraseñas) nunca va al historial.
-    if (!oculto) anotar(servidorId, comando);
+    // Lo escrito en modo oculto (contraseñas) nunca va al historial; lo de tu PC tampoco sale de ella.
+    if (!oculto && servidorId) anotar(servidorId, comando);
     setTexto("");
     setOculto(false);
   };
@@ -506,10 +625,19 @@ function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null;
   );
 }
 
+type Pestana =
+  | { clave: string; tipo: "ssh"; servidor: Servidor; sesion?: string }
+  | { clave: string; tipo: "local"; nombre: string; shell: string; pty?: string };
+
 export default function VpsTerminal() {
   const { data, isLoading, error } = useServidores();
   const esAdmin = usePuede("vps_terminal", "administrar");
-  const [pestanas, setPestanas] = useState<{ clave: string; servidor: Servidor; sesion?: string }[]>([]);
+  const [pestanas, setPestanas] = useState<Pestana[]>([]);
+  const local = escritorio()?.terminalLocal ?? null;
+  const [shells, setShells] = useState<{ id: string; nombre: string }[]>([]);
+  /** ptys de esta PC que ya tienen pestaña. */
+  const conocidasLocales = useRef(new Set<string>());
+  const yaPorDefecto = useRef(false);
   const [verCodigos, setVerCodigos] = useState(false);
   /** ids de sesión ya mostradas en una pestaña (para no duplicarlas al retomar). */
   const conocidas = useRef(new Set<string>());
@@ -529,7 +657,7 @@ export default function VpsTerminal() {
             .filter((x): x is { s: (typeof nuevas)[number]; servidor: Servidor } => Boolean(x.servidor))
             .map(({ s, servidor }) => {
               conocidas.current.add(s.id);
-              return { clave: crypto.randomUUID(), servidor, sesion: s.id };
+              return { clave: crypto.randomUUID(), tipo: "ssh" as const, servidor, sesion: s.id };
             });
           if (agregar.length) setActiva((a) => a ?? agregar[0]!.clave);
           return [...p, ...agregar];
@@ -561,10 +689,41 @@ export default function VpsTerminal() {
 
   const abrir = (servidor: Servidor) => {
     const clave = crypto.randomUUID();
-    setPestanas((p) => [...p, { clave, servidor }]);
+    setPestanas((p) => [...p, { clave, tipo: "ssh", servidor }]);
     setActiva(clave);
   };
+  const abrirLocal = (shell: string, nombre: string, pty?: string) => {
+    const clave = crypto.randomUUID();
+    setPestanas((p) => [...p, { clave, tipo: "local", shell, nombre, ...(pty ? { pty } : {}) }]);
+    setActiva((a) => (pty ? (a ?? clave) : clave));
+  };
+
+  // En la app de PC: se retoman las terminales de esta PC que siguen abiertas y,
+  // si no hay ninguna, se abre PowerShell de una vez (la terminal por defecto).
+  useEffect(() => {
+    if (!local) return;
+    let vigente = true;
+    void (async () => {
+      const [lista, disponibles] = await Promise.all([local.lista(), local.shells()]);
+      if (!vigente) return;
+      setShells(disponibles);
+      const vivas = lista.filter((s) => s.viva && !conocidasLocales.current.has(s.id));
+      vivas.forEach((s) => {
+        conocidasLocales.current.add(s.id);
+        abrirLocal(s.shell, s.nombre, s.id);
+      });
+      if (!lista.some((s) => s.viva) && !yaPorDefecto.current) {
+        yaPorDefecto.current = true;
+        const predeterminada = disponibles.find((s) => s.id === "powershell") ?? disponibles[0];
+        if (predeterminada) abrirLocal(predeterminada.id, predeterminada.nombre);
+      }
+    })().catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, [local]);
   const cerrar = (clave: string) => {
+    if (pestanas.find((x) => x.clave === clave)?.tipo === "local") cierresLocales.add(clave);
     // La X sí termina la sesión SSH (cambiar de pantalla solo la deja en pausa).
     cierresExplicitos.add(clave);
     registros.current.delete(clave);
@@ -575,6 +734,7 @@ export default function VpsTerminal() {
     });
   };
   const pestanaActiva = pestanas.find((p) => p.clave === activa) ?? null;
+  const servidorActivo = pestanaActiva?.tipo === "ssh" ? pestanaActiva.servidor.id : null;
   const enviarActiva = activa ? (enviadores.current.get(activa) ?? null) : null;
 
   const pegar = async () => {
@@ -613,13 +773,28 @@ export default function VpsTerminal() {
     <>
       <Encabezado
         titulo="Terminal"
-        descripcion="Sesiones SSH desde el servidor de Mi Setup. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado. Root pide confirmar tu identidad."
+        descripcion={local ? "PowerShell o CMD de esta PC y sesiones SSH a tus servidores. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado." : "Sesiones SSH desde el servidor de Mi Setup. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado. Root pide confirmar tu identidad."}
         acciones={esAdmin ? <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>Servidor</Boton> : null}
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
         <div className="space-y-2">
+          {local && shells.length ? (
+            <div className="rounded-tarjeta border border-borde bg-superficie p-3">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Laptop className="h-4 w-4 text-tenue" /> Esta PC
+              </p>
+              <p className="text-xs text-tenue">Terminal de Windows en tu computadora.</p>
+              <div className="mt-3 flex flex-wrap gap-1">
+                {shells.map((s) => (
+                  <Boton key={s.id} tamano="sm" variante={s.id === "powershell" ? "primario" : "secundario"} icono={TerminalSquare} onClick={() => abrirLocal(s.id, s.nombre)}>
+                    {s.nombre}
+                  </Boton>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {data?.length === 0 ? <Vacio icono={Server} texto="Agrega tu VPS con su llave SSH." /> : null}
           {data?.map((s) => (
             <div key={s.id} className="rounded-tarjeta border border-borde bg-superficie p-3">
@@ -647,13 +822,16 @@ export default function VpsTerminal() {
               </div>
             </div>
           ))}
-          <Historial servidorId={pestanaActiva?.servidor.id ?? null} alElegir={setTexto} />
+          <Historial servidorId={servidorActivo} alElegir={setTexto} />
         </div>
         <div className="flex h-[72vh] min-h-96 flex-col overflow-hidden rounded-tarjeta border border-borde bg-fondo">
           <div className="flex items-center gap-1 overflow-x-auto border-b border-borde bg-superficie p-1">
             {pestanas.map((p) => (
               <div key={p.clave} className={cx("flex items-center gap-1 rounded-lg pl-3 text-xs", activa === p.clave ? "bg-tarjeta" : "text-tenue")}>
-                <button type="button" onClick={() => setActiva(p.clave)} className="py-1.5">{p.servidor.nombre}</button>
+                <button type="button" onClick={() => setActiva(p.clave)} className="flex items-center gap-1 py-1.5">
+                  {p.tipo === "local" ? <Laptop className="h-3 w-3" /> : null}
+                  {p.tipo === "ssh" ? p.servidor.nombre : p.nombre}
+                </button>
                 <button type="button" onClick={() => cerrar(p.clave)} className="p-1.5 hover:text-texto" aria-label="Cerrar pestaña">
                   <X className="h-3 w-3" />
                 </button>
@@ -674,19 +852,30 @@ export default function VpsTerminal() {
           <div className="relative min-h-0 flex-1">
             {pestanas.map((p) => (
               <div key={p.clave} className={cx("absolute inset-0", activa !== p.clave && "pointer-events-none opacity-0")}>
-                <Consola
-                  clave={p.clave}
-                  servidor={p.servidor}
-                  {...(p.sesion ? { sesionInicial: p.sesion } : {})}
-                  visible={activa === p.clave}
-                  registrar={registroDe(p.clave)}
-                  alId={(id) => conocidas.current.add(id)}
-                />
+                {p.tipo === "ssh" ? (
+                  <Consola
+                    clave={p.clave}
+                    servidor={p.servidor}
+                    {...(p.sesion ? { sesionInicial: p.sesion } : {})}
+                    visible={activa === p.clave}
+                    registrar={registroDe(p.clave)}
+                    alId={(id) => conocidas.current.add(id)}
+                  />
+                ) : (
+                  <ConsolaLocal
+                    clave={p.clave}
+                    shell={p.shell}
+                    {...(p.pty ? { ptyInicial: p.pty } : {})}
+                    visible={activa === p.clave}
+                    registrar={registroDe(p.clave)}
+                    alId={(id) => conocidasLocales.current.add(id)}
+                  />
+                )}
               </div>
             ))}
             {pestanas.length === 0 ? <Vacio icono={TerminalSquare} texto="Elige un servidor y pulsa Abrir." /> : null}
           </div>
-          <BarraComandos enviar={enviarActiva} servidorId={pestanaActiva?.servidor.id ?? null} texto={texto} setTexto={setTexto} />
+          <BarraComandos enviar={enviarActiva} servidorId={servidorActivo} texto={texto} setTexto={setTexto} />
         </div>
       </div>
       <Modal abierto={verCodigos} titulo="Escribir un código 2FA en la terminal" alCerrar={() => setVerCodigos(false)}>

@@ -18,6 +18,20 @@ export interface PuenteEscritorio {
   notificar(titulo: string, cuerpo: string): void;
   alNavegar(cb: (ruta: string) => void): () => void;
   ventana(accion: "minimizar" | "maximizar" | "cerrar" | "recargar" | "pantallaCompleta"): void;
+  /** PowerShell / CMD de la PC (versión 0.5.1 o más nueva de la app de Windows). */
+  readonly terminalLocal?: TerminalLocal;
+}
+
+export interface TerminalLocal {
+  shells(): Promise<{ id: string; nombre: string }[]>;
+  lista(): Promise<{ id: string; shell: string; nombre: string; viva: boolean }[]>;
+  historial(id: string): Promise<string>;
+  abrir(shell: string, cols: number, rows: number): Promise<{ id: string; nombre: string }>;
+  escribir(id: string, datos: string): void;
+  tamano(id: string, cols: number, rows: number): void;
+  cerrar(id: string): void;
+  alDatos(cb: (id: string, datos: string) => void): () => void;
+  alSalida(cb: (id: string, codigo: number) => void): () => void;
 }
 
 declare global {

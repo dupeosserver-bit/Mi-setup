@@ -9,6 +9,9 @@ files:
   - dist/**/*
   - static/**/*
   - package.json
+# La terminal de la PC (node-pty) trae binarios nativos: van fuera del asar.
+asarUnpack:
+  - "**/node_modules/@lydell/**"
 extraResources:
   - from: build/icon.png
     to: icon.png
