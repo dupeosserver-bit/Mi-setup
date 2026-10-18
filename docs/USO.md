@@ -156,7 +156,7 @@ Huella o rostro: en la app de Android, **Ajustes → Seguridad → Activar huell
 ## VPN (WireGuard)
 
 1. El script del VPS ya configura `wg0` (10.66.66.0/24, 51820/udp) y `/usr/local/sbin/mi-setup-wg`.
-2. Ejecuta una vez como root `bash deploy/host-install.sh` (el script del VPS puede hacerlo): instala el servicio `mi-setup-wg-agent` que crea `/run/mi-setup/wg.sock`.
+2. Ejecuta una vez como root `bash /opt/mi-setup/app/deploy/host-install.sh` y luego `docker restart misetup-core`: instala WireGuard (`wg0`, red 10.8.0.0/24, puerto 51820/udp; si ya tienes `/etc/wireguard/wg0.conf` lo reutiliza), el ayudante `/usr/local/sbin/mi-setup-wg` y el servicio `mi-setup-wg-agent` que crea `/run/mi-setup/wg.sock`. La dirección pública que reciben los dispositivos está en `/etc/mi-setup/wg.env`.
 3. En la app, **Seguridad → VPN → Dispositivo**: escribe un nombre; la app genera las llaves y te muestra un QR y un `.conf` **una sola vez**.
 4. En el celular: app **WireGuard** → `+` → *Escanear desde código QR*. En Windows: WireGuard → *Importar túnel desde archivo*.
 5. Activa o desactiva el túnel desde la app de WireGuard ("Abrir WireGuard").

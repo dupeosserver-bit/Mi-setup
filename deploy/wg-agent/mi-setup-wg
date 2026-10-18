@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# mi-setup-wg: alta y baja de dispositivos en WireGuard para Mi Setup.
+# Lo llama el servicio mi-setup-wg-agent (root); también sirve a mano.
+#   mi-setup-wg add <nombre> --pubkey <llave> [--psk <llave>] --json
+#   mi-setup-wg remove <nombre> --json
+#   mi-setup-wg list
+# La llave privada del dispositivo nunca pasa por aquí.
+set -euo pipefail
+
+IFACE="${MI_SETUP_WG_IFACE:-wg0}"
+CONF="/etc/wireguard/${IFACE}.conf"
+AJUSTES="/etc/mi-setup/wg.env"   # ENDPOINT=ip:puerto  DNS=1.1.1.1
+ENDPOINT=""; DNS=""
+# shellcheck disable=SC1090
+[ -f "$AJUSTES" ] && . "$AJUSTES"
+
+error() { echo "$1" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || error "Ejecuta como root."
+[ -f "$CONF" ] || error "No existe ${CONF}: instala la VPN con deploy/host-install.sh."
+
+accion="${1:-}"
+nombre="${2:-}"
+[ $# -ge 2 ] && shift 2 || shift $#
+pubkey=""; psk=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pubkey) pubkey="${2:-}"; shift 2 ;;
+    --psk) psk="${2:-}"; shift 2 ;;
+    --json) shift ;;
+    *) error "Opción desconocida: $1" ;;
+  esac
+done
+
+LLAVE='^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=$'
+marca="# mi-setup: ${nombre}"
+
+# Un cambio a la vez.
+exec 9>/run/lock/mi-setup-wg.lock
+flock 9
+
+case "$accion" in
+  add)
+    [[ "$nombre" =~ ^[a-z0-9-]{1,32}$ ]] || error "Nombre inválido."
+    [[ "$pubkey" =~ $LLAVE ]] || error "Llave pública inválida."
+    [ -z "$psk" ] || [[ "$psk" =~ $LLAVE ]] || error "Llave precompartida inválida."
+    grep -qxF "$marca" "$CONF" && error "Ya existe un dispositivo llamado ${nombre}."
+    grep -qF "$pubkey" "$CONF" && error "Esa llave ya está registrada."
+    red="$(ip -4 -o addr show dev "$IFACE" 2>/dev/null | awk '{print $4}' | head -1)"
+    [ -n "$red" ] || error "La interfaz ${IFACE} no está activa (systemctl start wg-quick@${IFACE})."
+    servidor="${red%/*}"
+    base="${servidor%.*}"
+    ocupadas="$( { echo "$servidor"; grep -oE "AllowedIPs *= *[0-9.]+" "$CONF" | grep -oE '[0-9.]+$'; wg show "$IFACE" allowed-ips | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; } | sort -u)" || true
+    ip=""
+    for n in $(seq 2 254); do
+      if ! grep -qxF "${base}.${n}" <<< "$ocupadas"; then ip="${base}.${n}"; break; fi
+    done
+    [ -n "$ip" ] || error "No quedan direcciones libres en ${base}.0/24."
+    {
+      echo
+      echo "$marca"
+      echo "[Peer]"
+      echo "PublicKey = ${pubkey}"
+      [ -n "$psk" ] && echo "PresharedKey = ${psk}"
+      echo "AllowedIPs = ${ip}/32"
+    } >> "$CONF"
+    if [ -n "$psk" ]; then
+      f="$(mktemp)"; printf '%s' "$psk" > "$f"
+      wg set "$IFACE" peer "$pubkey" preshared-key "$f" allowed-ips "${ip}/32"
+      rm -f "$f"
+    else
+      wg set "$IFACE" peer "$pubkey" allowed-ips "${ip}/32"
+    fi
+    if [ -z "$ENDPOINT" ]; then
+      publica="$(curl -4 -fsS --max-time 5 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+      ENDPOINT="${publica}:$(wg show "$IFACE" listen-port)"
+    fi
+    printf '{"address":"%s/32","server_public_key":"%s","endpoint":"%s","dns":"%s","allowed_ips":"0.0.0.0/0"}\n' \
+      "$ip" "$(wg show "$IFACE" public-key)" "$ENDPOINT" "${DNS:-1.1.1.1}"
+    ;;
+  remove)
+    [[ "$nombre" =~ ^[a-z0-9-]{1,32}$ ]] || error "Nombre inválido."
+    if grep -qxF "$marca" "$CONF"; then
+      llave="$(awk -v m="$marca" '$0 == m { f = 1; next } f && /^PublicKey/ { print $3; exit }' "$CONF")"
+      [ -n "$llave" ] && wg set "$IFACE" peer "$llave" remove
+      cp "$CONF" "${CONF}.bak"
+      awk -v m="$marca" '$0 == m { s = 1; next } s && /^[[:space:]]*$/ { s = 0 } !s { print }' "${CONF}.bak" > "$CONF"
+      chmod 600 "$CONF"
+    fi
+    echo '{"ok":true}'
+    ;;
+  list)
+    grep -E '^# mi-setup: ' "$CONF" | sed 's/^# mi-setup: //'
+    ;;
+  *)
+    error "Uso: mi-setup-wg add <nombre> --pubkey <llave> [--psk <llave>] --json | remove <nombre> --json | list"
+    ;;
+esac
