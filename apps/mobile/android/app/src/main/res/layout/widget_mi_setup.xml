@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_raiz"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_fondo"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm"
+            android:format24Hour="H:mm"
+            android:textColor="#FFFFFFFF"
+            android:textSize="34sp"
+            android:fontFamily="sans-serif-light" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
+
+            <TextClock
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="EEEE d 'de' MMMM"
+                android:format24Hour="EEEE d 'de' MMMM"
+                android:textColor="#FFFFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/widget_titulo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="#99FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:minHeight="52dp"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/widget_ia"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_boton"
+            android:gravity="center"
+            android:text="🤖\nIA"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
+        <TextView
+            android:id="@+id/widget_notas"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_boton"
+            android:gravity="center"
+            android:text="📝\nNotas"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
+        <TextView
+            android:id="@+id/widget_finanzas"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_boton"
+            android:gravity="center"
+            android:text="💰\nFinanzas"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
+        <TextView
+            android:id="@+id/widget_calendario"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_boton"
+            android:gravity="center"
+            android:text="📅\nAgenda"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
+        <TextView
+            android:id="@+id/widget_vps"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_boton"
+            android:gravity="center"
+            android:text="🖥️\nVPS"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
+    </LinearLayout>
+</LinearLayout>

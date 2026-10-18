@@ -4,4 +4,9 @@
     <string name="title_activity_main">Mi Setup</string>
     <string name="package_name">net.mexicanland.misetup</string>
     <string name="custom_url_scheme">net.mexicanland.misetup</string>
+    <string name="widget_descripcion">Reloj y accesos rápidos a tu IA, notas, finanzas, agenda y VPS</string>
+    <string name="atajo_ia">IA</string>
+    <string name="atajo_notas">Notas</string>
+    <string name="atajo_finanzas">Finanzas</string>
+    <string name="atajo_vps">VPS</string>
 </resources>

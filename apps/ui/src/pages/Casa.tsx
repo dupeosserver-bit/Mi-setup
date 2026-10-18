@@ -5,7 +5,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Camera, ExternalLink, Gauge, Link2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Tarjeta, Vacio, avisarError } from "../components/ui";
+import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Tarjeta, Vacio, avisarError } from "../components/ui";
 import { API_BASE, api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";

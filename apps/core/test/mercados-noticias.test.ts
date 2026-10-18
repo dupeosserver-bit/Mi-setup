@@ -78,8 +78,9 @@ describe("mercados", () => {
         ]),
       ),
     );
-    const r = (await ctx.app.inject({ method: "GET", url: "/api/novedades/juegos-gratis?plataforma=epic-games-store", headers: h })).json<{ titulo: string }[]>();
-    expect(r.map((g) => g.titulo)).toEqual(["Juego A"]);
+    const r = (await ctx.app.inject({ method: "GET", url: "/api/novedades/juegos-gratis?plataforma=epic-games-store", headers: h })).json<{ pagina: number; totalPaginas: number; juegos: { titulo: string }[] }>();
+    expect(r.juegos.map((g) => g.titulo)).toEqual(["Juego A"]);
+    expect(r.pagina).toBe(1);
   });
 });
 

@@ -283,3 +283,49 @@ Caddy (de Mi Setup) ya ocupa los puertos 80 y 443, así que el instalador del pa
 - **Alertas de CPU** (VPS → Alertas de caída): además de RAM y disco. Al tocar el aviso en el celular se abre la IA con la pregunta lista para diagnosticar (no se envía sola).
 - **Notificaciones del chat**: los mensajes privados y de grupo avisan a los demás miembros; a la cuenta maestra también le llega push aunque la app esté cerrada.
 - **Instalador para otra persona**: `deploy/instalar.sh` (ver `docs/OTRA-INSTALACION.md`).
+
+## Versión 0.5: qué hay de nuevo
+
+Apartados nuevos en el menú (categorías **Herramientas**, **Entretenimiento** y **Casa**; lo demás va en su categoría de siempre). Cada uno tiene su guía en el botón **?** de la pantalla.
+
+- **Herramientas**: QR con tu logo y colores (para la pastelería), emojis con mensaje oculto (solo se decodifica, nunca se ejecuta), vista previa de HTML/CSS, **acortador de enlaces** (`/l/codigo`), **compartir archivos** tipo Mega (`/s/codigo`, hasta 2 GB, con contraseña, días y límite de descargas; se borran solos al vencer), **portapapeles** compartido entre tus equipos, **documentos PDF** (unir, páginas, fotos a PDF, firmar) y **convertidor** (imágenes, audio/video con ffmpeg en el servidor, Excel/CSV/JSON).
+- **Principal**: **calendario** (tus eventos + recordatorios, cobros, suscripciones y vencimientos), **mis finanzas** (movimientos, presupuestos, suscripciones con aviso antes del cobro, importar y exportar tu Excel) y **notas tipo Notion** (subpáginas, íconos, casillas y tablero de tareas; son las mismas del bloc de notas).
+- **IA creativa**: biblioteca de prompts con variables, quitar fondo de fotos (en tu equipo) y resumir/traducir páginas web.
+- **Modo streamer**: chats de Twitch y Kick juntos en vivo.
+- **Mi casa**: prueba de velocidad contra tu VPS, cámaras (MJPEG o go2rtc) y accesos rápidos (módem, Alexa).
+- **Entretenimiento**: **películas y series** (buscar, dónde verla en México, siguiente capítulo, lista "por ver"), **música** (control de Spotify y tu música subida) y **mis videos** (tu YouTube privado con "seguir donde te quedaste").
+- **Seguridad del servidor** (VPS): calificación y arreglos de un botón (firewall ufw, fail2ban, actualizaciones automáticas, abrir/cerrar puertos). Todo pide tu contraseña o huella y escribir el nombre del servidor; el puerto de SSH nunca se cierra. En **Archivos** hay un botón para **enviar un archivo a otro servidor** (home lab ↔ VPS).
+- **Ciberseguridad**: revisar tu sitio (certificado, cabeceras, SPF/DMARC), saber si una contraseña se filtró (sin enviarla) y lecciones.
+- **Respaldos**: descargar los respaldos de la base (solo maestra) y **Descargar mis datos** (cada cuenta). Script nuevo `deploy/respaldo.sh` (base + archivos subidos, guarda 14 días). Para que corra cada día a las 4:15:
+
+```bash
+chmod +x /opt/mi-setup/deploy/respaldo.sh
+(crontab -l 2>/dev/null; echo "15 4 * * * /opt/mi-setup/deploy/respaldo.sh >> /var/log/misetup-respaldo.log 2>&1") | crontab -
+```
+
+- **Cuentas**: verificación en dos pasos para cualquier cuenta (Ajustes → Mi cuenta), **pasar la cuenta maestra** a otra persona (necesita su 2FA activa y escribir su correo) y **eliminar cuentas** que no sean la maestra.
+- **Personalizar**: cada instalación cambia el nombre de la app, el logo y el fondo (Ajustes → Apariencia).
+- **Novedades**: juegos gratis y ofertas con páginas, clima de 10 días y estadísticas de Steam ("¿me corre el juego?").
+- **Actualizaciones**: la app de PC se actualiza sola; la de Android muestra un aviso y baja el APK nuevo (Android no deja instalar sin preguntarte). Ajustes → Descargar apps → Actualizaciones.
+- **Widget de Android**: mantén presionada la pantalla de inicio → Widgets → Mi Setup (reloj, fecha y accesos a IA, notas, finanzas, agenda y VPS). Al mantener presionado el ícono de la app también salen accesos.
+
+### Claves nuevas (opcionales; sin ellas la pantalla dice "Falta configurar")
+
+Se ponen en Ajustes → Servicios y claves (o en el `.env`):
+
+| Variable | Para qué | Cómo conseguirla |
+|---|---|---|
+| `TMDB_API_KEY` | Películas y series | Cuenta gratis en themoviedb.org → Ajustes → API → "API Key" (o el token de lectura largo). |
+| `SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET` | Controlar Spotify | developer.spotify.com → Create app → Redirect URI `https://TU-DOMINIO/api/musica/spotify/callback` → Web API. Controlar la música necesita Premium. |
+| `ARCHIVOS_DIR` | Dónde se guardan los archivos subidos | Ya viene en Docker: `/data/archivos` (volumen `misetup_archivos`). |
+
+### Publicar la versión 0.5 en el VPS
+
+La imagen de Docker ahora incluye **ffmpeg** (convertidor) y un volumen nuevo para archivos; `docker compose up -d --build` lo crea solo. Para que la app de PC se actualice sola sube **los tres** archivos de `apps/desktop/release/` a `/opt/mi-setup/descargas/`: `MiSetup-0.5.0.exe`, `MiSetup-0.5.0.exe.blockmap` y `latest.yml`; y el `MiSetup.apk` para Android.
+
+### Lo que no se pudo (y por qué)
+
+- **Ícono del celular distinto por persona**: Android no deja cambiar el ícono de una app instalada desde la propia app; sí cambian el nombre, logo y fondo dentro de la app.
+- **Alexa**: Amazon no deja controlarla desde apps de otros (solo con "skills" propias); hay accesos directos a su página.
+- **Chat de YouTube** en modo streamer: su API cobra por cuota; ábrelo en otra ventana.
+- **Panel para clientes de MexicanLand** (que ellos entren a ver sus servidores): queda para una versión siguiente; por ahora tú los administras en Clientes y cobros.

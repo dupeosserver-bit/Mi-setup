@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="ia" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/atajo_ia">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.mexicanland.misetup" android:targetClass="net.mexicanland.misetup.MainActivity">
+            <extra android:name="ruta" android:value="/ia" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="notas" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/atajo_notas">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.mexicanland.misetup" android:targetClass="net.mexicanland.misetup.MainActivity">
+            <extra android:name="ruta" android:value="/notas" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="finanzas" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/atajo_finanzas">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.mexicanland.misetup" android:targetClass="net.mexicanland.misetup.MainActivity">
+            <extra android:name="ruta" android:value="/finanzas" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="vps" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/atajo_vps">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="net.mexicanland.misetup" android:targetClass="net.mexicanland.misetup.MainActivity">
+            <extra android:name="ruta" android:value="/vps/rendimiento" />
+        </intent>
+    </shortcut>
+</shortcuts>
