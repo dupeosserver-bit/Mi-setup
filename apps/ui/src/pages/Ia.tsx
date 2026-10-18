@@ -48,10 +48,21 @@ function Uso() {
   );
 }
 
+/** Lee y borra la pregunta larga que dejó otra pantalla (IA creativa). */
+function leerPreguntaLarga(): string | null {
+  try {
+    const v = sessionStorage.getItem("mi-setup.pregunta");
+    return v;
+  } catch {
+    return null;
+  }
+}
+
 function Chat() {
   // Al tocar un aviso de alerta llega ?pregunta=…: se deja escrita, sin enviarla.
   const [params] = useSearchParams();
-  const pregunta = params.get("pregunta");
+  // Textos largos (p. ej. una página para resumir) llegan por sessionStorage con ?pregunta=@sesion.
+  const pregunta = params.get("pregunta") === "@sesion" ? leerPreguntaLarga() : params.get("pregunta");
   const [actual, setActual] = useState<string | null>(null);
   const lista = useQuery({ queryKey: ["ia", "conversaciones"], queryFn: () => api<Conversacion[]>("/api/ia/conversaciones") });
   const detalle = useQuery({

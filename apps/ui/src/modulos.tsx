@@ -106,7 +106,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   streams: m("streams", "/redes/streams", Radio, lazy(() => import("./pages/Streams"))),
   x: m("x", "/redes/x", AtSign, lazy(() => import("./pages/X"))),
   discord: m("discord", "/redes/discord", MessageCircle, lazy(() => import("./pages/Discord"))),
-  streamer: m("streamer", "/redes/streamer", Tv),
+  streamer: m("streamer", "/redes/streamer", Tv, lazy(() => import("./pages/Streamer"))),
 
   novedades: m("novedades", "/novedades", Sparkles, lazy(() => import("./pages/Novedades"))),
   noticias: m("noticias", "/noticias", Newspaper, lazy(() => import("./pages/Noticias"))),
@@ -121,10 +121,10 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   peliculas: m("peliculas", "/entretenimiento/peliculas", Clapperboard),
   musica: m("musica", "/entretenimiento/musica", Music),
   videos: m("videos", "/entretenimiento/videos", Film),
-  casa: m("casa", "/casa", House),
+  casa: m("casa", "/casa", House, lazy(() => import("./pages/Casa"))),
   control_remoto: m("control_remoto", "/control-remoto", MonitorUp, lazy(() => import("./pages/ControlRemoto"))),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
-  ia_creativa: m("ia_creativa", "/ia/creativa", Wand2),
+  ia_creativa: m("ia_creativa", "/ia/creativa", Wand2, lazy(() => import("./pages/IaCreativa"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
 };
 

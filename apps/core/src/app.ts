@@ -21,6 +21,7 @@ import { chatRoutes } from "./modules/chat.js";
 import { descargasRoutes } from "./modules/descargas.js";
 import { herramientasRoutes, limpiarCompartidos } from "./modules/herramientas.js";
 import { personalRoutes, revisarSuscripciones } from "./modules/personal.js";
+import { extrasRoutes } from "./modules/extras.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
@@ -114,7 +115,9 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
         // Portadas de ofertas (CheapShark) vienen de CDNs de cada tienda: se permiten solo imágenes https.
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         fontSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
+        // Chats en vivo (Twitch y Kick) y modelo para quitar fondos (IA creativa).
+        connectSrc: ["'self'", "wss://irc-ws.chat.twitch.tv", "wss://ws-us2.pusher.com", "https://staticimgly.com"],
+        workerSrc: ["'self'", "blob:"],
         frameSrc: ["'self'", pteroOrigin],
         mediaSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"],
@@ -176,6 +179,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(descargasRoutes(deps));
   await app.register(herramientasRoutes(deps));
   await app.register(personalRoutes(deps));
+  await app.register(extrasRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
   jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });
 
