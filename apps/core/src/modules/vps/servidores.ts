@@ -46,6 +46,7 @@ export function aDto(s: VpsServerRow) {
     alertas: s.alerts,
     umbralRam: s.ramThreshold,
     umbralDisco: s.diskThreshold,
+    umbralCpu: s.cpuThreshold,
     estado: s.status,
     ultimaRevision: s.lastCheckAt?.toISOString() ?? null,
   };

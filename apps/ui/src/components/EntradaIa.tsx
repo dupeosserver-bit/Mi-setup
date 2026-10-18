@@ -5,7 +5,7 @@
  */
 import { MODELOS_IA, type ModeloIa } from "@mi-setup/shared";
 import { FileText, ImageIcon, Mic, Paperclip, Send, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGuardarPreferencias, usePreferencias } from "../lib/preferencias";
 import { escuchar } from "../lib/voz";
 import { AreaTexto, Boton, avisar, avisarError, cx } from "./ui";
@@ -42,13 +42,19 @@ export function EntradaIa({
   deshabilitada,
   alEnviar,
   compacta = false,
+  textoInicial,
 }: {
   cargando: boolean;
   deshabilitada?: boolean;
   alEnviar: (mensaje: string, adjuntos: AdjuntoIa[]) => void;
   compacta?: boolean;
+  /** Texto ya escrito (p. ej. al tocar un aviso de alerta); no se envía solo. */
+  textoInicial?: string | null;
 }) {
-  const [texto, setTexto] = useState("");
+  const [texto, setTexto] = useState(textoInicial ?? "");
+  useEffect(() => {
+    if (textoInicial) setTexto(textoInicial);
+  }, [textoInicial]);
   const [adjuntos, setAdjuntos] = useState<AdjuntoIa[]>([]);
   const [escuchando, setEscuchando] = useState(false);
   const archivo = useRef<HTMLInputElement>(null);

@@ -106,6 +106,13 @@
       "when": 1792285806195,
       "tag": "0014_cuentas-eliminadas",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792287482927,
+      "tag": "0015_umbral-cpu",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessagesSquare, Paperclip, Trash2, Volume2 } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { EntradaIa, type AdjuntoIa } from "../components/EntradaIa";
 import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, avisar, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -48,6 +49,9 @@ function Uso() {
 }
 
 function Chat() {
+  // Al tocar un aviso de alerta llega ?pregunta=…: se deja escrita, sin enviarla.
+  const [params] = useSearchParams();
+  const pregunta = params.get("pregunta");
   const [actual, setActual] = useState<string | null>(null);
   const lista = useQuery({ queryKey: ["ia", "conversaciones"], queryFn: () => api<Conversacion[]>("/api/ia/conversaciones") });
   const detalle = useQuery({
@@ -152,7 +156,7 @@ function Chat() {
           <ErrorCaja error={enviar.error} />
         </div>
         <div className="mt-3">
-          <EntradaIa cargando={enviar.isPending} alEnviar={(mensaje, adjuntos) => enviar.mutate({ mensaje, adjuntos })} />
+          <EntradaIa textoInicial={pregunta} cargando={enviar.isPending} alEnviar={(mensaje, adjuntos) => enviar.mutate({ mensaje, adjuntos })} />
         </div>
       </Tarjeta>
     </div>

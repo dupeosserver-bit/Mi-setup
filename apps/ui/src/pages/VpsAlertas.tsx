@@ -38,7 +38,15 @@ function FilaServidor({ s, editable }: { s: Servidor; editable: boolean }) {
       </div>
       <Insignia tono={tono(s.estado)}>{texto(s.estado)}</Insignia>
       <Interruptor activo={s.alertas} alCambiar={(v) => editable && void guardar({ alertas: v })} etiqueta="Vigilar" />
-      <div className="flex items-center gap-2 text-xs text-tenue">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-tenue">
+        CPU %
+        <input
+          type="number"
+          disabled={!editable}
+          defaultValue={s.umbralCpu ?? ""}
+          onBlur={(e) => void guardar({ umbralCpu: umbral(e.target.value) })}
+          className="h-8 w-16 rounded-lg border border-borde bg-superficie px-2 text-texto"
+        />
         RAM %
         <input
           type="number"

@@ -1,0 +1,1 @@
+ALTER TABLE "vps_servers" ADD COLUMN "cpu_threshold" integer;

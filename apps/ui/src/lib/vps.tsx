@@ -16,6 +16,7 @@ export interface Servidor {
   alertas: boolean;
   umbralRam: number | null;
   umbralDisco: number | null;
+  umbralCpu?: number | null;
   estado: "arriba" | "caido" | "desconocido";
   ultimaRevision: string | null;
 }

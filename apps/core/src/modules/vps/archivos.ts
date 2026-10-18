@@ -12,8 +12,30 @@ import { currentUser } from "../../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "../common.js";
 import type { Servidores } from "./servidores.js";
 import { abrirSftp, citar, ejecutar } from "./ssh.js";
+import type { SFTPWrapper } from "ssh2";
 
 const MAX_SUBIDA = 100 * 1024 * 1024;
+const MAX_EDITAR = 1024 * 1024;
+
+function leerTodo(sftp: SFTPWrapper, ruta: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const partes: Buffer[] = [];
+    sftp
+      .createReadStream(ruta)
+      .on("data", (d: Buffer) => partes.push(d))
+      .on("end", () => resolve(Buffer.concat(partes)))
+      .on("error", (err: Error) => reject(new HttpError(400, `No se pudo leer: ${err.message}`)));
+  });
+}
+
+function escribirTodo(sftp: SFTPWrapper, ruta: string, datos: Buffer): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const salida = sftp.createWriteStream(ruta);
+    salida.on("close", () => resolve());
+    salida.on("error", (err: Error) => reject(new HttpError(400, `No se pudo guardar: ${err.message}`)));
+    salida.end(datos);
+  });
+}
 
 const rutaSchema = z.object({
   ruta: z
@@ -133,6 +155,49 @@ export function archivosRoutes(deps: ModuleDeps, servidores: Servidores) {
             ...clientInfo(request),
           });
           return { ok: true, ruta: destino };
+        });
+      },
+    );
+
+    /** Editor: abre archivos de texto de hasta 1 MB. */
+    app.get(
+      "/api/vps/servidores/:id/archivos/texto",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "lectura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const { ruta } = rutaSchema.parse(request.query);
+        await exigirRoot(request, id);
+        return servidores.usar(id, async (cliente) => {
+          const sftp = await abrirSftp(cliente);
+          const stat = await new Promise<import("ssh2").Stats>((resolve, reject) =>
+            sftp.stat(ruta, (err, s) => (err ? reject(new HttpError(404, "Archivo no encontrado")) : resolve(s))),
+          );
+          if (!stat.isFile()) throw new HttpError(400, "Solo se pueden editar archivos");
+          if (stat.size > MAX_EDITAR) throw new HttpError(413, "El archivo pesa más de 1 MB: descárgalo para editarlo");
+          const datos = await leerTodo(sftp, ruta);
+          if (datos.includes(0)) throw new HttpError(415, "No es un archivo de texto (parece binario)");
+          return { ruta, contenido: datos.toString("utf8"), modificado: new Date(stat.mtime * 1000).toISOString() };
+        });
+      },
+    );
+
+    /** Guarda el texto; antes deja una copia <archivo>.bak con lo anterior. */
+    app.put(
+      "/api/vps/servidores/:id/archivos/texto",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "escritura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const d = z
+          .object({ ruta: rutaSchema.shape.ruta, contenido: z.string().max(MAX_EDITAR), respaldo: z.boolean().default(true) })
+          .parse(request.body);
+        await exigirRoot(request, id);
+        return servidores.usar(id, async (cliente, servidor) => {
+          const sftp = await abrirSftp(cliente);
+          const existe = await new Promise<boolean>((resolve) => sftp.stat(d.ruta, (err) => resolve(!err)));
+          if (existe && d.respaldo) await escribirTodo(sftp, `${d.ruta}.bak`, await leerTodo(sftp, d.ruta));
+          await escribirTodo(sftp, d.ruta, Buffer.from(d.contenido, "utf8"));
+          await registrar(request, "archivo_editado", `${servidor.name}:${d.ruta}`);
+          return { ok: true, respaldo: existe && d.respaldo ? `${d.ruta}.bak` : null };
         });
       },
     );

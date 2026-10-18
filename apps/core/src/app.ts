@@ -18,6 +18,7 @@ import { rolesRoutes, sembrarRoles } from "./modules/roles.js";
 import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
+import { descargasRoutes } from "./modules/descargas.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
@@ -170,6 +171,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(notasRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
+  await app.register(descargasRoutes(deps));
 
   const vps = vpsModule(deps);
   jobs.push(...vps.jobs);

@@ -1,7 +1,8 @@
 /**
  * Alertas de caída: cada 60 s se revisan los VPS (puerto SSH) y los monitores
  * (TCP o HTTP). Un cambio de estado envía aviso push; además, si un VPS tiene
- * umbrales de RAM/disco, se avisa al superarlos (máximo cada 30 min).
+ * umbrales de CPU/RAM/disco, se avisa al superarlos (máximo cada 30 min); el
+ * aviso abre la IA con la pregunta lista para diagnosticar.
  */
 import { connect } from "node:net";
 import { asc, eq } from "drizzle-orm";
@@ -40,13 +41,35 @@ export async function probarHttp(url: string, timeoutMs = 8_000): Promise<{ arri
   }
 }
 
+/** Enlace del aviso: abre la IA con la pregunta ya escrita (no la envía sola). */
+export function enlaceDiagnostico(deps: ModuleDeps, pregunta: string): string {
+  return `https://${deps.config.env.APP_HOST}/ia?pregunta=${encodeURIComponent(pregunta.slice(0, 500))}`;
+}
+
+/** Uso de CPU (%) entre dos lecturas de la primera línea de /proc/stat. */
+export function cpuEntreLecturas(a: string, b: string): number | null {
+  const valores = (l: string) => l.trim().split(/\s+/).slice(1, 9).map(Number);
+  const [x, y] = [valores(a), valores(b)];
+  if (x.length < 5 || y.length < 5 || [...x, ...y].some((n) => !Number.isFinite(n))) return null;
+  const total = (v: number[]) => v.reduce((s, n) => s + n, 0);
+  const ocioso = (v: number[]) => (v[3] ?? 0) + (v[4] ?? 0);
+  const dt = total(y) - total(x);
+  return dt > 0 ? Math.min(100, Math.max(0, (1 - (ocioso(y) - ocioso(x)) / dt) * 100)) : null;
+}
+
 async function revisarRecursos(deps: ModuleDeps, servidores: Servidores, s: VpsServerRow): Promise<void> {
-  if (!s.ramThreshold && !s.diskThreshold) return;
+  if (!s.ramThreshold && !s.diskThreshold && !s.cpuThreshold) return;
   const ahora = deps.now();
   if (s.lastResourceAlertAt && ahora.getTime() - s.lastResourceAlertAt.getTime() < ALERTA_RECURSOS_MS) return;
   const salida = await servidores.usar(s.id, (c) => ejecutar(c, SCRIPT_METRICAS, { timeoutMs: 10_000 }));
   const { metricas } = parsearMetricas(salida.salida, ahora.getTime(), null);
   const problemas: string[] = [];
+  if (s.cpuThreshold) {
+    const r = await servidores.usar(s.id, (c) => ejecutar(c, "head -1 /proc/stat; sleep 1; head -1 /proc/stat", { timeoutMs: 10_000 }));
+    const [a = "", b = ""] = r.salida.trim().split("\n");
+    const cpu = cpuEntreLecturas(a, b);
+    if (cpu !== null && cpu >= s.cpuThreshold) problemas.push(`CPU al ${cpu.toFixed(0)} % (umbral ${s.cpuThreshold} %)`);
+  }
   const ram = metricas.ram.total > 0 ? (metricas.ram.usado / metricas.ram.total) * 100 : 0;
   if (s.ramThreshold && ram >= s.ramThreshold) problemas.push(`RAM al ${ram.toFixed(0)} % (umbral ${s.ramThreshold} %)`);
   for (const d of metricas.discos) {
@@ -55,7 +78,13 @@ async function revisarRecursos(deps: ModuleDeps, servidores: Servidores, s: VpsS
   }
   if (problemas.length === 0) return;
   await deps.db.update(vpsServers).set({ lastResourceAlertAt: ahora }).where(eq(vpsServers.id, s.id));
-  await deps.notifier.send({ title: `Mi Setup: ${s.name} con recursos altos`, message: problemas.join("\n"), priority: 4, tags: ["warning"] });
+  await deps.notifier.send({
+    title: `Mi Setup: ${s.name} con recursos altos`,
+    message: `${problemas.join("\n")}\nToca para preguntarle a la IA qué pasa.`,
+    priority: 4,
+    tags: ["warning"],
+    click: enlaceDiagnostico(deps, `El VPS "${s.name}" tiene ${problemas.join("; ")}. Revisa qué lo está causando (procesos, contenedores, logs) y dime cómo arreglarlo.`),
+  });
 }
 
 /** Una pasada completa (la tarea la llama cada 60 s). */
@@ -71,6 +100,7 @@ export async function revisarAlertas(deps: ModuleDeps, servidores: Servidores): 
         message: arriba ? `${s.host}:${s.port} responde de nuevo.` : `No hay respuesta en ${s.host}:${s.port}.`,
         priority: arriba ? 3 : 5,
         tags: [arriba ? "white_check_mark" : "rotating_light"],
+        ...(arriba ? {} : { click: enlaceDiagnostico(deps, `El VPS "${s.name}" (${s.host}) dejó de responder. Ayúdame a saber por qué y qué revisar primero.`) }),
       });
       await deps.audit.record({ actorType: "sistema", action: `vps_${estado}`, module: "vps_alertas", target: s.name, outcome: "ok" });
     }
@@ -144,6 +174,7 @@ export function alertasRoutes(deps: ModuleDeps) {
           alertas: z.boolean().optional(),
           umbralRam: z.number().int().min(1).max(100).nullable().optional(),
           umbralDisco: z.number().int().min(1).max(100).nullable().optional(),
+          umbralCpu: z.number().int().min(1).max(100).nullable().optional(),
         })
         .parse(request.body);
       await db
@@ -152,6 +183,7 @@ export function alertasRoutes(deps: ModuleDeps) {
           ...(d.alertas !== undefined ? { alerts: d.alertas } : {}),
           ...(d.umbralRam !== undefined ? { ramThreshold: d.umbralRam } : {}),
           ...(d.umbralDisco !== undefined ? { diskThreshold: d.umbralDisco } : {}),
+          ...(d.umbralCpu !== undefined ? { cpuThreshold: d.umbralCpu } : {}),
         })
         .where(eq(vpsServers.id, id));
       return { ok: true };

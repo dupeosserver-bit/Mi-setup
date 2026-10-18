@@ -54,6 +54,7 @@ services:
       NTFY_TOPIC: ${NTFY_TOPIC:-}
       NTFY_URL: http://ntfy
       BACKUP_DIR: /data/respaldos
+      DESCARGAS_DIR: /data/descargas
       VPN_SOCKET: /run/mi-setup/wg.sock
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-claude-sonnet-5-5}
@@ -80,6 +81,8 @@ services:
       - misetup_uploads:/data/uploads
       # Respaldos diarios de la base que hace el script del VPS (solo lectura).
       - ${BACKUP_HOST_DIR:-/opt/mi-setup/backups}:/data/respaldos:ro
+      # Apps para descargar (APK y EXE), subidas por SFTP; solo lectura para core.
+      - ${DESCARGAS_HOST_DIR:-/opt/mi-setup/descargas}:/data/descargas:ro
       # Socket del servicio VPN del host (deploy/host-install.sh). Nunca el socket de Docker.
       - /run/mi-setup:/run/mi-setup
     networks:

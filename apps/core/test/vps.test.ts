@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
 import { vpsServers } from "../src/db/schema.js";
-import { probarTcp, revisarAlertas } from "../src/modules/vps/alertas.js";
+import { cpuEntreLecturas, probarTcp, revisarAlertas } from "../src/modules/vps/alertas.js";
 import { comandoEstado, comandoReinicio, interpretarEstado } from "../src/modules/vps/bots.js";
 import { parsearMetricas } from "../src/modules/vps/parse.js";
 import { Servidores } from "../src/modules/vps/servidores.js";
@@ -69,6 +69,15 @@ describe("lectura de métricas del VPS", () => {
     expect(segunda.metricas.cpu).toBeCloseTo(66.67, 1);
     // 300 000 bytes en 3 s; "lo" no cuenta.
     expect(segunda.metricas.red?.rxBps).toBeCloseTo(100_000);
+  });
+});
+
+describe("alertas de CPU", () => {
+  it("calcula el uso de CPU entre dos lecturas de /proc/stat", () => {
+    // 100 unidades de tiempo: 25 ociosas → 75 % de uso.
+    expect(cpuEntreLecturas("cpu  100 0 100 700 100 0 0 0", "cpu  140 0 135 720 105 0 0 0")).toBeCloseTo(75);
+    expect(cpuEntreLecturas("cpu 1 2", "basura")).toBeNull();
+    expect(cpuEntreLecturas("cpu  1 1 1 1 1 0 0 0", "cpu  1 1 1 1 1 0 0 0")).toBeNull();
   });
 });
 

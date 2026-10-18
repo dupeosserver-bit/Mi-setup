@@ -43,6 +43,8 @@ export const envBase = z.object({
     PTERO_APP_KEY: optionalString,
     /** Carpeta (montada de solo lectura) con los respaldos de la base que hace el script del VPS. */
     BACKUP_DIR: optionalString,
+    /** Carpeta con las apps para descargar (APK y EXE). */
+    DESCARGAS_DIR: optionalString,
     /** Secreto compartido con el Email Worker de Cloudflare (firma HMAC-SHA256). */
     MAIL_INBOUND_SECRET: optionalString,
     /** Socket Unix del servicio del host que ejecuta /usr/local/sbin/mi-setup-wg. */

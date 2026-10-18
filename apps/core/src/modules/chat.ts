@@ -88,7 +88,32 @@ export async function enviarMensaje(
   const [autor] = await deps.db.select({ nombre: users.displayName }).from(users).where(eq(users.id, userId));
   const dto = aDto(m, autor?.nombre ?? null);
   deps.hub.publicar(temas.chat(canalId), { mensaje: dto });
+  await avisarMiembros(deps, canalId, userId, autor?.nombre ?? "Alguien", d.texto).catch(() => undefined);
   return dto;
+}
+
+/**
+ * Notificación a los demás miembros (privados y grupos; "Mis dispositivos" no
+ * avisa porque eres tú mismo). A la cuenta maestra también le llega push por
+ * ntfy, que funciona aunque la app esté cerrada.
+ */
+async function avisarMiembros(deps: ModuleDeps, canalId: string, autorId: string, autor: string, texto: string) {
+  const [canal] = await deps.db.select({ nombre: chatChannels.name, tipo: chatChannels.kind }).from(chatChannels).where(eq(chatChannels.id, canalId));
+  if (!canal || canal.tipo === "personal") return;
+  const destinatarios = await deps.db
+    .select({ id: users.id, rol: users.role })
+    .from(chatMembers)
+    .innerJoin(users, eq(users.id, chatMembers.userId))
+    .where(and(eq(chatMembers.channelId, canalId), eq(users.isActive, true)));
+  const titulo = canal.tipo === "privado" ? `Mensaje de ${autor}` : `${autor} en ${canal.nombre}`;
+  const cuerpo = texto.length > 140 ? `${texto.slice(0, 140)}…` : texto;
+  for (const u of destinatarios) {
+    if (u.id === autorId) continue;
+    deps.hub.publicar(`usuario:${u.id}`, { recurso: "chat", aviso: { titulo, cuerpo } });
+    if (u.rol === "maestra") {
+      await deps.notifier.send({ title: titulo, message: cuerpo, priority: 3, tags: ["speech_balloon"], click: `https://${deps.config.env.APP_HOST}/chat?canal=${canalId}` });
+    }
+  }
 }
 
 export function chatRoutes(deps: ModuleDeps) {

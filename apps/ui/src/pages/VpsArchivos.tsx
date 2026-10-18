@@ -1,6 +1,6 @@
 /** Explorador SFTP: navegar, descargar, subir (varios a la vez), crear carpetas, renombrar y borrar. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUp, Download, File, Folder, FolderPlus, FolderTree, Link2, Pencil, Trash2, Upload } from "lucide-react";
+import { ArrowUp, Download, File, FileEdit, Folder, FolderPlus, FolderTree, Link2, Pencil, Save, Trash2, Upload } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisar, avisarError } from "../components/ui";
 import { api, descargar } from "../lib/api";
@@ -63,11 +63,66 @@ function PedirNombre({
   );
 }
 
+/** Editor de texto (configs, .yml, .properties, scripts…): guarda dejando una copia .bak. */
+function EditorTexto({ base, ruta, alCerrar }: { base: string; ruta: string; alCerrar: () => void }) {
+  const q = useQuery({
+    queryKey: ["vps", "texto", base, ruta],
+    queryFn: () => api<{ contenido: string }>(`${base}/texto?ruta=${encodeURIComponent(ruta)}`),
+    gcTime: 0,
+  });
+  const [texto, setTexto] = useState<string | null>(null);
+  const actual = texto ?? q.data?.contenido ?? "";
+  const cambiado = texto !== null && texto !== q.data?.contenido;
+  const guardar = useMutation({
+    mutationFn: () => api<{ respaldo: string | null }>(`${base}/texto`, { metodo: "PUT", cuerpo: { ruta, contenido: actual } }),
+    onSuccess: (r) => {
+      avisar(r.respaldo ? `Guardado (copia anterior en ${r.respaldo.split("/").pop()})` : "Guardado");
+      void queryClient.invalidateQueries({ queryKey: ["vps"] });
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  const cerrar = async () => {
+    if (cambiado && !(await confirmar({ titulo: "Salir sin guardar", mensaje: "Tienes cambios sin guardar.", boton: "Salir" }))) return;
+    alCerrar();
+  };
+  return (
+    <Modal abierto titulo={`Editar ${ruta.split("/").pop() ?? ""}`} alCerrar={() => void cerrar()} ancho="max-w-4xl">
+      <p className="mb-2 truncate font-mono text-xs text-tenue">{ruta}</p>
+      <ErrorCaja error={q.error} />
+      {q.isLoading ? <Cargando /> : null}
+      {q.data ? (
+        <textarea
+          value={actual}
+          onChange={(e) => setTexto(e.target.value)}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          className="h-[60vh] w-full min-w-0 resize-none rounded-xl border border-borde bg-fondo p-3 font-mono text-xs leading-relaxed text-texto focus:border-acento focus:outline-none"
+        />
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Boton variante="primario" icono={Save} cargando={guardar.isPending} disabled={!cambiado} onClick={() => guardar.mutate()}>
+          Guardar
+        </Boton>
+        <Boton variante="fantasma" onClick={() => void cerrar()}>
+          Cerrar
+        </Boton>
+        <span className="text-xs text-tenue">Al guardar se deja una copia del archivo anterior con terminación .bak</span>
+      </div>
+    </Modal>
+  );
+}
+
+/** Archivos que se abren en el editor (por extensión o sin extensión, como Dockerfile). */
+const EDITABLE = /(\.(txt|md|ya?ml|json|properties|conf|cfg|ini|env|sh|bash|py|js|ts|mjs|cjs|php|html|css|xml|toml|log|sql|service|rules|list|csv)|^[^.]+)$/i;
+
 export default function VpsArchivos() {
   const [servidor, setServidor] = useState<string | null>(null);
   const [ruta, setRuta] = useState("/root");
   const [nuevaCarpeta, setNuevaCarpeta] = useState(false);
   const [renombrar, setRenombrar] = useState<Entrada | null>(null);
+  const [editar, setEditar] = useState<string | null>(null);
   const [progreso, setProgreso] = useState<string | null>(null);
   const puedeEscribir = usePuede("vps_archivos", "escritura");
   const input = useRef<HTMLInputElement>(null);
@@ -204,6 +259,9 @@ export default function VpsArchivos() {
                 ) : (
                   <span className="w-9 shrink-0" />
                 )}
+                {e.tipo === "archivo" && EDITABLE.test(e.nombre) && e.tamano <= 1024 * 1024 ? (
+                  <Boton tamano="icono" variante="fantasma" icono={FileEdit} aria-label={`Editar ${e.nombre}`} title="Editar texto" onClick={() => setEditar(unir(ruta, e.nombre))} />
+                ) : null}
                 {puedeEscribir ? (
                   <>
                     <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label={`Renombrar ${e.nombre}`} onClick={() => setRenombrar(e)} />
@@ -235,6 +293,7 @@ export default function VpsArchivos() {
           }}
         />
       ) : null}
+      {editar ? <EditorTexto base={base} ruta={editar} alCerrar={() => setEditar(null)} /> : null}
       {renombrar ? (
         <PedirNombre
           titulo={`Renombrar «${renombrar.nombre}»`}

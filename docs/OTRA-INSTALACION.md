@@ -27,7 +27,18 @@ Qué **comparten**: los servidores VPS, el panel de Pterodactyl, las claves de A
 
 > No se recomienda ponerla en tu mismo VPS: ambas instalaciones usarían los puertos 80/443 y los mismos nombres de contenedor.
 
-### Pasos en su VPS
+### Forma rápida (recomendada): el instalador
+
+Con `mi-setup.tar.gz` subido a `/root/` de su VPS, él solo corre:
+
+```bash
+mkdir -p /opt/mi-setup/app && tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && bash /opt/mi-setup/app/deploy/instalar.sh
+```
+
+El instalador (en español) instala Docker, le pregunta su dominio, genera **sus propias** contraseñas secretas, crea su `.env`, enciende todo y crea su cuenta maestra. Al final le dice qué poner en la app. No necesita tu ayuda ni tus claves.
+
+### Pasos a mano (si prefiere hacerlo él mismo)
+
 
 1. Sube el paquete `mi-setup.tar.gz` (el mismo que usas tú) a `/root/` y descomprímelo:
 

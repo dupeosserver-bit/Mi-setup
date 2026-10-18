@@ -274,3 +274,12 @@ Caddy (de Mi Setup) ya ocupa los puertos 80 y 443, así que el instalador del pa
 3. Aplica: `cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d` (y si ya estaba arriba: `docker exec misetup-caddy caddy reload --config /etc/caddy/Caddyfile`).
 4. En el `.env` del panel (`/var/www/pterodactyl/.env`) pon `APP_URL=https://panel.mexicanland.net` y agrega `TRUSTED_PROXIES=*`.
 5. Si usas `ufw`, deja que Docker llegue al puerto: `ufw allow from 172.16.0.0/12 to any port 8081`.
+
+## Versión 0.4: qué hay de nuevo
+
+- **Descargar apps** (Ajustes → Descargar apps): baja el APK o el instalador de Windows desde tu servidor, o copia el enlace para mandárselo a alguien. Para publicarlos, sube los archivos a `/opt/mi-setup/descargas/` del VPS (nombres que terminen en `.apk` o `.exe`).
+- **APK firmado**: la app de Android ya se firma siempre con la misma llave (`C:\Users\<tú>\.mi-setup\misetup-release.jks`; **respáldala**: sin ella las actualizaciones no se instalan encima). Al pasar de la versión anterior (firmada en modo prueba) hay que **desinstalar una vez** la app vieja; tus datos están en el servidor y no se pierden.
+- **Editor de archivos** (VPS → Archivos): el ícono de lápiz con hoja abre archivos de texto de hasta 1 MB. Al guardar deja una copia `.bak` con lo anterior.
+- **Alertas de CPU** (VPS → Alertas de caída): además de RAM y disco. Al tocar el aviso en el celular se abre la IA con la pregunta lista para diagnosticar (no se envía sola).
+- **Notificaciones del chat**: los mensajes privados y de grupo avisan a los demás miembros; a la cuenta maestra también le llega push aunque la app esté cerrada.
+- **Instalador para otra persona**: `deploy/instalar.sh` (ver `docs/OTRA-INSTALACION.md`).

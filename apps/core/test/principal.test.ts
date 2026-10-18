@@ -112,6 +112,8 @@ describe("chat", () => {
     await app.inject({ method: "POST", url: `/api/chat/canales/${p1.id}/mensajes`, headers: a, payload: { texto: "hola primo" } });
     expect((await app.inject({ method: "GET", url: `/api/chat/canales/${p1.id}/mensajes`, headers: b })).json()).toHaveLength(1);
     expect((await app.inject({ method: "GET", url: `/api/chat/canales/${p1.id}/mensajes`, headers: c })).statusCode).toBe(403);
+    // Entre cuentas normales no sale push por ntfy (ese canal es el de la cuenta maestra).
+    expect(ctx.notifier.sent.some((p) => p.title.includes("Mensaje de"))).toBe(false);
 
     const g = (await app.inject({ method: "POST", url: "/api/chat/canales", headers: a, payload: { nombre: "Equipo", miembros: [idB] } })).json<{ id: string }>();
     expect((await app.inject({ method: "PATCH", url: `/api/chat/canales/${g.id}`, headers: c, payload: { agregar: [idC] } })).statusCode).toBe(404);

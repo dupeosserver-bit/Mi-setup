@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
 import { Logo } from "../components/Logo";
 import { abrirTutorial } from "../components/Tutorial";
+import { DescargasApps } from "../components/DescargasApps";
 import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -598,7 +599,7 @@ function Servicios() {
 
 // ---------------------------------------------------------------- página
 
-type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad" | "servicios";
+type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad" | "apps" | "servicios";
 
 export default function Ajustes() {
   const [pestana, setPestana] = useState<Pestana>("cuenta");
@@ -616,6 +617,7 @@ export default function Ajustes() {
           { id: "terminal", texto: "Terminal" },
           { id: "voz", texto: "Voz e IA" },
           { id: "seguridad", texto: "Seguridad" },
+          { id: "apps", texto: "Descargar apps" },
           ...(esMaestra ? [{ id: "servicios" as const, texto: "Servicios y claves" }] : []),
         ]}
       />
@@ -624,6 +626,7 @@ export default function Ajustes() {
       {pestana === "terminal" ? <TerminalAjustes /> : null}
       {pestana === "voz" ? <VozIa /> : null}
       {pestana === "seguridad" ? <Seguridad /> : null}
+      {pestana === "apps" ? <DescargasApps /> : null}
       {pestana === "servicios" && esMaestra ? <Servicios /> : null}
     </>
   );

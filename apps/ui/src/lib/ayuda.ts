@@ -48,7 +48,8 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   vps_alertas: {
     pasos: [
       "Agrega lo que quieras vigilar: un servidor (ping/SSH), un puerto TCP o una página web.",
-      "Se revisa cada 60 s; si se cae o la RAM/disco pasan el límite te llega un push.",
+      "Se revisa cada 60 s; si se cae o el CPU, la RAM o el disco pasan el límite te llega un push.",
+      "Toca el aviso: se abre la IA con la pregunta lista para que te diga qué pasa (tú decides si la envías).",
     ],
   },
   vps_comandos: {

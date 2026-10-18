@@ -10,6 +10,8 @@ export interface PushMessage {
   /** 1 (mínima) a 5 (urgente). */
   readonly priority?: 1 | 2 | 3 | 4 | 5;
   readonly tags?: readonly string[];
+  /** Enlace que se abre al tocar el aviso (p. ej. la IA con la pregunta lista). */
+  readonly click?: string;
 }
 
 export interface Notifier {
@@ -39,6 +41,7 @@ export function createNtfyNotifier(options: {
             message: push.message,
             priority: push.priority ?? 3,
             tags: push.tags ?? [],
+            ...(push.click ? { click: push.click } : {}),
           }),
           signal: AbortSignal.timeout(5000),
         });

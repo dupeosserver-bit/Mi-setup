@@ -286,6 +286,8 @@ export const vpsServers = pgTable("vps_servers", {
   hostKeyFingerprint: text("host_key_fingerprint"),
   alerts: boolean("alerts").notNull().default(true),
   ramThreshold: integer("ram_threshold"),
+  /** Umbral de CPU (%) medido durante 1 s. */
+  cpuThreshold: integer("cpu_threshold"),
   diskThreshold: integer("disk_threshold"),
   status: text("status").notNull().default("desconocido"),
   lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
