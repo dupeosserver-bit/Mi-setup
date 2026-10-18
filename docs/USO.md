@@ -299,8 +299,8 @@ Apartados nuevos en el menú (categorías **Herramientas**, **Entretenimiento** 
 - **Respaldos**: descargar los respaldos de la base (solo maestra) y **Descargar mis datos** (cada cuenta). Script nuevo `deploy/respaldo.sh` (base + archivos subidos, guarda 14 días). Para que corra cada día a las 4:15:
 
 ```bash
-chmod +x /opt/mi-setup/deploy/respaldo.sh
-(crontab -l 2>/dev/null; echo "15 4 * * * /opt/mi-setup/deploy/respaldo.sh >> /var/log/misetup-respaldo.log 2>&1") | crontab -
+chmod +x /opt/mi-setup/app/deploy/respaldo.sh
+(crontab -l 2>/dev/null; echo "15 4 * * * /opt/mi-setup/app/deploy/respaldo.sh >> /var/log/misetup-respaldo.log 2>&1") | crontab -
 ```
 
 - **Cuentas**: verificación en dos pasos para cualquier cuenta (Ajustes → Mi cuenta), **pasar la cuenta maestra** a otra persona (necesita su 2FA activa y escribir su correo) y **eliminar cuentas** que no sean la maestra.

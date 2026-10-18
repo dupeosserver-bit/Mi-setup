@@ -2,7 +2,7 @@
 # Respaldo completo de Mi Setup: base de datos + archivos subidos (música,
 # videos, compartidos, logos). Guarda en /opt/mi-setup/backups y borra los
 # de más de 14 días. Programar con cron (ver docs/USO.md):
-#   15 4 * * * /opt/mi-setup/deploy/respaldo.sh >> /var/log/misetup-respaldo.log 2>&1
+#   15 4 * * * /opt/mi-setup/app/deploy/respaldo.sh >> /var/log/misetup-respaldo.log 2>&1
 set -eu
 DIR="${BACKUP_HOST_DIR:-/opt/mi-setup/backups}"
 DIAS="${RESPALDO_DIAS:-14}"
