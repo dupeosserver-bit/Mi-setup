@@ -19,6 +19,7 @@ import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
 import { chatRoutes } from "./modules/chat.js";
 import { descargasRoutes } from "./modules/descargas.js";
+import { herramientasRoutes, limpiarCompartidos } from "./modules/herramientas.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
@@ -172,6 +173,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
   await app.register(descargasRoutes(deps));
+  await app.register(herramientasRoutes(deps));
+  jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });
 
   const vps = vpsModule(deps);
   jobs.push(...vps.jobs);

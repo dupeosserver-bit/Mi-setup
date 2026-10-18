@@ -203,10 +203,14 @@ export const notes = pgTable(
     title: text("title").notNull().default(""),
     content: text("content").notNull().default(""),
     pinned: boolean("pinned").notNull().default(false),
+    /** Página padre (notas tipo Notion: páginas dentro de páginas). */
+    parentId: uuid("parent_id"),
+    /** Emoji o ícono de la página. */
+    icon: text("icon"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("notes_usuario").on(t.userId, t.updatedAt)],
+  (t) => [index("notes_usuario").on(t.userId, t.updatedAt), index("notes_padre").on(t.parentId)],
 );
 
 export const reminderRepeat = pgEnum("repeticion", ["nunca", "diario", "semanal", "mensual"]);
@@ -656,3 +660,202 @@ export const businessNotes = pgTable("business_notes", {
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type AuditRow = typeof auditLog.$inferSelect;
+
+// ---------------------------------------------------------------- versión 0.5
+
+/** Tablero de tareas (pendiente → haciendo → hecho), junto al Bloc de notas. */
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("pendiente"),
+    noteId: uuid("note_id").references(() => notes.id, { onDelete: "set null" }),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tasks_usuario").on(t.userId, t.status)],
+);
+
+/** Enlaces cortos de tu dominio: /l/<codigo>. */
+export const shortLinks = pgTable(
+  "short_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    target: text("target").notNull(),
+    clicks: integer("clicks").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("short_links_codigo").on(t.code)],
+);
+
+/** Archivos compartidos por enlace (tipo Mega / MediaFire). */
+export const sharedFiles = pgTable(
+  "shared_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    storedName: text("stored_name").notNull(),
+    size: bigint("size", { mode: "number" }).notNull(),
+    mime: text("mime").notNull().default("application/octet-stream"),
+    passwordHash: text("password_hash"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    maxDownloads: integer("max_downloads"),
+    downloads: integer("downloads").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("shared_files_codigo").on(t.code)],
+);
+
+/** Portapapeles compartido entre tus equipos (últimos 50). */
+export const clipboardItems = pgTable(
+  "clipboard_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    device: text("device"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("clipboard_usuario").on(t.userId, t.createdAt)],
+);
+
+/** Eventos propios del calendario (los recordatorios y pagos se suman solos). */
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    allDay: boolean("all_day").notNull().default(true),
+    color: text("color"),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("calendar_usuario").on(t.userId, t.startsAt)],
+);
+
+/** Finanzas personales: movimientos (gasto o ingreso). */
+export const personalMovements = pgTable(
+  "personal_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    category: text("category").notNull().default("Otros"),
+    description: text("description").notNull().default(""),
+    occurredOn: text("occurred_on").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("movimientos_usuario").on(t.userId, t.occurredOn)],
+);
+
+/** Presupuesto mensual por categoría. */
+export const personalBudgets = pgTable(
+  "personal_budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    monthlyLimit: numeric("monthly_limit", { precision: 14, scale: 2 }).notNull(),
+  },
+  (t) => [uniqueIndex("presupuesto_categoria").on(t.userId, t.category)],
+);
+
+/** Suscripciones (Netflix, Spotify, el VPS…), con aviso antes del cobro. */
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("MXN"),
+    cycle: text("cycle").notNull().default("mensual"),
+    nextCharge: text("next_charge").notNull(),
+    category: text("category").notNull().default("Suscripciones"),
+    remindDays: integer("remind_days").notNull().default(2),
+    lastRemindedFor: text("last_reminded_for"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("suscripciones_usuario").on(t.userId)],
+);
+
+/** Plantillas de prompts (IA creativa). */
+export const promptTemplates = pgTable(
+  "prompt_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    category: text("category").notNull().default("General"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("prompts_usuario").on(t.userId)],
+);
+
+/** Películas y series "por ver" (datos de TMDB). */
+export const watchlist = pgTable(
+  "watchlist",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tmdbId: integer("tmdb_id").notNull(),
+    mediaType: text("media_type").notNull(),
+    title: text("title").notNull(),
+    poster: text("poster"),
+    seen: boolean("seen").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("watchlist_unico").on(t.userId, t.mediaType, t.tmdbId)],
+);
+
+/** Tu música y tus videos subidos al VPS. */
+export const mediaFiles = pgTable(
+  "media_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    storedName: text("stored_name").notNull(),
+    size: bigint("size", { mode: "number" }).notNull(),
+    mime: text("mime").notNull(),
+    /** Segundos vistos (para "seguir viendo"). */
+    progress: integer("progress").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("media_usuario").on(t.userId, t.kind)],
+);

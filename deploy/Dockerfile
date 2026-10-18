@@ -19,12 +19,15 @@ RUN pnpm --filter "@mi-setup/core..." build \
   && cp -r apps/ui/dist /out/public
 
 FROM node:22-alpine AS runtime
+# ffmpeg: convertir audio y video (Herramientas → Convertidor).
+RUN apk add --no-cache ffmpeg
 ENV NODE_ENV=production \
     UI_DIR=/app/public \
-    UPLOADS_DIR=/data/uploads
+    UPLOADS_DIR=/data/uploads \
+    ARCHIVOS_DIR=/data/archivos
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
-RUN mkdir -p /data/uploads && chown node:node /data/uploads
+RUN mkdir -p /data/uploads /data/archivos && chown node:node /data/uploads /data/archivos
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

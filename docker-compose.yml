@@ -77,8 +77,13 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       KICK_CLIENT_ID: ${KICK_CLIENT_ID:-}
       KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
     volumes:
       - misetup_uploads:/data/uploads
+      # Archivos privados: compartidos por enlace, música y videos (no se sirven sin permiso).
+      - misetup_archivos:/data/archivos
       # Respaldos diarios de la base que hace el script del VPS (solo lectura).
       - ${BACKUP_HOST_DIR:-/opt/mi-setup/backups}:/data/respaldos:ro
       # Apps para descargar (APK y EXE), subidas por SFTP; solo lectura para core.
@@ -160,6 +165,7 @@ networks:
 volumes:
   misetup_pgdata:
   misetup_uploads:
+  misetup_archivos:
   misetup_ntfy:
   misetup_caddy_data:
   misetup_caddy_config:

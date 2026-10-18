@@ -7,6 +7,105 @@ export interface Ayuda {
 }
 
 export const AYUDA: Record<ModuleId, Ayuda> = {
+  calendario: {
+    pasos: [
+      "Ves en un solo calendario tus recordatorios, los vencimientos de clientes, tus pagos y suscripciones, y tus eventos.",
+      "Toca un día para ver lo que hay y agregar un evento.",
+    ],
+  },
+  finanzas_personales: {
+    pasos: [
+      "Anota tus gastos e ingresos con categoría; arriba ves cuánto llevas en el mes y en qué se va.",
+      "En 'Presupuestos' pones un límite por categoría y la barra te avisa cuando te acercas.",
+      "En 'Suscripciones' anotas Netflix, Spotify, el VPS…: te avisa antes de que te cobren.",
+      "'Importar' sube tu archivo .xlsx o .csv y lo convierte en movimientos; 'Exportar' te da un Excel cuando quieras.",
+    ],
+  },
+  portapapeles: {
+    pasos: ["Copia algo en la PC y toca 'Enviar lo que copié': aparece al momento en tu celular, y al revés.", "Toca un elemento para copiarlo; se guardan los últimos 50."],
+  },
+  vps_seguridad: {
+    pasos: [
+      "Elige el servidor (tu VPS o tu home lab) y toca 'Revisar': te da una calificación y te explica cada punto.",
+      "Firewall: abre o cierra puertos con un botón (siempre deja abierto el de SSH para no quedarte fuera).",
+      "Fail2ban bloquea a quien intenta adivinar contraseñas; las actualizaciones automáticas instalan parches de seguridad solas.",
+      "Todo pide confirmar y tu contraseña o huella.",
+    ],
+    nota: "Para tu home lab: agrégalo en Terminal como cualquier servidor (si está en tu casa, usa Tailscale para no abrir puertos del módem).",
+  },
+  ciberseguridad: {
+    pasos: [
+      "Revisa tu página web: certificado HTTPS, encabezados de seguridad y configuración del dominio.",
+      "'¿Se filtró mi contraseña?' revisa si apareció en filtraciones; tu contraseña nunca sale completa de tu equipo.",
+      "En 'Aprender' hay lecciones cortas y un cuaderno para tus prácticas.",
+    ],
+    nota: "Usa estas herramientas solo con tus propios servidores y páginas: revisar los de otros sin permiso es ilegal.",
+  },
+  streamer: {
+    pasos: ["Escribe tu canal de Twitch y de Kick: ves los dos chats juntos en una sola pantalla.", "Arriba tienes accesos rápidos a cambiar título y categoría (en Streams)."],
+  },
+  herramientas: {
+    pasos: [
+      "QR: escribe un enlace (Instagram, WhatsApp, página), elige colores, forma y un logo al centro, y descárgalo como imagen para redes.",
+      "Emojis secretos: escribe un mensaje o código y escóndelo dentro de un emoji; quien lo pegue aquí lo puede leer.",
+      "Vista previa HTML: escribe HTML, CSS y JavaScript y ve el resultado al instante, en tamaño celular o PC.",
+    ],
+  },
+  documentos: {
+    pasos: [
+      "Une varios PDF, separa páginas, gira, borra páginas o pasa fotos a PDF.",
+      "Firma: dibuja tu firma con el dedo y colócala en la página.",
+      "Todo se hace en tu equipo: los documentos no se suben a ningún lado.",
+    ],
+  },
+  convertidor: {
+    pasos: [
+      "Imágenes: cambia de formato (PNG, JPG, WebP), tamaño y peso, en tu equipo.",
+      "Audio y video: sácale el MP3 a un video, comprímelo o cambia el formato (se hace en tu VPS).",
+      "Datos: convierte entre CSV, JSON y Excel.",
+    ],
+  },
+  enlaces: {
+    pasos: ["Pega un enlace largo y te da uno corto de tu dominio, con contador de clics.", "Puedes elegir el nombre corto (ej. /l/pasteles) y desactivarlo cuando quieras."],
+  },
+  compartir: {
+    pasos: [
+      "Sube un archivo (hasta 2 GB) y te da un enlace para mandarlo a quien quieras, como Mega o MediaFire.",
+      "Opcional: contraseña, días para que caduque y límite de descargas.",
+      "Arriba ves cuánto espacio usan tus archivos compartidos.",
+    ],
+  },
+  peliculas: {
+    pasos: [
+      "Busca una película o serie: ves dónde verla en México (Netflix, Prime, Disney+, Max…) y cuándo se estrena.",
+      "Agrégala a 'Por ver'; en las series te dice cuándo sale el siguiente capítulo.",
+    ],
+    nota: "Necesita una clave gratis de TMDB (Ajustes → Servicios y claves → TMDB_API_KEY).",
+  },
+  musica: {
+    pasos: [
+      "Spotify: conéctalo una vez y controla lo que suena (pausar, siguiente, buscar) desde aquí.",
+      "Mi música: sube tus MP3 al VPS y escúchalos desde cualquier equipo.",
+    ],
+    nota: "Spotify necesita Premium y su app de desarrollador (SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET).",
+  },
+  videos: {
+    pasos: [
+      "Sube tus videos y míralos desde la app, con 'seguir viendo'.",
+      "Para una biblioteca grande tipo Netflix puedes encender Jellyfin en tu servidor (ver USO.md).",
+    ],
+    nota: "Solo videos tuyos o con permiso.",
+  },
+  casa: {
+    pasos: ["Mide la velocidad de tu internet.", "Agrega tus cámaras (si tienen RTSP) y accesos rápidos a las apps de tu casa."],
+  },
+  ia_creativa: {
+    pasos: [
+      "Prompts: guarda tus prompts favoritos como plantillas con espacios {así} para rellenar, y úsalos con un toque.",
+      "Quitar fondo: sube una foto y te deja solo la persona u objeto (en tu equipo, gratis).",
+      "Resumir y traducir: pega un texto, sube un PDF o pon un enlace.",
+    ],
+  },
   recordatorios: {
     pasos: [
       "Toca 'Nuevo', escribe qué y cuándo, y elige si se repite (diario, semanal, mensual).",

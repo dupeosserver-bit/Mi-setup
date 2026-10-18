@@ -43,6 +43,12 @@ export const envBase = z.object({
     PTERO_APP_KEY: optionalString,
     /** Carpeta (montada de solo lectura) con los respaldos de la base que hace el script del VPS. */
     BACKUP_DIR: optionalString,
+    /** Carpeta privada para archivos compartidos, música y videos. */
+    ARCHIVOS_DIR: optionalString,
+    /** Clave gratis de TMDB (películas y series). */
+    TMDB_API_KEY: optionalString,
+    SPOTIFY_CLIENT_ID: optionalString,
+    SPOTIFY_CLIENT_SECRET: optionalString,
     /** Carpeta con las apps para descargar (APK y EXE). */
     DESCARGAS_DIR: optionalString,
     /** Secreto compartido con el Email Worker de Cloudflare (firma HMAC-SHA256). */
