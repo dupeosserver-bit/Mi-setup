@@ -45,6 +45,7 @@ export function validarImagen(buf: Buffer): ImagenValida {
 
 const tipoGlobal = z.object({ tipo: z.enum(["logo", "fondo"]) });
 const CLAVE = (tipo: "logo" | "fondo") => `apariencia.${tipo}`;
+const CLAVE_NOMBRE = "apariencia.nombre";
 const url = (archivo: string | null | undefined) => (archivo ? `/uploads/${archivo}` : null);
 
 export function aparienciaRoutes(deps: ModuleDeps) {
@@ -74,7 +75,18 @@ export function aparienciaRoutes(deps: ModuleDeps) {
     app.get("/api/apariencia/publica", { config: { acceso: { publico: true } } }, async () => ({
       logo: url(await getSetting<string>(deps.db, CLAVE("logo"))),
       fondo: url(await getSetting<string>(deps.db, CLAVE("fondo"))),
+      nombre: (await getSetting<string>(deps.db, CLAVE_NOMBRE)) ?? null,
     }));
+
+    // Nombre de la app en esta instalación (p. ej. "Cosas de Juan"); vacío = MexicanLand.
+    app.put("/api/apariencia/nombre", { config: { acceso: { modulo: "ajustes", nivel: "administrar" } } }, async (request) => {
+      const { nombre } = z.object({ nombre: z.string().trim().max(40) }).parse(request.body);
+      if (nombre) await setSetting(deps.db, CLAVE_NOMBRE, nombre, deps.now());
+      else await deleteSetting(deps.db, CLAVE_NOMBRE);
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "apariencia_nombre", module: "ajustes", target: nombre || "(predeterminado)", outcome: "ok", ...clientInfo(request) });
+      deps.hub.publicar("apariencia", { tipo: "nombre" });
+      return { nombre: nombre || null };
+    });
 
     app.get("/api/apariencia", { config: { acceso: { autenticado: true } } }, async (request) => {
       const user = currentUser(request);

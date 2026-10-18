@@ -16,13 +16,14 @@ import {
   type TemaTerminal,
 } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Volume2 } from "lucide-react";
+import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, ShieldCheck, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
-import { Logo } from "../components/Logo";
+import { Logo, useAparienciaPublica } from "../components/Logo";
 import { abrirTutorial } from "../components/Tutorial";
 import { DescargasApps } from "../components/DescargasApps";
+import { CodigoQr } from "../components/CodigoQr";
 import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -195,6 +196,32 @@ const MUESTRA: Record<TemaApp, [string, string, string]> = {
   "alto-contraste": ["#000000", "#111111", "#ffff00"],
 };
 
+/** Nombre que muestra la app en esta instalación (encabezado, inicio de sesión y título). */
+function NombreApp() {
+  const { data } = useAparienciaPublica();
+  const [nombre, setNombre] = useState<string | null>(null);
+  const actual = nombre ?? data?.nombre ?? "";
+  const guardar = useMutation({
+    mutationFn: () => api("/api/apariencia/nombre", { metodo: "PUT", cuerpo: { nombre: actual } }),
+    onSuccess: () => {
+      avisar("Nombre guardado");
+      setNombre(null);
+      void queryClient.invalidateQueries({ queryKey: ["apariencia"] });
+    },
+    onError: avisarError,
+  });
+  return (
+    <Campo etiqueta="Nombre de la app" ayuda="Se ve arriba del menú, en el inicio de sesión y en el título. Vacío = MexicanLand.">
+      <div className="flex gap-2">
+        <Entrada value={actual} maxLength={40} onChange={(e) => setNombre(e.target.value)} placeholder="MexicanLand" />
+        <Boton variante="primario" cargando={guardar.isPending} disabled={nombre === null || nombre === (data?.nombre ?? "")} onClick={() => guardar.mutate()}>
+          Guardar
+        </Boton>
+      </div>
+    </Campo>
+  );
+}
+
 function Apariencia() {
   const prefs = usePreferencias();
   const guardar = useGuardarPreferencias();
@@ -260,6 +287,7 @@ function Apariencia() {
           <div className="space-y-3">
             {esAdmin ? (
               <>
+                <NombreApp />
                 <SubirImagen ruta="/api/apariencia/global/logo" etiqueta="Logo de la app" actual={apariencia?.logo ?? null} />
                 <SubirImagen ruta="/api/apariencia/global/fondo" etiqueta="Fondo de pantalla" actual={apariencia?.fondo ?? null} />
               </>
@@ -473,16 +501,82 @@ function Huella() {
   );
 }
 
+/** Código 2FA para cualquier cuenta: escaneas el QR con tu app autenticadora y confirmas. */
+function DosPasos() {
+  const { data: me } = useMe();
+  const estado = useQuery({ queryKey: ["cuenta", "2fa"], queryFn: () => api<{ activo: boolean }>("/api/cuenta/2fa") });
+  const [nuevo, setNuevo] = useState<{ secreto: string; uri: string } | null>(null);
+  const [codigo, setCodigo] = useState("");
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["cuenta", "2fa"] });
+  const iniciar = useMutation({ mutationFn: () => api<{ secreto: string; uri: string }>("/api/cuenta/2fa/iniciar", { metodo: "POST" }), onSuccess: setNuevo, onError: avisarError });
+  const confirmar2 = useMutation({
+    mutationFn: () => api("/api/cuenta/2fa/confirmar", { cuerpo: { codigo } }),
+    onSuccess: () => {
+      avisar("Código 2FA activado: desde ahora el inicio de sesión lo pide");
+      setNuevo(null);
+      setCodigo("");
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  const quitar = useMutation({ mutationFn: () => api("/api/cuenta/2fa", { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
+  const esMaestra = me?.usuario.role === "maestra";
+
+  return (
+    <Tarjeta titulo="Código 2FA" icono={ShieldCheck}>
+      {estado.data?.activo ? (
+        <div className="space-y-2 text-sm">
+          <p>
+            <Insignia tono="ok">Activado</Insignia> Al entrar se pide el código de 6 dígitos de tu app autenticadora.
+          </p>
+          {esMaestra ? (
+            <p className="text-xs text-tenue">La cuenta maestra siempre lo necesita.</p>
+          ) : (
+            <Boton tamano="sm" variante="fantasma" cargando={quitar.isPending} onClick={() => quitar.mutate()}>
+              Quitar código 2FA
+            </Boton>
+          )}
+        </div>
+      ) : nuevo ? (
+        <div className="space-y-3 text-sm">
+          <p>1. En tu app autenticadora (Google Authenticator, Aegis…) toca + y escanea este código:</p>
+          <div className="w-fit rounded-xl bg-white p-2">
+            <CodigoQr datos={nuevo.uri} tamano={200} />
+          </div>
+          <p className="break-all text-xs text-tenue">O escribe la clave a mano: {nuevo.secreto}</p>
+          <p>2. Escribe el código de 6 dígitos que te muestra:</p>
+          <div className="flex gap-2">
+            <Entrada inputMode="numeric" maxLength={6} value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ""))} placeholder="123456" />
+            <Boton variante="primario" cargando={confirmar2.isPending} disabled={codigo.length !== 6} onClick={() => confirmar2.mutate()}>
+              Activar
+            </Boton>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2 text-sm">
+          <p className="text-tenue">Protege tu cuenta con un código que cambia cada 30 segundos. También es necesario para poder recibir la cuenta maestra.</p>
+          <Boton variante="primario" cargando={iniciar.isPending} onClick={() => iniciar.mutate()}>
+            Activar código 2FA
+          </Boton>
+        </div>
+      )}
+    </Tarjeta>
+  );
+}
+
 function Seguridad() {
   const navegar = useNavigate();
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Tarjeta titulo="Confirmar tu identidad" icono={KeyRound}>
-        <div className="space-y-4">
-          <Pin />
-          <Huella />
-        </div>
-      </Tarjeta>
+      <div className="space-y-4">
+        <Tarjeta titulo="Confirmar tu identidad" icono={KeyRound}>
+          <div className="space-y-4">
+            <Pin />
+            <Huella />
+          </div>
+        </Tarjeta>
+        <DosPasos />
+      </div>
       <div className="space-y-4">
         <Tarjeta titulo="Este dispositivo">
           <p className="text-sm">Tipo: {tipoDispositivo() === "pc" ? "PC (app de Windows)" : tipoDispositivo() === "celular" ? "Celular (app de Android)" : "Navegador"}</p>

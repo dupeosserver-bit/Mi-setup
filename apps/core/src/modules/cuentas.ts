@@ -206,6 +206,36 @@ export function cuentasRoutes(deps: ModuleDeps) {
       return { ok: true };
     });
 
+    /**
+     * Pasar la cuenta maestra a otra persona (p. ej. un familiar de confianza en
+     * una emergencia). Solo hay una maestra: la actual queda como usuario normal.
+     * La otra cuenta debe tener su código 2FA activado (la maestra lo exige).
+     */
+    app.post("/api/cuentas/:id/hacer-maestra", administrar, async (request) => {
+      const yo = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const { confirmacion } = z.object({ confirmacion: z.string().max(200).optional() }).parse(request.body ?? {});
+      if (yo.role !== "maestra") throw new HttpError(403, "Solo la cuenta maestra puede pasar su lugar");
+      const u = await cuentaEditable(id);
+      if (u.deletedAt || !u.isActive) throw new HttpError(400, "Esa cuenta está desactivada");
+      if (!u.totpSecretEnc) {
+        throw new HttpError(400, "Esa persona primero debe activar su código 2FA (en su app: Ajustes → Seguridad → Código 2FA).", "sin_2fa");
+      }
+      if (confirmacion?.trim().toLowerCase() !== u.email.toLowerCase()) {
+        throw new HttpError(400, `Escribe el correo ${u.email} para confirmar`, "doble_confirmacion");
+      }
+      await db.transaction(async (tx) => {
+        // Primero se baja la actual (solo puede existir una maestra a la vez).
+        await tx.update(users).set({ role: "usuario", updatedAt: deps.now() }).where(eq(users.id, yo.id));
+        await tx.update(users).set({ role: "maestra", updatedAt: deps.now() }).where(eq(users.id, id));
+      });
+      await revocarSesiones(id);
+      deps.hub.publicar(`usuario:${id}`, { recurso: "me" });
+      deps.hub.publicar(`usuario:${yo.id}`, { recurso: "me" });
+      await deps.audit.record({ actorType: "usuario", actorUserId: yo.id, action: "maestra_transferida", module: "cuentas", target: u.email, outcome: "ok", ...clientInfo(request) });
+      return { ok: true };
+    });
+
     // ---------------------------------------------------------------- registro de actividad
 
     const filtroSchema = z.object({

@@ -96,6 +96,32 @@ describe("cuentas y permisos", () => {
     expect([400, 403]).toContain(maestraBorrada.statusCode);
   });
 
+  it("una cuenta activa su 2FA y recibe la cuenta maestra; la anterior queda como usuario", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const { id } = (
+      await ctx.app.inject({ method: "POST", url: "/api/cuentas", headers: h, payload: { email: "primo@x.test", nombre: "Primo", password: "Contraseña-segura-123" } })
+    ).json<{ id: string }>();
+    // Sin 2FA no se le puede pasar.
+    const sin2fa = await ctx.app.inject({ method: "POST", url: `/api/cuentas/${id}/hacer-maestra`, headers: h, payload: { confirmacion: "primo@x.test" } });
+    expect(sin2fa.json()).toMatchObject({ codigo: "sin_2fa" });
+
+    const hp = bearer((await login(ctx, "primo@x.test", "Contraseña-segura-123")).json<{ accessToken: string }>().accessToken);
+    const { secreto } = (await ctx.app.inject({ method: "POST", url: "/api/cuenta/2fa/iniciar", headers: hp })).json<{ secreto: string }>();
+    expect((await ctx.app.inject({ method: "POST", url: "/api/cuenta/2fa/confirmar", headers: hp, payload: { codigo: "000000" } })).statusCode).toBe(400);
+    const ok2fa = await ctx.app.inject({ method: "POST", url: "/api/cuenta/2fa/confirmar", headers: hp, payload: { codigo: totpAt(secreto, ctx.clock.now) } });
+    expect(ok2fa.statusCode).toBe(200);
+
+    const pasar = await ctx.app.inject({ method: "POST", url: `/api/cuentas/${id}/hacer-maestra`, headers: h, payload: { confirmacion: "PRIMO@x.test" } });
+    expect(pasar.statusCode).toBe(200);
+    // La antigua maestra ya no administra cuentas; la nueva entra con su código 2FA.
+    expect((await ctx.app.inject({ method: "GET", url: "/api/cuentas", headers: h })).statusCode).toBe(403);
+    ctx.advance(31_000);
+    const nueva = await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "primo@x.test", password: "Contraseña-segura-123", totp: totpAt(secreto, ctx.clock.now) } });
+    expect(nueva.statusCode).toBe(200);
+    expect(nueva.json<{ usuario: { role: string } }>().usuario.role).toBe("maestra");
+  });
+
   it("el registro de actividad filtra y exporta CSV sin fórmulas", async () => {
     ctx = await createTestContext();
     const h = await maestra(ctx);

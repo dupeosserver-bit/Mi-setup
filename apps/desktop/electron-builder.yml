@@ -21,3 +21,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: Mi Setup
+  # Nombre sin espacios: el actualizador lo pide así a tu servidor.
+  artifactName: MiSetup-${version}.${ext}
+# Actualizaciones automáticas: la app busca latest.yml en las descargas de tu servidor
+# (main.ts cambia la dirección si usas otro servidor). Sube a /opt/mi-setup/descargas:
+# MiSetup-<versión>.exe, MiSetup-<versión>.exe.blockmap y latest.yml.
+publish:
+  - provider: generic
+    url: https://setup.mexicanland.net/api/descargas/

@@ -7,6 +7,7 @@ import { Copy, Download, MonitorDown, Smartphone } from "lucide-react";
 import { API_BASE, api } from "../lib/api";
 import { fmtBytes, fmtFechaHora } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
+import { SeccionActualizaciones } from "./Actualizaciones";
 import { Boton, Cargando, ErrorCaja, Tarjeta, Vacio, avisar } from "./ui";
 
 interface Archivo {
@@ -64,6 +65,7 @@ export function DescargasApps() {
           })}
         </div>
       </Tarjeta>
+      <SeccionActualizaciones />
       <Tarjeta titulo="¿Android dice que la app es peligrosa?">
         <ol className="list-decimal space-y-1 pl-5 text-sm text-tenue">
           <li>Es normal con apps que no vienen de la Play Store: Android avisa con todas las apps instaladas "a mano".</li>

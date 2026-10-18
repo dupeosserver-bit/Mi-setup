@@ -5,7 +5,7 @@
  */
 import { MODULES, MODULE_IDS, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
+import { Crown, KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
 import { useState } from "react";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -179,6 +179,15 @@ function Detalle({ c }: { c: Cuenta }) {
     },
     onError: avisarError,
   });
+  const hacerMaestra = useMutation({
+    mutationFn: () => api(`/api/cuentas/${c.id}/hacer-maestra`, { cuerpo: { confirmacion: c.email } }),
+    onSuccess: () => {
+      avisar(`${c.nombre} ahora es la cuenta maestra`);
+      void queryClient.invalidateQueries();
+      window.location.assign("/");
+    },
+    onError: avisarError,
+  });
   const eliminar = useMutation({
     mutationFn: () => api(`/api/cuentas/${c.id}`, { metodo: "DELETE", cuerpo: { confirmacion: c.email } }),
     onSuccess: () => {
@@ -240,6 +249,29 @@ function Detalle({ c }: { c: Cuenta }) {
               }}
             >
               Eliminar cuenta
+            </Boton>
+            <Boton
+              tamano="sm"
+              icono={Crown}
+              cargando={hacerMaestra.isPending}
+              onClick={async () => {
+                if (!c.dosPasos) {
+                  avisar(`${c.nombre} primero debe activar su código 2FA en su app: Ajustes → Seguridad → Código 2FA.`, "info");
+                  return;
+                }
+                const ok = await confirmar({
+                  titulo: `Pasar la cuenta maestra a ${c.nombre}`,
+                  mensaje:
+                    "Tendrá control total de la app (VPS, bóveda maestra, cuentas, registro de actividad). Tú quedarás como cuenta normal y solo esa persona podrá devolvértela. Úsalo solo con alguien de total confianza.",
+                  detalle: c.email,
+                  peligroso: true,
+                  textoExacto: c.email,
+                  boton: "Pasar cuenta maestra",
+                });
+                if (ok) hacerMaestra.mutate();
+              }}
+            >
+              Pasar cuenta maestra
             </Boton>
           </div>
           <p className="text-sm font-medium">Permisos extra (además de los de sus roles)</p>

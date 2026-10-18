@@ -21,6 +21,7 @@ import {
   type IpcMainEvent,
   type MenuItemConstructorOptions,
 } from "electron";
+import { autoUpdater } from "electron-updater";
 import { leerMetricas, leerSistema } from "./metricas";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
@@ -345,5 +346,39 @@ if (!app.requestSingleInstanceLock()) {
     construirMenu();
     crearBandeja();
     crearVentana();
+    if (!DEV) iniciarActualizaciones();
   });
+}
+
+/**
+ * Actualizaciones automáticas: la app busca latest.yml en las descargas de tu
+ * servidor (el mismo que abre la app), baja la versión nueva en segundo plano
+ * y la instala al cerrarse; también se puede reiniciar al momento.
+ */
+function iniciarActualizaciones(): void {
+  autoUpdater.setFeedURL({ provider: "generic", url: `${ORIGEN}/api/descargas/` });
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("update-downloaded", (info) => {
+    void dialog
+      .showMessageBox({
+        type: "info",
+        title: "Actualización lista",
+        message: `Mi Setup ${info.version} ya se descargó.`,
+        detail: "Se instalará al cerrar la app. ¿Quieres reiniciar ahora?",
+        buttons: ["Reiniciar ahora", "Después"],
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          saliendo = true;
+          autoUpdater.quitAndInstall();
+        }
+      });
+  });
+  // Sin conexión o sin latest.yml en el servidor: se intenta más tarde, sin molestar.
+  autoUpdater.on("error", () => undefined);
+  const revisar = () => void autoUpdater.checkForUpdates().catch(() => undefined);
+  revisar();
+  setInterval(revisar, 6 * 60 * 60_000);
 }

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -7,10 +8,11 @@ import { defineConfig } from "vite";
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   // App de Android: la UI va empaquetada y habla con el servidor por HTTPS.
-  define:
-    mode === "movil"
-      ? { "import.meta.env.VITE_API_URL": JSON.stringify(process.env["MI_SETUP_API"] ?? "https://setup.mexicanland.net") }
-      : {},
+  define: {
+    // Versión de esta app (el celular la compara con la del servidor para avisar de actualizaciones).
+    __VERSION_APP__: JSON.stringify((JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version),
+    ...(mode === "movil" ? { "import.meta.env.VITE_API_URL": JSON.stringify(process.env["MI_SETUP_API"] ?? "https://setup.mexicanland.net") } : {}),
+  },
   resolve: {
     alias: {
       // La UI usa siempre el código fuente de shared (Vite lo compila).
