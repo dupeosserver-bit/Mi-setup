@@ -217,6 +217,20 @@ const ubicacionSchema = z.object({
   auto: z.boolean().default(false),
 });
 
+/** Lo que usamos de appdetails de Steam. */
+interface DatosSteam {
+  name: string;
+  header_image: string;
+  short_description: string;
+  is_free: boolean;
+  price_overview?: { final: number; discount_percent: number };
+  release_date?: { date: string };
+  genres?: { description: string }[];
+  developers?: string[];
+  metacritic?: { score: number };
+  pc_requirements?: { minimum?: string; recommended?: string };
+}
+
 /** Tiendas para buscar juegos (las de claves de terceros se marcan como mercado). */
 export const TIENDAS_JUEGOS = [
   { id: "steam", nombre: "Steam", tipo: "oficial", url: "https://store.steampowered.com/search/?term=" },
@@ -278,7 +292,12 @@ export function novedadesRoutes(deps: ModuleDeps) {
 
     // -------- juegos gratis (GamerPower: Epic, Steam, GOG…) y tiendas para buscar
     app.get("/api/novedades/juegos-gratis", leer, async (request) => {
-      const { plataforma } = z.object({ plataforma: z.enum(["todas", "pc", "epic-games-store", "steam", "gog", "ps5", "xbox-series-xs", "switch", "android"]).default("todas") }).parse(request.query);
+      const { plataforma, pagina } = z
+        .object({
+          plataforma: z.enum(["todas", "pc", "epic-games-store", "steam", "gog", "ps5", "xbox-series-xs", "switch", "android"]).default("todas"),
+          pagina: z.coerce.number().int().min(1).max(50).default(1),
+        })
+        .parse(request.query);
       const url = `https://www.gamerpower.com/api/giveaways?type=game&sort-by=date${plataforma === "todas" ? "" : `&platform=${plataforma}`}`;
       const r = await conCache(`gratis:${plataforma}`, 30 * 60_000, async () => {
         const lista = await pedirJson<
@@ -286,10 +305,12 @@ export function novedadesRoutes(deps: ModuleDeps) {
         >("GamerPower", url).catch(() => []);
         return Array.isArray(lista) ? lista : [];
       });
-      return r
-        .filter((g) => g.status === "Active")
-        .slice(0, 40)
-        .map((g) => ({
+      const activos = r.filter((g) => g.status === "Active");
+      const porPagina = 24;
+      return {
+        pagina,
+        totalPaginas: Math.max(1, Math.ceil(activos.length / porPagina)),
+        juegos: activos.slice((pagina - 1) * porPagina, pagina * porPagina).map((g) => ({
           id: g.id,
           titulo: g.title,
           valor: g.worth === "N/A" ? null : g.worth,
@@ -298,10 +319,68 @@ export function novedadesRoutes(deps: ModuleDeps) {
           url: g.open_giveaway_url,
           plataformas: g.platforms,
           termina: g.end_date === "N/A" ? null : g.end_date,
-        }));
+        })),
+      };
     });
 
     app.get("/api/novedades/tiendas-juegos", leer, async () => TIENDAS_JUEGOS);
+
+    // -------- Steam: buscar juegos y ver sus datos (jugadores, reseñas, requisitos)
+    app.get("/api/novedades/steam/buscar", leer, async (request) => {
+      const { q } = z.object({ q: z.string().trim().min(2).max(100) }).parse(request.query);
+      const r = await conCache(`steam-buscar:${q.toLowerCase()}`, 60 * 60_000, () =>
+        pedirJson<{ items?: { id: number; name: string; tiny_image: string; price?: { final: number; currency: string } }[] }>(
+          "Steam",
+          `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=spanish&cc=MX`,
+        ),
+      );
+      return (r.items ?? []).slice(0, 12).map((j) => ({
+        id: j.id,
+        nombre: j.name,
+        imagen: j.tiny_image,
+        precio: j.price ? j.price.final / 100 : null,
+        moneda: j.price?.currency ?? null,
+      }));
+    });
+
+    app.get("/api/novedades/steam/:appid", leer, async (request) => {
+      const { appid } = z.object({ appid: z.coerce.number().int().positive().max(99_999_999) }).parse(request.params);
+      return conCache(`steam-juego:${appid}`, 30 * 60_000, async () => {
+        const [detalle, jugadores, spy] = await Promise.all([
+          pedirJson<Record<string, { success: boolean; data?: DatosSteam }>>("Steam", `https://store.steampowered.com/api/appdetails?appids=${appid}&l=spanish&cc=MX`),
+          pedirJson<{ response?: { player_count?: number } }>("Steam", `https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appid}`).catch(() => null),
+          pedirJson<{ positive?: number; negative?: number; owners?: string; average_forever?: number; ccu?: number }>(
+            "SteamSpy",
+            `https://steamspy.com/api.php?request=appdetails&appid=${appid}`,
+          ).catch(() => null),
+        ]);
+        const d = detalle[String(appid)]?.data;
+        if (!d) throw new HttpError(404, "Ese juego no está en Steam");
+        const texto = (html?: string) => (html ? load(html).text().replace(/\s+\n/g, "\n").trim() : null);
+        const positivas = spy?.positive ?? 0;
+        const negativas = spy?.negative ?? 0;
+        return {
+          id: appid,
+          nombre: d.name,
+          imagen: d.header_image,
+          descripcion: d.short_description,
+          precio: d.is_free ? 0 : d.price_overview ? d.price_overview.final / 100 : null,
+          descuento: d.price_overview?.discount_percent ?? 0,
+          lanzamiento: d.release_date?.date ?? null,
+          generos: (d.genres ?? []).map((g) => g.description),
+          desarrollador: d.developers?.[0] ?? null,
+          metacritic: d.metacritic?.score ?? null,
+          jugadoresAhora: jugadores?.response?.player_count ?? null,
+          picoAyer: spy?.ccu ?? null,
+          resenas: positivas + negativas > 0 ? { positivas, negativas, porcentaje: Math.round((positivas / (positivas + negativas)) * 100) } : null,
+          duenos: spy?.owners ?? null,
+          horasPromedio: spy?.average_forever ? Math.round(spy.average_forever / 60) : null,
+          requisitos: { minimos: texto(d.pc_requirements?.minimum), recomendados: texto(d.pc_requirements?.recommended) },
+          url: `https://store.steampowered.com/app/${appid}`,
+          steamdb: `https://steamdb.info/app/${appid}/`,
+        };
+      });
+    });
 
     app.get("/api/novedades/clima/ubicacion", leer, async (request) => {
       const user = currentUser(request);
@@ -320,11 +399,13 @@ export function novedadesRoutes(deps: ModuleDeps) {
     });
 
     app.get("/api/novedades/clima", leer, async (request) => {
-      const { lat, lon } = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }).parse(request.query);
-      return conCache(`clima:${lat.toFixed(2)}:${lon.toFixed(2)}`, 10 * 60_000, () =>
+      const { lat, lon, dias } = z
+        .object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180), dias: z.coerce.number().int().min(1).max(16).default(10) })
+        .parse(request.query);
+      return conCache(`clima:${lat.toFixed(2)}:${lon.toFixed(2)}:${dias}`, 10 * 60_000, () =>
         pedirJson<unknown>(
           "Open-Meteo",
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&forecast_days=5` +
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&forecast_days=${dias}` +
             "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
         ),
@@ -345,9 +426,11 @@ export function novedadesRoutes(deps: ModuleDeps) {
           tienda: z.string().regex(/^\d{1,3}$/).optional(),
           precioMax: z.coerce.number().min(0).max(200).default(15),
           titulo: z.string().trim().max(100).optional(),
+          pagina: z.coerce.number().int().min(1).max(50).default(1),
         })
         .parse(request.query);
-      const params = new URLSearchParams({ pageSize: "30", sortBy: "Deal Rating", upperPrice: String(q.precioMax), onSale: "1" });
+      // CheapShark cuenta las páginas desde 0.
+      const params = new URLSearchParams({ pageSize: "30", sortBy: "Deal Rating", upperPrice: String(q.precioMax), onSale: "1", pageNumber: String(q.pagina - 1) });
       if (q.tienda) params.set("storeID", q.tienda);
       if (q.titulo) params.set("title", q.titulo);
       const r = await conCache(`ofertas:${params}`, 30 * 60_000, () =>

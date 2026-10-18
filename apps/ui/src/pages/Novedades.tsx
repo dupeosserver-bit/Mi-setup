@@ -1,6 +1,8 @@
 /** Novedades: clima (con ubicación en tiempo real), ofertas y juegos gratis, tiendas para buscar y vigilante de precios. */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  ChevronLeft,
+  ChevronRight,
   Cloud,
   CloudDrizzle,
   CloudFog,
@@ -8,8 +10,10 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
+  Cpu,
   Crosshair,
   ExternalLink,
+  Gamepad2,
   Gift,
   Info,
   MapPin,
@@ -17,6 +21,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   Sun,
   Target,
   Trash2,
@@ -29,7 +34,8 @@ import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { fmtFecha, fmtFechaHora, haceCuanto } from "../lib/formato";
-import { abrirExterno } from "../lib/plataforma";
+import { abrirExterno, escritorio, leerSistema } from "../lib/plataforma";
+import { useNavigate } from "react-router-dom";
 import { ubicacionActual } from "../lib/ubicacion";
 
 // ---------------------------------------------------------------- clima
@@ -235,13 +241,35 @@ function BuscarEnTiendas() {
   );
 }
 
+/** Botones Anterior / Siguiente con el número de página. */
+function Paginador({ pagina, total, hayMas, alCambiar }: { pagina: number; total?: number | undefined; hayMas?: boolean; alCambiar: (p: number) => void }) {
+  const siguiente = total !== undefined ? pagina < total : Boolean(hayMas);
+  if (pagina === 1 && !siguiente) return null;
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <Boton tamano="sm" icono={ChevronLeft} disabled={pagina <= 1} onClick={() => alCambiar(pagina - 1)}>
+        Anterior
+      </Boton>
+      <span className="text-sm text-tenue">
+        Página {pagina}
+        {total !== undefined ? ` de ${total}` : ""}
+      </span>
+      <Boton tamano="sm" disabled={!siguiente} onClick={() => alCambiar(pagina + 1)}>
+        Siguiente <ChevronRight className="h-4 w-4" />
+      </Boton>
+    </div>
+  );
+}
+
 function Ofertas() {
   const [tienda, setTienda] = useState("");
   const [precioMax, setPrecioMax] = useState("15");
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => setPagina(1), [tienda, precioMax]);
   const tiendas = useQuery({ queryKey: ["novedades", "tiendas"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/novedades/tiendas") });
   const ofertas = useQuery({
-    queryKey: ["novedades", "ofertas", tienda, precioMax],
-    queryFn: () => api<Oferta[]>(`/api/novedades/ofertas?precioMax=${precioMax}${tienda ? `&tienda=${tienda}` : ""}`),
+    queryKey: ["novedades", "ofertas", tienda, precioMax, pagina],
+    queryFn: () => api<Oferta[]>(`/api/novedades/ofertas?precioMax=${precioMax}&pagina=${pagina}${tienda ? `&tienda=${tienda}` : ""}`),
   });
   const nombreTienda = new Map((tiendas.data ?? []).map((t) => [t.id, t.nombre]));
   return (
@@ -288,6 +316,7 @@ function Ofertas() {
           </button>
         ))}
       </div>
+      <Paginador pagina={pagina} hayMas={(ofertas.data?.length ?? 0) >= 30} alCambiar={setPagina} />
       <p className="text-xs text-tenue">Ofertas de tiendas oficiales vía CheapShark (precios en USD).</p>
     </div>
   );
@@ -306,7 +335,13 @@ interface Gratis {
 
 function JuegosGratis() {
   const [plataforma, setPlataforma] = useState("todas");
-  const lista = useQuery({ queryKey: ["novedades", "gratis", plataforma], queryFn: () => api<Gratis[]>(`/api/novedades/juegos-gratis?plataforma=${plataforma}`) });
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => setPagina(1), [plataforma]);
+  const respuesta = useQuery({
+    queryKey: ["novedades", "gratis", plataforma, pagina],
+    queryFn: () => api<{ pagina: number; totalPaginas: number; juegos: Gratis[] }>(`/api/novedades/juegos-gratis?plataforma=${plataforma}&pagina=${pagina}`),
+  });
+  const lista = { ...respuesta, data: respuesta.data?.juegos };
   return (
     <div className="space-y-4">
       <Selector className="max-w-xs" value={plataforma} onChange={(e) => setPlataforma(e.target.value)}>
@@ -339,7 +374,273 @@ function JuegosGratis() {
           </button>
         ))}
       </div>
+      <Paginador pagina={pagina} total={respuesta.data?.totalPaginas} alCambiar={setPagina} />
       <p className="text-xs text-tenue">Datos de GamerPower. Ábrelos para reclamarlos en su tienda.</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Steam
+
+interface ResultadoSteam {
+  id: number;
+  nombre: string;
+  imagen: string;
+  precio: number | null;
+  moneda: string | null;
+}
+
+interface JuegoSteam {
+  id: number;
+  nombre: string;
+  imagen: string;
+  descripcion: string;
+  precio: number | null;
+  descuento: number;
+  lanzamiento: string | null;
+  generos: string[];
+  desarrollador: string | null;
+  metacritic: number | null;
+  jugadoresAhora: number | null;
+  picoAyer: number | null;
+  resenas: { positivas: number; negativas: number; porcentaje: number } | null;
+  duenos: string | null;
+  horasPromedio: number | null;
+  requisitos: { minimos: string | null; recomendados: string | null };
+  url: string;
+  steamdb: string;
+}
+
+/** Tu PC para "¿Me corre?": se detecta sola en la app de Windows; en el celular la escribes una vez. */
+interface MiPc {
+  procesador: string;
+  graficos: string;
+  ramGb: number;
+}
+const CLAVE_MI_PC = "mi-setup.mi-pc";
+
+function leerMiPc(): MiPc | null {
+  try {
+    const v = localStorage.getItem(CLAVE_MI_PC);
+    return v ? (JSON.parse(v) as MiPc) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Busca "8 GB" de RAM o de espacio dentro del texto de requisitos. */
+function gbEn(texto: string | null, palabras: RegExp): number | null {
+  if (!texto) return null;
+  for (const linea of texto.split(/\n|(?=Memoria|Almacenamiento|Gráficos|Procesador|Memory|Storage)/i)) {
+    if (!palabras.test(linea)) continue;
+    const m = /(\d+(?:[.,]\d+)?)\s*(GB|MB|TB)/i.exec(linea);
+    if (!m) continue;
+    const n = Number(m[1]!.replace(",", "."));
+    return m[2]!.toUpperCase() === "MB" ? n / 1024 : m[2]!.toUpperCase() === "TB" ? n * 1024 : n;
+  }
+  return null;
+}
+
+function MeCorre({ juego }: { juego: JuegoSteam }) {
+  const navegar = useNavigate();
+  const [pc, setPc] = useState<MiPc | null>(leerMiPc);
+  const [editando, setEditando] = useState(false);
+  const [borrador, setBorrador] = useState<MiPc>(pc ?? { procesador: "", graficos: "", ramGb: 16 });
+
+  // En la app de Windows se leen las piezas reales de la PC.
+  useEffect(() => {
+    if (!escritorio() || pc) return;
+    void leerSistema().then((s) => {
+      const detectada = { procesador: s.procesador, graficos: s.graficos.join(" / "), ramGb: Math.round(s.memoria / 1024 ** 3) };
+      setPc(detectada);
+      setBorrador(detectada);
+      try {
+        localStorage.setItem(CLAVE_MI_PC, JSON.stringify(detectada));
+      } catch {
+        // Sin almacenamiento local: se vuelve a detectar la próxima vez.
+      }
+    });
+  }, [pc]);
+
+  const ramMin = gbEn(juego.requisitos.minimos, /memoria|memory|ram/i);
+  const ramRec = gbEn(juego.requisitos.recomendados, /memoria|memory|ram/i);
+  const espacio = gbEn(juego.requisitos.minimos, /almacenamiento|espacio|storage|disco/i);
+  const veredictoRam = !pc || ramMin === null ? null : pc.ramGb >= (ramRec ?? ramMin) ? "ok" : pc.ramGb >= ramMin ? "justo" : "no";
+
+  const preguntar = () => {
+    if (!pc) return;
+    const pregunta =
+      `¿Me corre "${juego.nombre}"? Mi PC: procesador ${pc.procesador}, gráficos ${pc.graficos}, ${pc.ramGb} GB de RAM.\n` +
+      `Requisitos mínimos: ${juego.requisitos.minimos ?? "no publicados"}\nRecomendados: ${juego.requisitos.recomendados ?? "no publicados"}\n` +
+      "Dime si me corre, en qué calidad (bajo, medio, alto o ultra), a cuántos FPS aproximados en 1080p y qué ajustes me recomiendas.";
+    navegar(`/ia?pregunta=${encodeURIComponent(pregunta.slice(0, 1800))}`);
+  };
+
+  const guardar = () => {
+    setPc(borrador);
+    setEditando(false);
+    try {
+      localStorage.setItem(CLAVE_MI_PC, JSON.stringify(borrador));
+    } catch {
+      // Sin almacenamiento local: dura solo esta vez.
+    }
+  };
+
+  return (
+    <Tarjeta titulo="¿Me corre?" icono={Cpu}>
+      {pc && !editando ? (
+        <div className="space-y-2 text-sm">
+          <p className="text-tenue">
+            Tu PC: <span className="text-texto">{pc.procesador}</span> · <span className="text-texto">{pc.graficos}</span> · <span className="text-texto">{pc.ramGb} GB RAM</span>{" "}
+            <button type="button" className="text-xs underline" onClick={() => setEditando(true)}>
+              cambiar
+            </button>
+          </p>
+          {veredictoRam ? (
+            <p>
+              RAM:{" "}
+              <Insignia tono={veredictoRam === "ok" ? "ok" : veredictoRam === "justo" ? "aviso" : "peligro"}>
+                {veredictoRam === "ok" ? "suficiente" : veredictoRam === "justo" ? "justa (cumple el mínimo)" : `insuficiente (pide ${ramMin} GB)`}
+              </Insignia>
+            </p>
+          ) : null}
+          {espacio ? <p className="text-tenue">Espacio necesario: {espacio} GB</p> : null}
+          <p className="text-xs text-tenue">El procesador y la tarjeta de video son difíciles de comparar a mano: la IA te dice si te corre, en qué calidad y a cuántos FPS.</p>
+          <Boton variante="primario" icono={Sparkles} onClick={preguntar}>
+            Preguntarle a la IA
+          </Boton>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-tenue">Escribe las piezas de tu PC una vez (en la app de Windows se detectan solas).</p>
+          <Campo etiqueta="Procesador">
+            <Entrada value={borrador.procesador} onChange={(e) => setBorrador({ ...borrador, procesador: e.target.value })} placeholder="Ej. Ryzen 5 5600" />
+          </Campo>
+          <Campo etiqueta="Tarjeta de video">
+            <Entrada value={borrador.graficos} onChange={(e) => setBorrador({ ...borrador, graficos: e.target.value })} placeholder="Ej. RTX 3060 12 GB" />
+          </Campo>
+          <Campo etiqueta="RAM (GB)">
+            <Entrada type="number" min={1} max={512} value={borrador.ramGb} onChange={(e) => setBorrador({ ...borrador, ramGb: Number(e.target.value) || 0 })} />
+          </Campo>
+          <Boton variante="primario" disabled={!borrador.procesador.trim() || !borrador.graficos.trim() || borrador.ramGb <= 0} onClick={guardar}>
+            Guardar mi PC
+          </Boton>
+        </div>
+      )}
+    </Tarjeta>
+  );
+}
+
+function FichaSteam({ id }: { id: number }) {
+  const q = useQuery({ queryKey: ["novedades", "steam", id], queryFn: () => api<JuegoSteam>(`/api/novedades/steam/${id}`) });
+  if (q.isLoading) return <Cargando />;
+  if (q.error) return <ErrorCaja error={q.error} />;
+  const j = q.data;
+  if (!j) return null;
+  const dato = (titulo: string, valor: string | null) =>
+    valor ? (
+      <div className="rounded-xl bg-fondo p-3">
+        <p className="text-xs text-tenue">{titulo}</p>
+        <p className="text-lg font-semibold">{valor}</p>
+      </div>
+    ) : null;
+  return (
+    <div className="space-y-4">
+      <Tarjeta>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <img src={j.imagen} alt={j.nombre} referrerPolicy="no-referrer" className="w-full rounded-xl object-cover md:w-80" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <h3 className="text-xl font-semibold">{j.nombre}</h3>
+            <p className="text-sm text-tenue">{j.descripcion}</p>
+            <div className="flex flex-wrap gap-1">
+              {j.generos.map((g) => (
+                <Insignia key={g}>{g}</Insignia>
+              ))}
+              {j.lanzamiento ? <Insignia>{j.lanzamiento}</Insignia> : null}
+              {j.desarrollador ? <Insignia>{j.desarrollador}</Insignia> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Boton tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(j.url)}>
+                Steam
+              </Boton>
+              <Boton tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(j.steamdb)}>
+                SteamDB (historial de precios)
+              </Boton>
+            </div>
+          </div>
+        </div>
+      </Tarjeta>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {dato("Jugando ahora", j.jugadoresAhora !== null ? j.jugadoresAhora.toLocaleString("es-MX") : null)}
+        {dato("Pico de ayer", j.picoAyer !== null ? j.picoAyer.toLocaleString("es-MX") : null)}
+        {dato("Reseñas positivas", j.resenas ? `${j.resenas.porcentaje} %` : null)}
+        {dato("Precio", j.precio === null ? null : j.precio === 0 ? "Gratis" : `$${j.precio.toLocaleString("es-MX")} MXN${j.descuento ? ` (-${j.descuento}%)` : ""}`)}
+        {dato("Dueños (aprox.)", j.duenos)}
+        {dato("Horas promedio", j.horasPromedio !== null ? `${j.horasPromedio} h` : null)}
+        {dato("Metacritic", j.metacritic !== null ? String(j.metacritic) : null)}
+      </div>
+      <MeCorre juego={j} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Tarjeta titulo="Requisitos mínimos">
+          <p className="whitespace-pre-line text-sm text-tenue">{j.requisitos.minimos ?? "Steam no los publica."}</p>
+        </Tarjeta>
+        <Tarjeta titulo="Requisitos recomendados">
+          <p className="whitespace-pre-line text-sm text-tenue">{j.requisitos.recomendados ?? "Steam no los publica."}</p>
+        </Tarjeta>
+      </div>
+    </div>
+  );
+}
+
+function Steam() {
+  const [texto, setTexto] = useState("");
+  const [buscar, setBuscar] = useState("");
+  const [elegido, setElegido] = useState<number | null>(null);
+  const resultados = useQuery({
+    queryKey: ["novedades", "steam-buscar", buscar],
+    queryFn: () => api<ResultadoSteam[]>(`/api/novedades/steam/buscar?q=${encodeURIComponent(buscar)}`),
+    enabled: buscar.length >= 2,
+  });
+  return (
+    <div className="space-y-4">
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setBuscar(texto.trim());
+          setElegido(null);
+        }}
+      >
+        <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Busca un juego de Steam, ej. Cyberpunk" />
+        <Boton type="submit" variante="primario" icono={Search} disabled={texto.trim().length < 2}>
+          Buscar
+        </Boton>
+      </form>
+      {resultados.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={resultados.error} />
+      {elegido === null ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {resultados.data?.map((r) => (
+            <button key={r.id} type="button" onClick={() => setElegido(r.id)} className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-2 text-left hover:bg-tarjeta">
+              <img src={r.imagen} alt={r.nombre} referrerPolicy="no-referrer" className="h-12 w-24 shrink-0 rounded-lg object-cover" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{r.nombre}</p>
+                <p className="text-xs text-tenue">{r.precio === null ? "Gratis o sin precio" : `$${r.precio.toLocaleString("es-MX")} ${r.moneda ?? ""}`}</p>
+              </div>
+            </button>
+          ))}
+          {resultados.data?.length === 0 ? <Vacio icono={Gamepad2} texto="No encontré juegos con ese nombre." /> : null}
+        </div>
+      ) : (
+        <>
+          <Boton tamano="sm" variante="fantasma" icono={ChevronLeft} onClick={() => setElegido(null)}>
+            Volver a los resultados
+          </Boton>
+          <FichaSteam id={elegido} />
+        </>
+      )}
+      {!buscar ? <Vacio icono={Gamepad2} texto="Busca un juego para ver jugadores en línea, reseñas, requisitos y si te corre." /> : null}
+      <p className="text-xs text-tenue">Datos de la tienda de Steam y SteamSpy. SteamDB no tiene API pública: se abre en el navegador.</p>
     </div>
   );
 }
@@ -612,7 +913,7 @@ function Precios() {
 }
 
 export default function Novedades() {
-  const [pestana, setPestana] = useState<"clima" | "ofertas" | "gratis" | "precios">("clima");
+  const [pestana, setPestana] = useState<"clima" | "ofertas" | "gratis" | "steam" | "precios">("clima");
   return (
     <div className="space-y-4">
       <Encabezado titulo="Novedades" descripcion="Clima, ofertas y juegos gratis, y vigilante de precios." />
@@ -623,10 +924,11 @@ export default function Novedades() {
           { id: "clima", texto: "Clima" },
           { id: "ofertas", texto: "Ofertas de juegos" },
           { id: "gratis", texto: "Juegos gratis" },
+          { id: "steam", texto: "Steam" },
           { id: "precios", texto: "Precios (RAM)" },
         ]}
       />
-      {pestana === "clima" ? <Clima /> : pestana === "ofertas" ? <Ofertas /> : pestana === "gratis" ? <JuegosGratis /> : <Precios />}
+      {pestana === "clima" ? <Clima /> : pestana === "ofertas" ? <Ofertas /> : pestana === "gratis" ? <JuegosGratis /> : pestana === "steam" ? <Steam /> : <Precios />}
     </div>
   );
 }
