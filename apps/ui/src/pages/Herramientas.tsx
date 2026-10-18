@@ -5,7 +5,7 @@
  * - Emojis secretos: esconde un mensaje o código dentro de un emoji.
  * - Vista previa HTML/CSS/JS al instante, en tamaño celular, tableta o PC.
  */
-import { Code2, Copy, Download, Eye, ImagePlus, Monitor, QrCode, Save, Smartphone, Sparkles, Tablet, Trash2, Wand2 } from "lucide-react";
+import { Code2, Copy, Download, Eye, ImagePlus, Monitor, Play, QrCode, Save, Smartphone, Sparkles, Tablet, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { CodigoQr, ESTILO_BASICO, type CodigoQrRef, type EstiloQr } from "../components/CodigoQr";
@@ -416,6 +416,12 @@ const EJEMPLO: Omit<Diseno, "id" | "nombre"> = {
   js: `document.getElementById("boton").onclick = () => alert("¡Funciona!");`,
 };
 
+/** Arma una página completa con el HTML, CSS y JavaScript escritos. */
+export function documentoDe(c: { html: string; css: string; js: string }): string {
+  const seguro = (t: string, etiqueta: string) => t.replace(new RegExp(`</${etiqueta}`, "gi"), `<\\/${etiqueta}`);
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${seguro(c.css, "style")}</style></head><body>${c.html}<script>${seguro(c.js, "script")}</script></body></html>`;
+}
+
 const TAMANOS = { celular: { ancho: 375, icono: Smartphone }, tableta: { ancho: 768, icono: Tablet }, pc: { ancho: 1280, icono: Monitor } } as const;
 
 function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
@@ -425,39 +431,36 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
   const [tamano, setTamano] = useState<keyof typeof TAMANOS>("celular");
   const [disenos, setDisenos] = useState<Diseno[]>(() => leerLocal(CLAVE_DISENOS, []));
   const [nombre, setNombre] = useState("");
-  const [doc, setDoc] = useState("");
+  const [auto, setAuto] = useState(true);
+  const doc = documentoDe(codigo);
 
   useEffect(() => {
     if (inicial) setCodigo({ html: inicial, css: "", js: "" });
   }, [inicial]);
 
-  // Se actualiza un momento después de dejar de escribir.
-  useEffect(() => {
-    const t = setTimeout(
-      () =>
-        setDoc(
-          `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${codigo.css}</style></head><body>${codigo.html}<script>${codigo.js.replace(/<\/script/gi, "<\\/script")}</script></body></html>`,
-        ),
-      400,
-    );
-    return () => clearTimeout(t);
-  }, [codigo]);
-
-  // El marco avisa cuando está listo; después se le manda cada cambio.
+  // El marco avisa cuando está listo; después se le manda el código (al dejar de
+  // escribir si "Actualizar mientras escribo" está activo, o al tocar Ejecutar).
   const marco = useRef<HTMLIFrameElement>(null);
   const listo = useRef(false);
+  const ultimo = useRef(doc);
+  ultimo.current = doc;
+  const mostrar = (d: string) => {
+    if (listo.current) marco.current?.contentWindow?.postMessage(d, "*");
+  };
   useEffect(() => {
     const alMensaje = (e: MessageEvent) => {
       if (e.source !== marco.current?.contentWindow || e.data !== "vista-previa-lista") return;
       listo.current = true;
-      marco.current?.contentWindow?.postMessage(doc, "*");
+      mostrar(ultimo.current);
     };
     window.addEventListener("message", alMensaje);
     return () => window.removeEventListener("message", alMensaje);
-  }, [doc]);
+  }, []);
   useEffect(() => {
-    if (listo.current && doc) marco.current?.contentWindow?.postMessage(doc, "*");
-  }, [doc]);
+    if (!auto) return;
+    const t = setTimeout(() => mostrar(doc), 400);
+    return () => clearTimeout(t);
+  }, [doc, auto]);
 
   const guardar = () => {
     const d: Diseno = { id: crypto.randomUUID(), nombre: nombre.trim() || `Diseño ${disenos.length + 1}`, ...codigo };
@@ -521,7 +524,10 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
           titulo="Resultado"
           icono={Eye}
           acciones={
-            <div className="flex gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Boton tamano="sm" variante="primario" icono={Play} onClick={() => mostrar(doc)}>
+                Ejecutar
+              </Boton>
               {(Object.keys(TAMANOS) as (keyof typeof TAMANOS)[]).map((t) => {
                 const Icono = TAMANOS[t].icono;
                 return <Boton key={t} tamano="icono" variante={tamano === t ? "primario" : "fantasma"} icono={Icono} aria-label={`Ver como ${t}`} onClick={() => setTamano(t)} />;
@@ -540,7 +546,13 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
               className="mx-auto block h-[50vh] border-0"
             />
           </div>
-          <p className="mt-2 text-xs text-tenue">Ancho: {ancho} px. El código corre aislado: no puede tocar tu cuenta.</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-tenue">Ancho: {ancho} px. El código corre aislado: no puede tocar tu cuenta.</p>
+            <label className="flex items-center gap-2 text-xs text-tenue">
+              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-[rgb(var(--acento))]" />
+              Actualizar mientras escribo
+            </label>
+          </div>
         </Tarjeta>
       </div>
       {disenos.length ? (

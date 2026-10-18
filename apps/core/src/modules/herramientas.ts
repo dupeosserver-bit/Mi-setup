@@ -327,7 +327,9 @@ export function herramientasRoutes(deps: ModuleDeps) {
         )
         .type("text/html; charset=utf-8")
         .send(
-          `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><script>window.addEventListener("message",function(e){if(typeof e.data!=="string")return;document.open();document.write(e.data);document.close();});parent.postMessage("vista-previa-lista","*");</script></body></html>`,
+          // El código del usuario corre en un marco interno (srcdoc, aislado). Esta página
+          // nunca se reemplaza, así que sigue escuchando cada cambio o "Ejecutar".
+          `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block;background:#fff}</style></head><body><iframe id="f" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe><script>var f=document.getElementById("f");window.addEventListener("message",function(e){if(e.source!==parent||typeof e.data!=="string")return;f.srcdoc=e.data;});parent.postMessage("vista-previa-lista","*");</script></body></html>`,
         );
     });
 
