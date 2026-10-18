@@ -9,6 +9,7 @@ import { comandosRoutes } from "./comandos.js";
 import { historialRoutes } from "./historial.js";
 import { registrarMetricasVps } from "./metricas.js";
 import { Servidores, servidoresRoutes } from "./servidores.js";
+import { seguridadRoutes } from "./seguridad.js";
 import { registrarTerminal } from "./terminal.js";
 
 export function vpsModule(deps: ModuleDeps) {
@@ -25,6 +26,7 @@ export function vpsModule(deps: ModuleDeps) {
     await app.register(historialRoutes(deps));
     await app.register(archivosRoutes(deps, servidores));
     await app.register(botsRoutes(deps, servidores));
+    await app.register(seguridadRoutes(deps, servidores));
   }
 
   return { servidores, jobs, routes };

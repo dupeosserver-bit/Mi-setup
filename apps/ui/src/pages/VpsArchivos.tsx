@@ -1,13 +1,13 @@
 /** Explorador SFTP: navegar, descargar, subir (varios a la vez), crear carpetas, renombrar y borrar. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUp, Download, File, FileEdit, Folder, FolderPlus, FolderTree, Link2, Pencil, Save, Trash2, Upload } from "lucide-react";
+import { ArrowUp, Download, File, FileEdit, Folder, FolderPlus, FolderTree, Link2, Pencil, Save, Send, Trash2, Upload } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisar, avisarError } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Selector, Vacio, avisar, avisarError } from "../components/ui";
 import { api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { fmtBytes, fmtFechaHora } from "../lib/formato";
-import { SelectorServidor } from "../lib/vps";
+import { SelectorServidor, useServidores } from "../lib/vps";
 
 interface Entrada {
   nombre: string;
@@ -59,6 +59,53 @@ function PedirNombre({
           {boton}
         </Boton>
       </form>
+    </Modal>
+  );
+}
+
+/** Copia un archivo directo de este servidor a otro (p. ej. del home lab al VPS). */
+function EnviarAServidor({ origenId, ruta, alCerrar }: { origenId: string; ruta: string; alCerrar: () => void }) {
+  const otros = (useServidores().data ?? []).filter((s) => s.id !== origenId);
+  const [destino, setDestino] = useState(otros[0]?.id ?? "");
+  const [carpeta, setCarpeta] = useState("/root");
+  const enviar = useMutation({
+    mutationFn: () => api<{ destino: string; bytes: number }>(`/api/vps/servidores/${origenId}/archivos/enviar`, { cuerpo: { ruta, destinoId: destino || otros[0]?.id, carpetaDestino: carpeta } }),
+    onSuccess: (r) => {
+      avisar(`Copiado a ${r.destino} (${fmtBytes(r.bytes)})`);
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <Modal abierto titulo="Enviar a otro servidor" alCerrar={alCerrar}>
+      {!otros.length ? (
+        <Vacio texto="Agrega otro servidor (tu home lab o tu VPS) en Servidores para poder enviar archivos entre ellos." />
+      ) : (
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            enviar.mutate();
+          }}
+        >
+          <p className="break-all text-sm text-tenue">{ruta}</p>
+          <Campo etiqueta="Servidor destino">
+            <Selector value={destino || otros[0]?.id} onChange={(e) => setDestino(e.target.value)}>
+              {otros.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} ({s.usuario}@{s.host})
+                </option>
+              ))}
+            </Selector>
+          </Campo>
+          <Campo etiqueta="Carpeta destino">
+            <Entrada value={carpeta} onChange={(e) => setCarpeta(e.target.value)} />
+          </Campo>
+          <Boton type="submit" variante="primario" icono={Send} className="w-full" cargando={enviar.isPending}>
+            {enviar.isPending ? "Copiando… (los archivos grandes tardan)" : "Enviar"}
+          </Boton>
+        </form>
+      )}
     </Modal>
   );
 }
@@ -123,6 +170,7 @@ export default function VpsArchivos() {
   const [nuevaCarpeta, setNuevaCarpeta] = useState(false);
   const [renombrar, setRenombrar] = useState<Entrada | null>(null);
   const [editar, setEditar] = useState<string | null>(null);
+  const [enviarRuta, setEnviarRuta] = useState<string | null>(null);
   const [progreso, setProgreso] = useState<string | null>(null);
   const puedeEscribir = usePuede("vps_archivos", "escritura");
   const input = useRef<HTMLInputElement>(null);
@@ -264,6 +312,9 @@ export default function VpsArchivos() {
                 ) : null}
                 {puedeEscribir ? (
                   <>
+                    {e.tipo === "archivo" ? (
+                      <Boton tamano="icono" variante="fantasma" icono={Send} aria-label={`Enviar ${e.nombre} a otro servidor`} title="Enviar a otro servidor" onClick={() => setEnviarRuta(unir(ruta, e.nombre))} />
+                    ) : null}
                     <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label={`Renombrar ${e.nombre}`} onClick={() => setRenombrar(e)} />
                     <Boton
                       tamano="icono"
@@ -293,6 +344,7 @@ export default function VpsArchivos() {
           }}
         />
       ) : null}
+      {enviarRuta && servidor ? <EnviarAServidor origenId={servidor} ruta={enviarRuta} alCerrar={() => setEnviarRuta(null)} /> : null}
       {editar ? <EditorTexto base={base} ruta={editar} alCerrar={() => setEditar(null)} /> : null}
       {renombrar ? (
         <PedirNombre

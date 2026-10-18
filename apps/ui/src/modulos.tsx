@@ -83,7 +83,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   vps_alertas: m("vps_alertas", "/vps/alertas", Siren, lazy(() => import("./pages/VpsAlertas"))),
   vps_comandos: m("vps_comandos", "/vps/comandos", ListChecks, lazy(() => import("./pages/VpsComandos"))),
   vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree, lazy(() => import("./pages/VpsArchivos"))),
-  vps_seguridad: m("vps_seguridad", "/vps/seguridad", ShieldAlert),
+  vps_seguridad: m("vps_seguridad", "/vps/seguridad", ShieldAlert, lazy(() => import("./pages/VpsSeguridad"))),
   vps_bots: m("vps_bots", "/vps/bots", Bot, lazy(() => import("./pages/VpsBots"))),
 
   pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server, lazy(() => import("./pages/Pterodactyl"))),
@@ -99,7 +99,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   correos_temporales: m("correos_temporales", "/seguridad/correos", Mail, lazy(() => import("./pages/Correos"))),
   vpn: m("vpn", "/seguridad/vpn", Shield, lazy(() => import("./pages/Vpn"))),
   navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe, lazy(() => import("./pages/NavegadorPrivado"))),
-  ciberseguridad: m("ciberseguridad", "/seguridad/ciberseguridad", Cpu),
+  ciberseguridad: m("ciberseguridad", "/seguridad/ciberseguridad", Cpu, lazy(() => import("./pages/Ciberseguridad"))),
   auditoria: m("auditoria", "/seguridad/actividad", ScrollText, lazy(() => import("./pages/Auditoria"))),
   cuentas: m("cuentas", "/seguridad/cuentas", UserCog, lazy(() => import("./pages/Cuentas"))),
 

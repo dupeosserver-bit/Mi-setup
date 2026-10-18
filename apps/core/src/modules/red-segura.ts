@@ -34,7 +34,7 @@ export function ipNoPermitida(ip: string): boolean {
   return x === "::" || x === "::1" || /^f[cd]/.test(x) || /^fe[89ab]/.test(x) || x.startsWith("ff");
 }
 
-async function validarDestino(url: URL): Promise<void> {
+export async function validarDestino(url: URL): Promise<void> {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new HttpError(400, "Solo se permiten URLs http o https");
   if (url.username || url.password) throw new HttpError(400, "La URL no puede llevar usuario ni contraseña");
   const host = url.hostname.replace(/^\[|\]$/g, "");

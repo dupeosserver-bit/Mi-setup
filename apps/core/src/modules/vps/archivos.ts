@@ -243,6 +243,53 @@ export function archivosRoutes(deps: ModuleDeps, servidores: Servidores) {
     );
 
     /**
+     * Enviar un archivo de un servidor a otro (p. ej. del home lab al VPS) sin
+     * pasar por tu equipo: se copia por SFTP de uno al otro.
+     */
+    app.post(
+      "/api/vps/servidores/:id/archivos/enviar",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "escritura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const d = z
+          .object({ ruta: z.string().min(1).max(4096), destinoId: z.string().uuid(), carpetaDestino: z.string().min(1).max(4096) })
+          .parse(request.body);
+        if (d.destinoId === id) throw new HttpError(400, "Elige otro servidor como destino");
+        const origen = rutaSchema.parse({ ruta: d.ruta }).ruta;
+        const carpeta = rutaSchema.parse({ ruta: d.carpetaDestino }).ruta;
+        await exigirRoot(request, id);
+        await exigirRoot(request, d.destinoId);
+        const destino = posix.join(carpeta, posix.basename(origen));
+        return servidores.usar(id, (c1, s1) =>
+          servidores.usar(d.destinoId, async (c2, s2) => {
+            const [a, b] = await Promise.all([abrirSftp(c1), abrirSftp(c2)]);
+            const bytes = await new Promise<number>((resolve, reject) => {
+              let total = 0;
+              const lectura = a.createReadStream(origen);
+              const escritura = b.createWriteStream(destino);
+              lectura.on("data", (p: Buffer) => (total += p.length));
+              lectura.on("error", (err: Error) => reject(new HttpError(400, `No se pudo leer: ${err.message}`)));
+              escritura.on("error", (err: Error) => reject(new HttpError(400, `No se pudo escribir en ${s2.name}: ${err.message}`)));
+              escritura.on("close", () => resolve(total));
+              lectura.pipe(escritura);
+            });
+            await deps.audit.record({
+              actorType: "usuario",
+              actorUserId: currentUser(request).id,
+              action: "archivo_enviado",
+              module: "vps_archivos",
+              target: `${s1.name}:${origen} → ${s2.name}:${destino}`,
+              outcome: "ok",
+              details: { bytes },
+              ...clientInfo(request),
+            });
+            return { ok: true, destino, bytes };
+          }),
+        );
+      },
+    );
+
+    /**
      * Borrar: un archivo se borra directo; una carpeta (con todo lo de adentro)
      * pide reautenticación fuerte y escribir su nombre. Las carpetas del sistema
      * nunca se pueden borrar.
