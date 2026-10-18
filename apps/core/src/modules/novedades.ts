@@ -48,8 +48,78 @@ export function interpretarPrecio(texto: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Extrae el precio del HTML con el selector (usa el atributo content si existe, p. ej. meta itemprop=price). */
+/** Lugares típicos del precio en tiendas conocidas (si la página no trae datos estructurados). */
+const SELECTORES_CONOCIDOS = [
+  "#corePrice_feature_div .a-offscreen", // Amazon
+  ".a-price .a-offscreen", // Amazon
+  ".ui-pdp-price__second-line .andes-money-amount__fraction", // Mercado Libre
+  ".andes-money-amount__fraction", // Mercado Libre
+  ".priceText", // Cyberpuerta
+  ".product-price", // varias tiendas
+  ".price-new",
+  ".price",
+];
+
+/** Busca un precio en datos JSON-LD (lo que las tiendas publican para Google). */
+function precioJsonLd(valor: unknown, profundidad = 0): string | null {
+  if (profundidad > 8 || valor === null || typeof valor !== "object") return null;
+  if (Array.isArray(valor)) {
+    for (const v of valor) {
+      const p = precioJsonLd(v, profundidad + 1);
+      if (p) return p;
+    }
+    return null;
+  }
+  const o = valor as Record<string, unknown>;
+  for (const clave of ["price", "lowPrice"]) {
+    const v = o[clave];
+    if ((typeof v === "number" && v > 0) || (typeof v === "string" && /\d/.test(v))) return String(v);
+  }
+  for (const clave of ["offers", "@graph", "mainEntity", "itemOffered"]) {
+    const p = precioJsonLd(o[clave], profundidad + 1);
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
+ * Modo automático (sin selector): datos estructurados primero (JSON-LD y
+ * meta de precio, los más fiables), después los lugares típicos de tiendas conocidas.
+ */
+export function detectarPrecio(html: string): { precio: number; texto: string; metodo: string } {
+  const $ = load(html);
+  const probar = (texto: string | undefined, metodo: string) => {
+    const t = (texto ?? "").trim().slice(0, 200);
+    const precio = t ? interpretarPrecio(t) : null;
+    return precio !== null && precio > 0 ? { precio, texto: t, metodo } : null;
+  };
+  for (const script of $('script[type="application/ld+json"]').toArray()) {
+    try {
+      const r = probar(precioJsonLd(JSON.parse($(script).text())) ?? undefined, "datos de la tienda (JSON-LD)");
+      if (r) return r;
+    } catch {
+      // JSON inválido en la página: se prueba lo siguiente.
+    }
+  }
+  for (const sel of ['meta[itemprop="price"]', '[itemprop="price"][content]', 'meta[property="product:price:amount"]', 'meta[property="og:price:amount"]']) {
+    const el = $(sel).first();
+    const r = el.length ? probar(el.attr("content"), "etiqueta de precio de la página") : null;
+    if (r) return r;
+  }
+  for (const sel of SELECTORES_CONOCIDOS) {
+    const el = $(sel).first();
+    const r = el.length ? probar(el.attr("content") ?? el.text(), `selector ${sel}`) : null;
+    if (r) return r;
+  }
+  throw new HttpError(
+    422,
+    "No encontré el precio automáticamente. Puede que la tienda bloquee a los robots (Amazon a veces lo hace) o que muestre el precio con JavaScript. Prueba con otra tienda o escribe el selector a mano.",
+  );
+}
+
+/** Extrae el precio del HTML: con el selector (usa el atributo content si existe) o automático si está vacío. */
 export function extraerPrecio(html: string, selector: string): { precio: number; texto: string } {
+  if (!selector.trim() || selector.trim() === "auto") return detectarPrecio(html);
   const $ = load(html);
   let el;
   try {
@@ -132,7 +202,8 @@ export async function revisarPrecios(deps: ModuleDeps): Promise<void> {
 const vigilanteSchema = z.object({
   nombre: z.string().trim().min(1).max(100),
   url: z.string().trim().url("URL inválida").max(2000).refine((u) => /^https?:\/\//i.test(u), "Solo http o https"),
-  selector: z.string().trim().min(1).max(300),
+  /** Vacío = automático (la app busca el precio sola). */
+  selector: z.string().trim().max(300).default(""),
   activo: z.boolean().default(true),
   /** Precio al que quieres comprar: avisa cuando baje a ese valor o menos. */
   objetivo: z.number().positive().max(10_000_000).nullable().default(null),
@@ -301,6 +372,14 @@ export function novedadesRoutes(deps: ModuleDeps) {
     app.get("/api/novedades/vigilante", leer, async () => {
       const filas = await deps.db.select().from(priceWatches).orderBy(desc(priceWatches.createdAt));
       return filas.map(vigilanteDto);
+    });
+
+    // Probar una página antes de guardar: dice qué precio encontró y cómo.
+    app.post("/api/novedades/vigilante/probar", escribir, async (request) => {
+      const d = vigilanteSchema.pick({ url: true, selector: true }).parse(request.body);
+      const html = await descargarTextoSeguro(d.url);
+      if (!d.selector) return detectarPrecio(html);
+      return { ...extraerPrecio(html, d.selector), metodo: `selector ${d.selector}` };
     });
 
     app.post("/api/novedades/vigilante", escribir, async (request) => {

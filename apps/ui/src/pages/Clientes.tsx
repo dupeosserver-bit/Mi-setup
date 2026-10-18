@@ -139,7 +139,7 @@ export default function Clientes() {
       />
       <ErrorCaja error={cobros.error ?? clientes.error} />
       {cobros.isLoading ? <Cargando /> : null}
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <Tarjeta titulo={`Cobros activos (${activos.length})${pendiente ? ` · vencido ${fmtDinero(pendiente)}` : ""}`} icono={Receipt}>
           {cobros.data?.length === 0 ? <Vacio icono={Receipt} texto="Registra lo que te paga cada cliente." /> : null}
           <ul className="space-y-2">

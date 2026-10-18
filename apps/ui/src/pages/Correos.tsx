@@ -132,7 +132,7 @@ export default function Correos() {
         acciones={puede ? <Boton variante="primario" icono={Plus} onClick={() => setNuevo(true)} disabled={!alias.data}>Dirección</Boton> : null}
       />
       <ErrorCaja error={alias.error ?? mensajes.error} />
-      <div className="grid gap-4 lg:grid-cols-[280px_340px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_340px_1fr]">
         <Tarjeta titulo="Direcciones" icono={Mail}>
           {alias.data?.alias.length === 0 ? <Vacio icono={Mail} texto="Crea una dirección para empezar." /> : null}
           <button type="button" onClick={() => setFiltro(null)} className={cx("mb-1 w-full rounded-lg px-2 py-1.5 text-left text-sm", filtro === null ? "bg-tarjeta" : "hover:bg-tarjeta")}>

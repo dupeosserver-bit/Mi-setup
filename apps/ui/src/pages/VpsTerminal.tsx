@@ -9,7 +9,7 @@ import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, History, KeyRound, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
+import { ClipboardPaste, Eye, EyeOff, History, KeyRound, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Punto, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { Desbloqueo } from "../components/Desbloqueo";
@@ -19,6 +19,7 @@ import { codigoTotp, type CuentaTotp } from "../lib/boveda/totp";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
+import { esMovil } from "../lib/plataforma";
 import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { pedirReauth } from "../lib/reauth";
 import { tiempoReal } from "../lib/tiempo-real";
@@ -84,12 +85,16 @@ function Consola({
   useEffect(() => {
     const contenedor = caja.current;
     if (!contenedor) return;
-    const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true });
+    // En el celular el teclado (Gboard, Samsung…) autocompleta y xterm duplica el texto:
+    // ahí se escribe desde la barra de abajo y la terminal solo muestra.
+    const movil = esMovil();
+    const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true, disableStdin: movil });
     terminal.current = term;
     const fit = new FitAddon();
     ajuste.current = fit;
     term.loadAddon(fit);
     term.open(contenedor);
+    if (movil) term.textarea?.setAttribute("inputmode", "none");
     fit.fit();
 
     const pegar = async () => {
@@ -188,7 +193,7 @@ function Consola({
     });
     registrar((texto) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos: texto });
-      term.focus();
+      if (!movil) term.focus();
     });
     const tamano = term.onResize(({ cols, rows }) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.tamano", id, cols, rows });
@@ -264,11 +269,27 @@ function CodigosParaTerminal({ alElegir }: { alElegir: (codigo: string) => void 
   );
 }
 
+/** Teclas especiales para el celular (la terminal no recibe el teclado ahí). */
+const TECLAS: [string, string][] = [
+  ["Enter", "\r"],
+  ["Tab", "\t"],
+  ["Esc", "\x1b"],
+  ["Ctrl+C", "\x03"],
+  ["↑", "\x1b[A"],
+  ["↓", "\x1b[B"],
+  ["←", "\x1b[D"],
+  ["→", "\x1b[C"],
+  ["Borrar", "\x7f"],
+  ["Ctrl+D", "\x04"],
+];
+
 const normalizar = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-");
 
 /** Barra de comandos: escribe un comando o "/nombre" de un comando guardado y Enter lo ejecuta en la pestaña activa. */
 function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: string) => void) | null; servidorId: string | null; texto: string; setTexto: (t: string) => void }) {
   const puedeComandos = usePuede("vps_comandos", "lectura");
+  const [oculto, setOculto] = useState(false);
+  const movil = esMovil();
   const comandos = useQuery({ queryKey: ["vps", "comandos"], queryFn: () => api<ComandoGuardado[]>("/api/vps/comandos"), enabled: puedeComandos });
   const busqueda = texto.startsWith("/") ? normalizar(texto.slice(1)) : null;
   const sugerencias = busqueda !== null ? (comandos.data ?? []).filter((c) => normalizar(c.nombre).includes(busqueda)).slice(0, 6) : [];
@@ -288,8 +309,10 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
       if (!ok) return;
     }
     enviar(`${comando}\r`);
-    anotar(servidorId, comando);
+    // Lo escrito en modo oculto (contraseñas) nunca va al historial.
+    if (!oculto) anotar(servidorId, comando);
     setTexto("");
+    setOculto(false);
   };
 
   const alEnviar = async (e: FormEvent) => {
@@ -300,7 +323,17 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
       await ejecutar(exacto.comando, exacto.nombre);
       return;
     }
+    if (oculto) {
+      // Contraseña o respuesta a un script: se manda tal cual, sin revisar ni guardar.
+      if (!enviar) return;
+      enviar(`${texto}\r`);
+      setTexto("");
+      setOculto(false);
+      return;
+    }
     if (texto.trim()) await ejecutar(texto);
+    // En el celular, Enter con la barra vacía manda un Enter (p. ej. "Presiona ENTER para continuar").
+    else if (movil && enviar) enviar("\r");
   };
 
   return (
@@ -316,15 +349,43 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
           ))}
         </div>
       ) : null}
+      {movil ? (
+        <div className="mb-2 flex gap-1 overflow-x-auto pb-1">
+          {TECLAS.map(([etiqueta, secuencia]) => (
+            <button
+              key={etiqueta}
+              type="button"
+              disabled={!enviar}
+              onClick={() => enviar?.(secuencia)}
+              className="shrink-0 rounded-lg border border-borde bg-fondo px-3 py-1.5 font-mono text-xs disabled:opacity-50"
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <form className="flex gap-2" onSubmit={(e) => void alEnviar(e)}>
+        <Boton
+          tamano="icono"
+          variante={oculto ? "primario" : "secundario"}
+          icono={oculto ? EyeOff : Eye}
+          onClick={() => setOculto((v) => !v)}
+          aria-label={oculto ? "Modo oculto activado" : "Escribir oculto (contraseñas)"}
+          title="Modo oculto: para contraseñas; no se muestra ni se guarda en el historial"
+        />
         <Entrada
           value={texto}
+          type={oculto ? "password" : "text"}
           onChange={(e) => setTexto(e.target.value)}
-          placeholder="Escribe un comando o /nombre de un comando guardado y pulsa Enter"
+          placeholder={oculto ? "Contraseña o respuesta (oculta)" : movil ? "Escribe aquí y pulsa Enter" : "Escribe un comando o /nombre de un comando guardado y pulsa Enter"}
           className="h-9 font-mono text-xs"
           disabled={!enviar}
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
         />
-        <Boton type="submit" tamano="icono" icono={Send} aria-label="Ejecutar" disabled={!enviar || !texto.trim()} />
+        <Boton type="submit" tamano="icono" icono={Send} aria-label="Ejecutar" disabled={!enviar || (!movil && !texto.trim())} />
       </form>
     </div>
   );
@@ -401,7 +462,7 @@ function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null;
         guardar.mutate();
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Campo etiqueta="Nombre">
           <Entrada value={d.nombre} onChange={(e) => set("nombre", e.target.value)} required />
         </Campo>
@@ -557,7 +618,7 @@ export default function VpsTerminal() {
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
         <div className="space-y-2">
           {data?.length === 0 ? <Vacio icono={Server} texto="Agrega tu VPS con su llave SSH." /> : null}
           {data?.map((s) => (

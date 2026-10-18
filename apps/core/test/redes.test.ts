@@ -3,7 +3,7 @@ import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
 import { loadConfig } from "../src/config.js";
 import { socialAccounts } from "../src/db/schema.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
-import { extraerPrecio, interpretarPrecio } from "../src/modules/novedades.js";
+import { detectarPrecio, extraerPrecio, interpretarPrecio } from "../src/modules/novedades.js";
 import { descargarTextoSeguro, ipNoPermitida } from "../src/modules/red-segura.js";
 import { limpiarCacheDiscord } from "../src/modules/redes/index.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
@@ -45,6 +45,16 @@ describe("vigilante de precios", () => {
     expect(interpretarPrecio("Agotado")).toBeNull();
     expect(extraerPrecio('<meta itemprop="price" content="1549.00"><span class="p">$9</span>', 'meta[itemprop="price"]').precio).toBe(1549);
     expect(() => extraerPrecio("<p>hola</p>", ".precio")).toThrow(/selector/);
+  });
+
+  it("modo automático: encuentra el precio sin selector", () => {
+    // JSON-LD de producto (lo más común en tiendas): gana aunque haya otros precios en la página.
+    const jsonLd = `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"RAM","offers":{"@type":"Offer","price":"1899.00","priceCurrency":"MXN"}}</script><span class="price">$2,500</span>`;
+    expect(extraerPrecio(jsonLd, "")).toMatchObject({ precio: 1899 });
+    expect(detectarPrecio(`<script type="application/ld+json">{"@graph":[{"@type":"WebPage"},{"@type":"Product","offers":[{"lowPrice":749.5}]}]}</script>`).precio).toBe(749.5);
+    expect(detectarPrecio('<meta property="product:price:amount" content="999">').precio).toBe(999);
+    expect(detectarPrecio('<div class="ui-pdp-price__second-line"><span class="andes-money-amount__fraction">1,349</span></div>').precio).toBe(1349);
+    expect(() => detectarPrecio("<p>sin precio</p>")).toThrow(/automáticamente/);
   });
 
   it("no descarga de la red interna (SSRF)", async () => {

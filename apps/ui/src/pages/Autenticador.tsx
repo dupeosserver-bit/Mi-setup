@@ -260,7 +260,7 @@ function Contenido() {
       {isLoading ? <Cargando texto="Descifrando…" /> : null}
       {data?.length ? <Entrada className="mb-3 max-w-sm" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} /> : null}
       {data?.length === 0 ? <Vacio icono={ShieldCheck} texto="Agrega tu primera cuenta con su QR o enlace otpauth." /> : null}
-      <ul className="grid gap-2 lg:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
         {lista.map((i) => (
           <Codigo key={i.id} id={i.id} cuenta={i.valor} puede={puede} />
         ))}

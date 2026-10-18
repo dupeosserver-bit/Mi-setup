@@ -48,7 +48,7 @@ function Fuentes({ alCerrar }: { alCerrar: () => void }) {
           </div>
         ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]">
         <Entrada value={nueva.nombre} onChange={(e) => setNueva({ ...nueva, nombre: e.target.value })} placeholder="Nombre" />
         <Entrada value={nueva.url} onChange={(e) => setNueva({ ...nueva, url: e.target.value })} placeholder="URL del RSS, o escribe un tema" />
         <Boton
@@ -110,7 +110,7 @@ export default function Noticias() {
       <ErrorCaja error={datos.error} />
       {datos.data?.errores.length ? <p className="text-xs text-aviso">No se pudieron leer: {datos.data.errores.map((e) => e.fuente).join(", ")}</p> : null}
       {datos.data?.noticias.length === 0 ? <Vacio icono={Newspaper} texto="Sin noticias por ahora." /> : null}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {datos.data?.noticias.map((n) => (
           <button key={n.url} type="button" onClick={() => abrirExterno(n.url)} className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-3 text-left hover:bg-tarjeta">
             {n.imagen ? <img src={n.imagen} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-20 w-28 shrink-0 rounded-lg object-cover" /> : null}

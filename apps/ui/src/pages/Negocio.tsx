@@ -60,7 +60,7 @@ export default function Negocio() {
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
       {data?.length === 0 ? <Vacio icono={Lightbulb} texto="Anota ideas para MexicanLand y llévalas a 'Hecho'." /> : null}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {COLUMNAS.map((c, ci) => (
           <section key={c.id} className="rounded-tarjeta border border-borde bg-superficie p-3">
             <h3 className="mb-3 text-sm font-semibold">

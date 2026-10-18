@@ -115,7 +115,7 @@ function Cuenta() {
   });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Tu cuenta">
         <div className="mb-4 flex items-center gap-4">
           {apariencia?.avatar ? (
@@ -200,7 +200,7 @@ function Apariencia() {
   const { data: apariencia } = useApariencia();
   const esAdmin = usePuede("ajustes", "administrar");
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Tema">
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(TEMAS_APP) as TemaApp[]).map((t) => {
@@ -280,7 +280,7 @@ function TerminalAjustes() {
   const t = prefs.terminal;
   const tema = TEMAS_XTERM[t.tema];
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Terminal SSH">
         <div className="space-y-4">
           <Campo etiqueta="Tema">
@@ -351,7 +351,7 @@ function VozIa() {
     void vocesEspanol().then(setVoces);
   }, []);
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Modelo de IA">
         <div className="space-y-2">
           <label className={cx("flex cursor-pointer items-start gap-3 rounded-xl border p-3", prefs.ia.modelo === null ? "border-acento" : "border-borde")}>
@@ -475,7 +475,7 @@ function Huella() {
 function Seguridad() {
   const navegar = useNavigate();
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Confirmar tu identidad" icono={KeyRound}>
         <div className="space-y-4">
           <Pin />
@@ -579,7 +579,7 @@ function Servicios() {
       </p>
       {claves.isLoading ? <Cargando /> : null}
       <ErrorCaja error={claves.error} />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {grupos.map((g) => (
           <Tarjeta key={g} titulo={g}>
             <div className="space-y-2">

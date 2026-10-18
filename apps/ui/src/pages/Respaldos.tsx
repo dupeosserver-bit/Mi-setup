@@ -45,7 +45,7 @@ export default function Respaldos() {
   return (
     <>
       <Encabezado titulo="Respaldos" />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Tarjeta
           titulo="Base de datos de Mi Setup"
           icono={Database}

@@ -57,7 +57,7 @@ export const Boton = forwardRef<HTMLButtonElement, BotonProps>(function Boton(
 });
 
 const CAMPO =
-  "w-full rounded-xl border border-borde bg-superficie px-3 text-sm text-texto placeholder:text-tenue focus:border-acento focus:outline-none disabled:opacity-60";
+  "w-full min-w-0 rounded-xl border border-borde bg-superficie px-3 text-sm text-texto placeholder:text-tenue focus:border-acento focus:outline-none disabled:opacity-60";
 
 export const Entrada = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Entrada(
   { className, ...props },
@@ -117,7 +117,7 @@ export function Tarjeta({
   icono?: LucideIcon;
 }) {
   return (
-    <section className={cx("rounded-tarjeta border border-borde bg-superficie p-4", className)}>
+    <section className={cx("min-w-0 rounded-tarjeta border border-borde bg-superficie p-4", className)}>
       {titulo || acciones ? (
         <header className="mb-3 flex items-center justify-between gap-3">
           <h3 className="flex min-w-0 items-center gap-2 truncate text-sm font-semibold">

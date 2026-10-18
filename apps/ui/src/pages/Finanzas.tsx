@@ -99,7 +99,7 @@ export default function Finanzas() {
       {resumen.isLoading ? <Cargando /> : null}
       {r ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
               { t: "Ingresos", v: r.totales.ingresos, i: TrendingUp, c: "text-ok" },
               { t: "Gastos", v: r.totales.gastos, i: TrendingDown, c: "text-peligro" },
@@ -125,7 +125,7 @@ export default function Finanzas() {
               formato={fmt}
             />
           </Tarjeta>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Tarjeta titulo="Gastos por categoría">
               <Dona datos={r.gastosPorCategoria} formato={fmt} />
             </Tarjeta>

@@ -81,7 +81,7 @@ export default function Inversiones() {
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
       {lista.data?.length === 0 ? <Vacio texto="Agrega símbolos para seguirlos." /> : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((c) => (
           <div key={c.simbolo} className="rounded-tarjeta border border-borde bg-superficie p-4">
             <div className="flex items-center justify-between gap-2">

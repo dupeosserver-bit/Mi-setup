@@ -47,6 +47,8 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     role: userRole("role").notNull().default("usuario"),
     isActive: boolean("is_active").notNull().default(true),
+    /** Cuenta eliminada: sin datos personales, oculta y sin acceso; la fila queda por el registro de actividad. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     /** Secreto TOTP de la app, cifrado con SERVER_ENC_KEY (fase 2). */
     totpSecretEnc: text("totp_secret_enc"),
     /** Último paso TOTP aceptado (evita reutilizar un código). */

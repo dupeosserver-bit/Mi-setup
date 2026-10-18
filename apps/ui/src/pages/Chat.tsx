@@ -321,7 +321,7 @@ export default function Chat() {
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
-      <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
         <div className={cx("min-w-0 space-y-3", params.get("canal") && "hidden md:block")}>
           {SECCIONES.map(([tipo, titulo]) => {
             const lista = (data ?? []).filter((c) => c.tipo === tipo);

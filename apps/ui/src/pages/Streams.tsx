@@ -96,7 +96,7 @@ export default function Streams() {
       <Encabezado titulo="Streams" descripcion="Cambia el título y el juego de tus transmisiones. La IA también puede proponerlo; tú apruebas." />
       {cuentas.isLoading ? <Cargando /> : null}
       <ErrorCaja error={cuentas.error} />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {lista.map((c) => (
           <Tarjeta key={c.plataforma} titulo={c.nombre}>
             <EstadoCuenta c={c} />

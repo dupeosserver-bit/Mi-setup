@@ -95,7 +95,7 @@ export default function Cripto() {
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
       {lista.data?.length === 0 ? <Vacio texto="Agrega monedas para seguirlas." /> : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((m) => (
           <div key={m.id} className="rounded-tarjeta border border-borde bg-superficie p-4">
             <div className="flex items-center gap-3">

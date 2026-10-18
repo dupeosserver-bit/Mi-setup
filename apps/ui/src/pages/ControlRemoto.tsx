@@ -120,7 +120,7 @@ export default function ControlRemoto() {
       {datos.isLoading ? <Cargando /> : null}
       <ErrorCaja error={datos.error} />
       {datos.data?.equipos.length === 0 ? <Vacio icono={MonitorUp} texto="Agrega tu PC con su ID de RustDesk." /> : null}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {datos.data?.equipos.map((e) => (
           <Tarjeta
             key={e.id}

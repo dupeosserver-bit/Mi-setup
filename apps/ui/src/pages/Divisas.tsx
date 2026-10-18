@@ -111,7 +111,7 @@ export default function Divisas() {
             </div>
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {d.destinos.map((m) => {
               const serie = (d.historial[m] ?? []).map((p) => p.valor);
               const inicio = serie[0];

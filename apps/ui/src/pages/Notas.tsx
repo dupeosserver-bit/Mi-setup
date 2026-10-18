@@ -136,7 +136,7 @@ export default function Notas() {
         acciones={puedeEditar ? <Boton variante="primario" icono={Plus} onClick={() => crear.mutate()} cargando={crear.isPending}>Nueva nota</Boton> : null}
       />
       <ErrorCaja error={error} />
-      <div className="grid gap-4 md:grid-cols-[300px_1fr]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
         <div className={cx("space-y-2", actual && "hidden md:block")}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />

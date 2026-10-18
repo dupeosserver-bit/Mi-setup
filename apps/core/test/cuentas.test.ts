@@ -68,6 +68,34 @@ describe("cuentas y permisos", () => {
     expect(vencida.json()).toMatchObject({ codigo: "reauth_requerida" });
   });
 
+  it("eliminar una cuenta borra sus datos, libera el correo y conserva el registro", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const crear = () =>
+      ctx!.app.inject({ method: "POST", url: "/api/cuentas", headers: h, payload: { email: "prueba@x.test", nombre: "Prueba", password: "Contraseña-segura-123", permisos: { notas: "escritura" } } });
+    const { id } = (await crear()).json<{ id: string }>();
+    const hu = bearer((await login(ctx, "prueba@x.test", "Contraseña-segura-123")).json<{ accessToken: string }>().accessToken);
+    await ctx.app.inject({ method: "POST", url: "/api/notas", headers: hu, payload: { titulo: "Secreta", contenido: "dato" } });
+
+    const sinConfirmar = await ctx.app.inject({ method: "DELETE", url: `/api/cuentas/${id}`, headers: h, payload: {} });
+    expect(sinConfirmar.json()).toMatchObject({ codigo: "doble_confirmacion" });
+    const ok = await ctx.app.inject({ method: "DELETE", url: `/api/cuentas/${id}`, headers: h, payload: { confirmacion: "Prueba@X.test" } });
+    expect(ok.statusCode).toBe(200);
+
+    expect((await ctx.app.inject({ method: "GET", url: "/api/notas", headers: hu })).statusCode).toBe(401);
+    expect((await login(ctx, "prueba@x.test", "Contraseña-segura-123")).statusCode).not.toBe(200);
+    const lista = (await ctx.app.inject({ method: "GET", url: "/api/cuentas", headers: h })).json<{ id: string; rol: string }[]>();
+    expect(lista.some((c) => c.id === id)).toBe(false);
+    // El correo queda libre y el registro de actividad sigue intacto.
+    expect((await crear()).statusCode).toBe(200);
+    const actividad = await ctx.app.inject({ method: "GET", url: "/api/auditoria?accion=cuenta_eliminada", headers: h });
+    expect(actividad.body).toContain("prueba@x.test");
+
+    const idMaestra = lista.find((c) => c.rol === "maestra")!.id;
+    const maestraBorrada = await ctx.app.inject({ method: "DELETE", url: `/api/cuentas/${idMaestra}`, headers: h, payload: { confirmacion: "m@x.test" } });
+    expect([400, 403]).toContain(maestraBorrada.statusCode);
+  });
+
   it("el registro de actividad filtra y exporta CSV sin fórmulas", async () => {
     ctx = await createTestContext();
     const h = await maestra(ctx);

@@ -55,7 +55,7 @@ export function InsigniaRol({ nombre, color }: { nombre: string; color: string }
 
 function EditorPermisos({ valor, alCambiar }: { valor: Permisos; alCambiar: (p: Permisos) => void }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {OTORGABLES.map((m) => (
         <label key={m} className="flex items-center justify-between gap-2 rounded-xl bg-tarjeta px-3 py-2 text-sm">
           <span className="truncate">{MODULES[m].label}</span>
@@ -179,6 +179,14 @@ function Detalle({ c }: { c: Cuenta }) {
     },
     onError: avisarError,
   });
+  const eliminar = useMutation({
+    mutationFn: () => api(`/api/cuentas/${c.id}`, { metodo: "DELETE", cuerpo: { confirmacion: c.email } }),
+    onSuccess: () => {
+      avisar("Cuenta eliminada");
+      refrescar();
+    },
+    onError: avisarError,
+  });
   const cambioPermisos = JSON.stringify(permisos) !== JSON.stringify(c.permisos);
   const cambioRoles = [...roles].sort().join() !== [...c.roles].sort().join();
 
@@ -212,6 +220,26 @@ function Detalle({ c }: { c: Cuenta }) {
             </Boton>
             <Boton tamano="sm" icono={KeyRound} onClick={() => setClave("")}>
               Restablecer contraseña
+            </Boton>
+            <Boton
+              tamano="sm"
+              variante="peligro"
+              icono={Trash2}
+              cargando={eliminar.isPending}
+              onClick={async () => {
+                const ok = await confirmar({
+                  titulo: `Eliminar la cuenta de ${c.nombre}`,
+                  mensaje:
+                    "Se borran sus notas, recordatorios, chats, sesiones y permisos, y desaparece de la lista. El correo queda libre para usarlo otra vez. El registro de actividad se conserva. No se puede deshacer.",
+                  detalle: c.email,
+                  peligroso: true,
+                  textoExacto: c.email,
+                  boton: "Eliminar",
+                });
+                if (ok) eliminar.mutate();
+              }}
+            >
+              Eliminar cuenta
             </Boton>
           </div>
           <p className="text-sm font-medium">Permisos extra (además de los de sus roles)</p>
@@ -322,7 +350,7 @@ function EditorRol({ inicial, alCerrar }: { inicial: Rol | null; alCerrar: () =>
         guardar.mutate();
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
         <Campo etiqueta="Nombre del rol">
           <Entrada value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} placeholder="Ej. Moderador" required maxLength={40} />
         </Campo>

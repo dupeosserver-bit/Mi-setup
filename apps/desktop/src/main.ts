@@ -86,6 +86,9 @@ function crearVentana(): void {
       spellcheck: false,
     },
   });
+  // Sin barra Archivo/Editar/Ver: el menú sigue existiendo (atajos como Ctrl+C,
+  // Ctrl+V, Ctrl+N o el zoom funcionan) pero no se muestra.
+  ventana.setMenuBarVisibility(false);
   ventana.once("ready-to-show", () => ventana?.show());
   vigilarCarga(ventana.webContents);
   ventana.webContents.setWindowOpenHandler(({ url }) => {
@@ -278,6 +281,7 @@ function crearBandeja(): void {
     Menu.buildFromTemplate([
       { label: "Abrir Mi Setup", click: mostrar },
       { label: "Navegador privado", click: () => abrirNavegadorPrivado() },
+      { label: "Cambiar servidor…", click: () => void cambiarServidor() },
       { type: "separator" },
       { label: "Salir", click: salir },
     ]),

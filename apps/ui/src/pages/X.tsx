@@ -74,7 +74,7 @@ export default function X() {
         </Tarjeta>
       ) : null}
       {cuenta?.cuenta ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {puedeEscribir ? (
             <Tarjeta titulo="Publicar">
               <AreaTexto rows={4} maxLength={280} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="¿Qué quieres publicar?" />

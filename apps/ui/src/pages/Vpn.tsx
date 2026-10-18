@@ -136,7 +136,7 @@ export default function Vpn() {
         </div>
       ) : null}
       {data?.dispositivos.length === 0 ? <Vacio icono={Shield} texto="Agrega tu celular o tu PC para usar la VPN." /> : null}
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {data?.dispositivos.map((d) => (
           <Tarjeta
             key={d.id}

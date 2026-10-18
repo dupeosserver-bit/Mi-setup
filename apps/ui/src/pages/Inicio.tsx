@@ -35,7 +35,7 @@ export default function Inicio() {
       <div className="mb-6">
         <EsteEquipo />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {verEquipos ? (
           <Tarjeta titulo="Equipos" icono={MonitorSmartphone} acciones={<Link to="/equipos" className="text-xs text-tenue hover:text-texto">Ver</Link>}>
             {equipos.data?.length ? (

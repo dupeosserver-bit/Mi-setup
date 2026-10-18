@@ -188,7 +188,7 @@ function Editor({ inicial, carpetas, alTerminar }: { inicial: Item | null; carpe
           <option value="nota">Nota segura</option>
         </Selector>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Campo etiqueta="Nombre">
           <Entrada value={d.nombre} onChange={(e) => set("nombre", e.target.value)} required autoFocus />
         </Campo>
@@ -391,7 +391,7 @@ function Contenido() {
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando texto="Descifrando…" /> : null}
-      <div className="grid gap-4 lg:grid-cols-[200px_320px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_320px_1fr]">
         <nav className="space-y-1 text-sm">
           <button type="button" onClick={() => setCarpeta(null)} className={cx("flex w-full items-center gap-2 rounded-lg px-3 py-2", carpeta === null ? "bg-tarjeta" : "hover:bg-tarjeta")}>
             <KeyRound className="h-4 w-4 text-tenue" /> Todo ({data?.length ?? 0})

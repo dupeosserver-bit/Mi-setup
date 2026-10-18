@@ -119,7 +119,7 @@ export default function VpsComandos() {
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
       {data?.length === 0 ? <Vacio icono={ListChecks} texto="Crea botones para tus scripts, por ejemplo vps-manager.sh." /> : null}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {data?.map((c) => (
           <Tarjeta
             key={c.id}

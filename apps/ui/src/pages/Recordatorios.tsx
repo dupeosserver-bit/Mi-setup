@@ -54,7 +54,7 @@ function Formulario({ inicial, alTerminar }: { inicial: Recordatorio | null; alT
       <Campo etiqueta="Título">
         <Entrada value={titulo} onChange={(e) => setTitulo(e.target.value)} required maxLength={200} autoFocus />
       </Campo>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Campo etiqueta="Fecha y hora">
           <Entrada type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} required />
         </Campo>
@@ -168,7 +168,7 @@ export default function Recordatorios() {
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Tarjeta titulo={`Pendientes (${pendientes.length})`} icono={Bell}>
           {pendientes.length ? <ul className="space-y-2">{pendientes.map(fila)}</ul> : <Vacio icono={Bell} texto="Nada pendiente." />}
         </Tarjeta>

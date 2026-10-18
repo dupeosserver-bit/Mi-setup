@@ -91,7 +91,7 @@ function Enviar({ canales }: { canales: CanalDiscord[] }) {
     onError: avisarError,
   });
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Tarjeta titulo="Nuevo mensaje">
         <div className="space-y-3">
           <Campo etiqueta="Canal">
@@ -259,7 +259,7 @@ function Servidores() {
     <div className="space-y-3">
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((s) => (
           <div key={s.id} className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4">
             {s.icono ? <img src={s.icono} alt="" className="h-12 w-12 rounded-full" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tarjeta font-semibold">{s.nombre.slice(0, 1)}</div>}

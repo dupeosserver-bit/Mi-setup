@@ -47,7 +47,7 @@ function Detalle({ equipo }: { equipo: Equipo }) {
   return (
     <div className="space-y-4">
       {equipo.tipo === "pc" || ultimo?.cpu !== undefined ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <p className="mb-1 text-xs text-tenue">CPU · {fmtPct(ultimo?.cpu)}</p>
             <LineaEnVivo datos={puntos} series={[{ clave: "cpu", nombre: "CPU" }]} formato={(v) => `${v.toFixed(0)}%`} dominio={[0, 100]} />
@@ -73,7 +73,7 @@ function Detalle({ equipo }: { equipo: Equipo }) {
           </div>
         </div>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {m?.bateria ? (
           <Anillo valor={m.bateria.nivel} total={100} etiqueta="Batería" detalle={m.bateria.cargando ? "Cargando" : "Sin cargar"} invertido />
         ) : null}
@@ -130,7 +130,7 @@ export default function Equipos() {
       <Encabezado titulo="Equipos" descripcion="PC y celular vinculados. Latido cada 15 s; se marcan como desconectados a los 45 s." />
       <ErrorCaja error={error} />
       {data && data.length === 0 ? <Vacio icono={MonitorSmartphone} texto="Abre la app en tu PC o en tu celular para registrarlos." /> : null}
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
         <div className="space-y-2">
           {data?.map((e) => {
             const Icono = ICONOS[e.tipo];

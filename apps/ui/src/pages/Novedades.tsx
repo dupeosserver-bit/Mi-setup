@@ -266,7 +266,7 @@ function Ofertas() {
       </div>
       {ofertas.isLoading ? <Cargando /> : null}
       <ErrorCaja error={ofertas.error} />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {ofertas.data?.map((o) => (
           <button
             key={o.id}
@@ -323,7 +323,7 @@ function JuegosGratis() {
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
       {lista.data?.length === 0 ? <Vacio icono={Gift} texto="No hay juegos gratis activos para esa plataforma." /> : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((g) => (
           <button key={g.id} type="button" onClick={() => abrirExterno(g.url)} className="overflow-hidden rounded-tarjeta border border-borde bg-superficie text-left hover:bg-tarjeta">
             <img src={g.imagen} alt={g.titulo} loading="lazy" referrerPolicy="no-referrer" className="h-32 w-full object-cover" />
@@ -380,29 +380,45 @@ function Historial({ id, objetivo }: { id: string; objetivo: number | null }) {
 
 function ComoFunciona() {
   return (
-    <Tarjeta titulo="¿Cómo se configura? (léelo una vez)" icono={Info}>
+    <Tarjeta titulo="¿Cómo se usa? (3 pasos)" icono={Info}>
       <ol className="list-decimal space-y-2 pl-5 text-sm text-tenue">
-        <li>Abre la página del producto (la RAM) en tu navegador y copia la dirección (URL).</li>
         <li>
-          Haz clic derecho sobre el <b className="text-texto">precio que pagarías</b> → <b className="text-texto">Inspeccionar</b>. Se marca un trozo de código; fíjate en su{" "}
-          <code>class</code> o <code>id</code>.
+          En tu celular o PC abre el producto en la tienda y <b className="text-texto">copia el enlace</b> (en el celular: Compartir → Copiar enlace).
         </li>
         <li>
-          Escribe el selector: si dice <code>class="precio-final"</code> pon <code>.precio-final</code>; si dice <code>id="price"</code> pon <code>#price</code>. Muchas tiendas tienen{" "}
-          <code>meta[itemprop="price"]</code>, que da el precio sin símbolos.
+          Toca <b className="text-texto">Vigilar URL</b>, pega el enlace y toca <b className="text-texto">Probar</b>: la app busca el precio sola y te dice cuánto encontró.
         </li>
         <li>
-          <b className="text-texto">Si el producto tiene descuento</b>, la página muestra dos precios: el tachado (antes) y el nuevo (ahora). Usa siempre el selector del{" "}
-          <b className="text-texto">precio nuevo</b>, el que pagas. Si el selector apunta al tachado, la app leerá el precio viejo.
+          Si el precio es correcto, pon tu <b className="text-texto">precio objetivo</b> (opcional) y guarda. Te llega un aviso cuando baje a esa cantidad o menos.
         </li>
-        <li>Pon un "precio objetivo" (opcional): te llega un aviso cuando el precio baje a esa cantidad o menos.</li>
       </ol>
-      <p className="mt-2 text-xs text-tenue">Si después de guardar aparece un error en rojo, revisa el selector. Algunas tiendas (Amazon, Mercado Libre) cambian su página a menudo o bloquean robots.</p>
+      <p className="mt-2 text-xs text-tenue">
+        Si "Probar" no encuentra el precio, la tienda bloquea a los robots o lo muestra con JavaScript: prueba el mismo producto en otra tienda. Solo si sabes hacerlo, abre "Opciones
+        avanzadas" y escribe el selector CSS del precio nuevo (no el tachado).
+      </p>
     </Tarjeta>
   );
 }
 
+interface Prueba {
+  precio: number;
+  texto: string;
+  metodo: string;
+}
+
 const VACIO_VIGILANTE = { nombre: "", url: "", selector: "", objetivo: "" };
+
+/** "https://www.tienda.com/memoria-ram-ddr5-32gb/p/123" → "Memoria ram ddr5 32gb" */
+function nombreDesdeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const parte = u.pathname.split("/").filter((p) => /[a-z]{3,}/i.test(p) && p.length > 6).sort((a, b) => b.length - a.length)[0];
+    const texto = (parte ?? u.hostname).replace(/[-_]+/g, " ").replace(/\.\w+$/, "").trim().slice(0, 60);
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  } catch {
+    return "";
+  }
+}
 
 function Precios() {
   const puede = usePuede("novedades", "escritura");
@@ -423,6 +439,16 @@ function Precios() {
       refrescar();
     },
     onError: avisarError,
+  });
+  const [prueba, setPrueba] = useState<Prueba | null>(null);
+  const probar = useMutation({
+    mutationFn: () => api<Prueba>("/api/novedades/vigilante/probar", { cuerpo: { url: d.url.trim(), selector: d.selector } }),
+    onMutate: () => setPrueba(null),
+    onSuccess: (r) => {
+      setPrueba(r);
+      // Si no puso nombre, se sugiere uno a partir del enlace.
+      if (!d.nombre.trim()) setD((v) => ({ ...v, nombre: nombreDesdeUrl(v.url) }));
+    },
   });
   const revisar = useMutation({
     mutationFn: (id: string) => api(`/api/novedades/vigilante/${id}/revisar`, { metodo: "POST" }),
@@ -453,7 +479,7 @@ function Precios() {
       <ComoFunciona />
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.length === 0 ? <Vacio texto="Agrega la página de una tienda y el selector CSS del precio." /> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {lista.data?.map((w) => (
           <Tarjeta
             key={w.id}
@@ -531,12 +557,47 @@ function Precios() {
           <Campo etiqueta="Nombre">
             <Entrada value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} placeholder="RAM DDR5 32 GB" required />
           </Campo>
-          <Campo etiqueta="URL de la tienda">
-            <Entrada type="url" value={d.url} onChange={(e) => setD({ ...d, url: e.target.value })} placeholder="https://…" required />
+          <Campo etiqueta="Enlace del producto">
+            <div className="flex gap-2">
+              <Entrada
+                type="url"
+                value={d.url}
+                onChange={(e) => {
+                  setD({ ...d, url: e.target.value });
+                  setPrueba(null);
+                }}
+                placeholder="Pega aquí el enlace de la tienda"
+                required
+              />
+              <Boton icono={Search} cargando={probar.isPending} disabled={!d.url.trim()} onClick={() => probar.mutate()}>
+                Probar
+              </Boton>
+            </div>
           </Campo>
-          <Campo etiqueta="Selector CSS del precio que pagas" ayuda='Si hay descuento, usa el del precio NUEVO (no el tachado). Ej.: ".precio-final", "#price" o meta[itemprop="price"].'>
-            <Entrada value={d.selector} onChange={(e) => setD({ ...d, selector: e.target.value })} placeholder=".product-price" required />
-          </Campo>
+          {prueba ? (
+            <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm">
+              <p>
+                Precio encontrado: <b className="text-lg">{prueba.precio.toLocaleString("es-MX")}</b>
+              </p>
+              <p className="text-xs text-tenue">
+                Leído: "{prueba.texto}" · {prueba.metodo}. Si no es el precio correcto (por ejemplo, es el tachado), usa las opciones avanzadas.
+              </p>
+            </div>
+          ) : null}
+          <ErrorCaja error={probar.error} />
+          <details>
+            <summary className="cursor-pointer text-xs text-tenue">Opciones avanzadas (selector CSS)</summary>
+            <Campo etiqueta="Selector CSS del precio" ayuda='Vacío = automático. Si hay descuento, usa el del precio NUEVO. Ej.: ".precio-final", "#price".'>
+              <Entrada
+                value={d.selector}
+                onChange={(e) => {
+                  setD({ ...d, selector: e.target.value });
+                  setPrueba(null);
+                }}
+                placeholder="Automático"
+              />
+            </Campo>
+          </details>
           <Campo etiqueta="Precio objetivo (opcional)" ayuda="Te avisa cuando baje a este precio o menos.">
             <Entrada type="number" min={0} step="0.01" value={d.objetivo} onChange={(e) => setD({ ...d, objetivo: e.target.value })} placeholder="Ej. 1500" />
           </Campo>

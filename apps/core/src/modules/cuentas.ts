@@ -1,12 +1,13 @@
 /**
  * Cuentas y permisos (solo la cuenta maestra) y Registro de actividad.
- * Las cuentas no se borran: se desactivan (la auditoría las referencia).
+ * Las cuentas se desactivan o se eliminan (vaciadas: la auditoría las referencia).
  * Todo cambio pide reautenticación fuerte y queda auditado.
  */
 import { MODULE_IDS, PERMISSION_LEVELS, passwordSchema, sanitizePermissionMap, type PermissionMap } from "@mi-setup/shared";
 import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { hashSecret } from "../auth/password.js";
 import { auditLog, sessions, userModulePermissions, userRoles, users } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
@@ -55,7 +56,7 @@ export function cuentasRoutes(deps: ModuleDeps) {
 
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/cuentas", { config: { acceso: { modulo: "cuentas", nivel: "lectura" } } }, async () => {
-      const lista = await db.select().from(users).orderBy(users.createdAt);
+      const lista = await db.select().from(users).where(isNull(users.deletedAt)).orderBy(users.createdAt);
       const permisos = await db.select().from(userModulePermissions);
       const asignados = await db.select().from(userRoles);
       const activas = await db
@@ -146,6 +147,62 @@ export function cuentasRoutes(deps: ModuleDeps) {
       const u = await cuentaEditable(id);
       await revocarSesiones(id);
       await deps.audit.record({ actorType: "usuario", actorUserId: yo.id, action: "sesiones_cerradas", module: "cuentas", target: u.email, outcome: "ok", ...clientInfo(request) });
+      return { ok: true };
+    });
+
+    /**
+     * Eliminar una cuenta (nunca la maestra ni la propia). El registro de
+     * actividad es inmutable y la referencia, así que la fila queda pero vacía:
+     * se borran todos sus datos (notas, recordatorios, sesiones, permisos…), se
+     * libera el correo y queda oculta y sin acceso.
+     */
+    app.delete("/api/cuentas/:id", administrar, async (request) => {
+      const yo = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const { confirmacion } = z.object({ confirmacion: z.string().max(200).optional() }).parse(request.body ?? {});
+      if (id === yo.id) throw new HttpError(400, "No puedes eliminar tu propia cuenta");
+      const u = await cuentaEditable(id);
+      if (u.deletedAt) throw new HttpError(404, "Cuenta no encontrada");
+      if (confirmacion?.trim().toLowerCase() !== u.email.toLowerCase()) {
+        throw new HttpError(400, `Escribe el correo ${u.email} para confirmar`, "doble_confirmacion");
+      }
+      // Tablas que apuntan a users: las de "ON DELETE CASCADE" son datos de la cuenta (se borran)
+      // y las de "SET NULL" solo recuerdan quién creó algo compartido (se dejan sin autor).
+      const resultado = await db.execute(sql`
+        SELECT kcu.table_name AS tabla, kcu.column_name AS columna, rc.delete_rule AS regla
+        FROM information_schema.referential_constraints rc
+        JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = rc.constraint_name AND kcu.constraint_schema = rc.constraint_schema
+        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = rc.unique_constraint_name AND ccu.constraint_schema = rc.unique_constraint_schema
+        WHERE ccu.table_name = 'users' AND ccu.column_name = 'id' AND rc.delete_rule IN ('CASCADE', 'SET NULL')`);
+      // Postgres y PGlite devuelven las filas en .rows.
+      const referencias = (resultado as unknown as { rows: { tabla: string; columna: string; regla: string }[] }).rows;
+      const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
+      const nuevoHash = await hashSecret(randomBytes(32).toString("base64url"));
+      await db.transaction(async (tx) => {
+        for (const r of referencias) {
+          const tabla = sql.raw(ident(r.tabla));
+          const columna = sql.raw(ident(r.columna));
+          if (r.regla === "CASCADE") await tx.execute(sql`DELETE FROM ${tabla} WHERE ${columna} = ${id}`);
+          else await tx.execute(sql`UPDATE ${tabla} SET ${columna} = NULL WHERE ${columna} = ${id}`);
+        }
+        await tx
+          .update(users)
+          .set({
+            email: `eliminada-${id}@cuentas.invalid`,
+            displayName: "Cuenta eliminada",
+            passwordHash: nuevoHash,
+            isActive: false,
+            deletedAt: deps.now(),
+            totpSecretEnc: null,
+            totpLastStep: null,
+            pinHash: null,
+            avatarPath: null,
+            updatedAt: deps.now(),
+          })
+          .where(eq(users.id, id));
+      });
+      deps.hub.publicar(`usuario:${id}`, { recurso: "me" });
+      await deps.audit.record({ actorType: "usuario", actorUserId: yo.id, action: "cuenta_eliminada", module: "cuentas", target: u.email, outcome: "ok", ...clientInfo(request) });
       return { ok: true };
     });
 

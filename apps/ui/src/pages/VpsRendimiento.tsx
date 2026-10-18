@@ -43,7 +43,7 @@ function Panel({ id }: { id: string }) {
   if (ultimo?.error) return <Vacio icono={Activity} texto={ultimo.error} />;
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Tarjeta titulo={`CPU · ${fmtPct(p?.cpu)}`}>
           <LineaEnVivo datos={puntos} series={[{ clave: "cpu", nombre: "CPU" }]} formato={(v) => `${v.toFixed(0)}%`} dominio={[0, 100]} />
         </Tarjeta>

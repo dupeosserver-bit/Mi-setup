@@ -54,7 +54,7 @@ export function EsteEquipo() {
         <MonitorSmartphone className="h-4 w-4 text-tenue" /> {titulo}
         {s?.nombreEquipo ? <span className="text-sm font-normal text-tenue">· {s.nombreEquipo}</span> : null}
       </h2>
-      <div className="grid gap-2 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         <Dato icono={Monitor} etiqueta="Sistema" valor={s?.sistema ?? "…"} />
         <Dato icono={Cpu} etiqueta="Procesador" valor={s ? `${s.procesador}${s.nucleos && !s.procesador.includes("núcleos") ? ` · ${s.nucleos} núcleos` : ""}` : "…"} />
         <Dato icono={Gauge} etiqueta="Gráficos" valor={s?.graficos.length ? s.graficos.join(", ") : "—"} />
