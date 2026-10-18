@@ -90,3 +90,19 @@ describe("películas", () => {
     expect(r.json()).toEqual({ conectado: false, configurado: false });
   });
 });
+
+describe("respaldo de mis datos", () => {
+  it("descarga solo lo tuyo en JSON", async () => {
+    const h = await preparar();
+    const app = ctx!.app;
+    await app.inject({ method: "POST", url: "/api/peliculas/por-ver", headers: h, payload: { tmdbId: 1, tipo: "tv", titulo: "Serie", poster: null } });
+    const r = await app.inject({ method: "GET", url: "/api/respaldos/mis-datos", headers: h });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers["content-disposition"]).toContain("mis-datos-");
+    const d = r.json<{ cuenta: { correo: string }; porVer: unknown[]; notas: unknown[] }>();
+    expect(d.cuenta.correo).toBe("u@x.test");
+    expect(d.porVer).toHaveLength(1);
+    // Un usuario normal no puede bajar la base completa.
+    expect((await app.inject({ method: "GET", url: "/api/respaldos/base/descargar/x.sql", headers: h })).statusCode).toBeGreaterThanOrEqual(400);
+  });
+});

@@ -1,10 +1,10 @@
 /** Respaldos: base de datos de Mi Setup (cron del script del VPS) y servidores de juego (Pterodactyl). */
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Database, Gamepad2 } from "lucide-react";
+import { Archive, Database, Download, FileJson, Gamepad2 } from "lucide-react";
 import { useState } from "react";
-import { Cargando, Encabezado, ErrorCaja, Insignia, Selector, Tarjeta, Vacio } from "../components/ui";
-import { api } from "../lib/api";
-import { usePuede } from "../lib/consultas";
+import { Boton, Cargando, Encabezado, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisarError } from "../components/ui";
+import { api, descargar } from "../lib/api";
+import { useMe, usePuede } from "../lib/consultas";
 import { fmtBytes, fmtFechaHora, haceCuanto } from "../lib/formato";
 import { RespaldosServidor } from "./Pterodactyl";
 
@@ -41,6 +41,7 @@ function ServidoresJuego() {
 
 export default function Respaldos() {
   const verPtero = usePuede("pterodactyl");
+  const maestra = useMe().data?.usuario.role === "maestra";
   const base = useQuery({ queryKey: ["respaldos", "base"], queryFn: () => api<EstadoBase>("/api/respaldos/base"), retry: false });
   return (
     <>
@@ -64,12 +65,26 @@ export default function Respaldos() {
             {base.data?.archivos.map((a) => (
               <li key={a.nombre} className="flex justify-between gap-2 rounded-lg bg-fondo px-3 py-1.5 text-xs">
                 <span className="truncate">{a.nombre}</span>
-                <span className="shrink-0 text-tenue">{fmtFechaHora(a.fecha)} · {fmtBytes(a.bytes)}</span>
+                <span className="flex shrink-0 items-center gap-2 text-tenue">
+                  {fmtFechaHora(a.fecha)} · {fmtBytes(a.bytes)}
+                  {maestra ? (
+                    <button type="button" aria-label={`Descargar ${a.nombre}`} className="hover:text-texto" onClick={() => void descargar(`/api/respaldos/base/descargar/${encodeURIComponent(a.nombre)}`, a.nombre).catch(avisarError)}>
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
         </Tarjeta>
         {verPtero ? <ServidoresJuego /> : null}
+        <Tarjeta titulo="Mis datos" icono={FileJson}>
+          <p className="text-sm text-tenue">Descarga todo lo tuyo (notas, tareas, finanzas, suscripciones, calendario, enlaces, prompts y tu lista por ver) en un archivo. Guárdalo en tu PC o en la nube.</p>
+          <Boton className="mt-3" icono={Download} onClick={() => void descargar("/api/respaldos/mis-datos", `mis-datos-${new Date().toISOString().slice(0, 10)}.json`).catch(avisarError)}>
+            Descargar mis datos
+          </Boton>
+          <p className="mt-3 text-xs text-tenue">Tus archivos subidos (música, videos, compartidos) viven en el volumen misetup_archivos del VPS; el script de respaldo también los copia (ver USO.md).</p>
+        </Tarjeta>
       </div>
     </>
   );
