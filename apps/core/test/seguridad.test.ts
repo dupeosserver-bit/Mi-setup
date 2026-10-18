@@ -65,3 +65,12 @@ describe("ciberseguridad", () => {
     expect(revisarCorreo([], [])[0]?.estado).toBe("aviso");
   });
 });
+
+describe("dominio raíz para SPF/DMARC", () => {
+  it("quita subdominios y respeta .com.mx", async () => {
+    const { dominioRaiz } = await import("../src/modules/ciberseguridad.js");
+    expect(dominioRaiz("setup.mexicanland.net")).toBe("mexicanland.net");
+    expect(dominioRaiz("www.pasteleria.com.mx")).toBe("pasteleria.com.mx");
+    expect(dominioRaiz("mexicanland.org")).toBe("mexicanland.org");
+  });
+});

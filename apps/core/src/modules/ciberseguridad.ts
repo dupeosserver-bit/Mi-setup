@@ -60,6 +60,14 @@ export function revisarCorreo(txt: string[], dmarc: string[]): Revision[] {
   ];
 }
 
+/** Dominio donde viven SPF y DMARC: "setup.mexicanland.net" → "mexicanland.net", "x.tienda.com.mx" → "tienda.com.mx". */
+export function dominioRaiz(host: string): string {
+  const partes = host.toLowerCase().replace(/\.$/, "").split(".");
+  const n = partes.length;
+  const compuesto = n >= 3 && partes[n - 1]!.length === 2 && ["com", "org", "net", "gob", "edu", "co"].includes(partes[n - 2]!);
+  return partes.slice(compuesto ? -3 : -2).join(".");
+}
+
 function certificado(host: string): Promise<{ cert: PeerCertificate; protocolo: string | null; autorizado: boolean; error?: string }> {
   return new Promise((resolve, reject) => {
     const s = connect({ host, port: 443, servername: host, rejectUnauthorized: false, timeout: 8_000 }, () => {
@@ -82,13 +90,21 @@ export function ciberseguridadRoutes(deps: ModuleDeps) {
       const { sitio } = z.object({ sitio: z.string().trim().min(3).max(300) }).parse(request.body);
       const url = new URL(/^https?:\/\//i.test(sitio) ? sitio : `https://${sitio}`);
       url.protocol = "https:";
-      await validarDestino(url);
       const host = url.hostname;
-      const dominio = host.replace(/^www\./, "");
+      const dominio = dominioRaiz(host);
       const revisiones: Revision[] = [];
+      // Bloquea IPs internas; un dominio sin servidor igual se revisa en su correo.
+      const sinServidor = await validarDestino(url).then(
+        () => false,
+        (err: unknown) => {
+          if (err instanceof HttpError && /resolver/.test(err.message)) return true;
+          throw err;
+        },
+      );
 
-      // Certificado
-      try {
+      if (sinServidor) {
+        revisiones.push({ id: "dns", titulo: "Dirección del sitio", estado: "aviso", detalle: `${host} no apunta a ningún servidor (sin registro A). Si tu página está en un subdominio, revisa ese (p. ej. setup.${dominio}).` });
+      } else try {
         const c = await certificado(host);
         const vence = new Date(c.cert.valid_to);
         const dias = Math.floor((vence.getTime() - deps.now().getTime()) / 86_400_000);
@@ -111,7 +127,7 @@ export function ciberseguridadRoutes(deps: ModuleDeps) {
       }
 
       // Cabeceras (sin seguir redirecciones a otros sitios)
-      const r = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(10_000), headers: { "user-agent": "Mozilla/5.0 (MiSetup revisión de seguridad)" } }).catch(() => null);
+      const r = sinServidor ? null : await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(10_000), headers: { "user-agent": "Mozilla/5.0 (MiSetup revisión de seguridad)" } }).catch(() => null);
       if (r) {
         revisiones.push(...revisarCabeceras(r.headers));
         const servidor = r.headers.get("server");
@@ -119,7 +135,7 @@ export function ciberseguridadRoutes(deps: ModuleDeps) {
         if (powered || (servidor && /\d/.test(servidor))) {
           revisiones.push({ id: "version", titulo: "Muestra versiones del servidor", estado: "aviso", detalle: `Le dice a los atacantes qué usas: ${[servidor, powered].filter(Boolean).join(", ")}` });
         }
-      } else revisiones.push({ id: "respuesta", titulo: "Respuesta del sitio", estado: "mal", detalle: "No respondió." });
+      } else if (!sinServidor) revisiones.push({ id: "respuesta", titulo: "Respuesta del sitio", estado: "mal", detalle: "No respondió." });
 
       // Correo del dominio
       const [txt, dmarc] = await Promise.all([
