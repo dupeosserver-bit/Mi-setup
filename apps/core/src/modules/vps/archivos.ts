@@ -1,5 +1,6 @@
 /**
- * Explorador SFTP: ver carpetas, descargar y subir archivos. En servidores con
+ * Explorador SFTP: ver carpetas, descargar, subir, crear carpetas, renombrar y
+ * borrar archivos. En servidores con
  * usuario root se exige reautenticación fuerte.
  */
 import { posix } from "node:path";
@@ -10,7 +11,7 @@ import { HttpError } from "../../http-error.js";
 import { currentUser } from "../../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "../common.js";
 import type { Servidores } from "./servidores.js";
-import { abrirSftp } from "./ssh.js";
+import { abrirSftp, citar, ejecutar } from "./ssh.js";
 
 const MAX_SUBIDA = 100 * 1024 * 1024;
 
@@ -19,7 +20,8 @@ const rutaSchema = z.object({
     .string()
     .max(4096)
     .default("/")
-    .transform((r) => posix.normalize(r.startsWith("/") ? r : `/${r}`)),
+    // Sin la barra final ("/etc/" → "/etc"), para que las carpetas protegidas se reconozcan siempre.
+    .transform((r) => posix.normalize(r.startsWith("/") ? r : `/${r}`).replace(/(.)\/+$/, "$1")),
 });
 
 export function archivosRoutes(deps: ModuleDeps, servidores: Servidores) {
@@ -134,5 +136,89 @@ export function archivosRoutes(deps: ModuleDeps, servidores: Servidores) {
         });
       },
     );
+
+    const registrar = (request: FastifyRequest, action: string, target: string) =>
+      deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action, module: "vps_archivos", target, outcome: "ok", ...clientInfo(request) });
+
+    app.post(
+      "/api/vps/servidores/:id/archivos/carpeta",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "escritura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const { ruta } = rutaSchema.parse(request.body ?? {});
+        await exigirRoot(request, id);
+        return servidores.usar(id, async (cliente, servidor) => {
+          const sftp = await abrirSftp(cliente);
+          await new Promise<void>((resolve, reject) =>
+            sftp.mkdir(ruta, (err) => (err ? reject(new HttpError(400, `No se pudo crear la carpeta: ${err.message}`)) : resolve())),
+          );
+          await registrar(request, "carpeta_creada", `${servidor.name}:${ruta}`);
+          return { ok: true, ruta };
+        });
+      },
+    );
+
+    app.post(
+      "/api/vps/servidores/:id/archivos/renombrar",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "escritura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const { de, a } = z.object({ de: rutaSchema.shape.ruta, a: rutaSchema.shape.ruta }).parse(request.body);
+        if (RUTAS_PROTEGIDAS.has(de)) throw new HttpError(400, "Esa carpeta del sistema no se puede mover");
+        await exigirRoot(request, id);
+        return servidores.usar(id, async (cliente, servidor) => {
+          const sftp = await abrirSftp(cliente);
+          await new Promise<void>((resolve, reject) =>
+            sftp.rename(de, a, (err) => (err ? reject(new HttpError(400, `No se pudo renombrar: ${err.message}`)) : resolve())),
+          );
+          await registrar(request, "archivo_renombrado", `${servidor.name}:${de} → ${a}`);
+          return { ok: true, ruta: a };
+        });
+      },
+    );
+
+    /**
+     * Borrar: un archivo se borra directo; una carpeta (con todo lo de adentro)
+     * pide reautenticación fuerte y escribir su nombre. Las carpetas del sistema
+     * nunca se pueden borrar.
+     */
+    app.delete(
+      "/api/vps/servidores/:id/archivos",
+      { config: { acceso: { modulo: "vps_archivos", nivel: "escritura" } } },
+      async (request) => {
+        const { id } = idParams.parse(request.params);
+        const { ruta } = rutaSchema.parse(request.query);
+        const { confirmacion } = z.object({ confirmacion: z.string().max(300).optional() }).parse(request.body ?? {});
+        if (RUTAS_PROTEGIDAS.has(ruta)) throw new HttpError(400, "Esa carpeta del sistema no se puede borrar");
+        await exigirRoot(request, id);
+        return servidores.usar(id, async (cliente, servidor) => {
+          const sftp = await abrirSftp(cliente);
+          const stat = await new Promise<import("ssh2").Stats>((resolve, reject) =>
+            sftp.lstat(ruta, (err, s) => (err ? reject(new HttpError(404, "No existe")) : resolve(s))),
+          );
+          if (stat.isDirectory()) {
+            if (!reauthSatisfies(currentUser(request), "fuerte", deps.now())) {
+              throw new HttpError(403, "Borrar una carpeta: confirma con contraseña o huella", "reauth_requerida", { metodo: "fuerte" });
+            }
+            if (confirmacion !== posix.basename(ruta)) {
+              throw new HttpError(400, `Escribe "${posix.basename(ruta)}" para confirmar`, "doble_confirmacion");
+            }
+            const r = await ejecutar(cliente, `rm -rf -- ${citar(ruta)}`, { timeoutMs: 300_000 });
+            if (r.codigo !== 0) throw new HttpError(400, `No se pudo borrar: ${r.error.trim() || `código ${r.codigo}`}`);
+          } else {
+            await new Promise<void>((resolve, reject) =>
+              sftp.unlink(ruta, (err) => (err ? reject(new HttpError(400, `No se pudo borrar: ${err.message}`)) : resolve())),
+            );
+          }
+          await registrar(request, stat.isDirectory() ? "carpeta_borrada" : "archivo_borrado", `${servidor.name}:${ruta}`);
+          return { ok: true };
+        });
+      },
+    );
   };
 }
+
+/** Carpetas del sistema que nunca se borran ni se mueven desde la app. */
+const RUTAS_PROTEGIDAS = new Set(
+  ["/", "/root", "/home", "/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/boot", "/var", "/opt", "/srv", "/proc", "/sys", "/dev", "/run", "/tmp", "/snap", "/var/lib", "/var/lib/docker", "/var/www", "/opt/mi-setup"],
+);

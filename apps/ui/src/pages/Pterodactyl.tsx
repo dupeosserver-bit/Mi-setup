@@ -259,10 +259,17 @@ function PanelWeb({ url }: { url: string }) {
       {pc ? (
         <p className="text-sm text-tenue">En la app de PC el panel se abre en su propia ventana, con tu sesión guardada.</p>
       ) : (
-        <>
-          <p className="mb-2 text-xs text-tenue">Si el panel no permite mostrarse aquí, usa "Abrir en pestaña".</p>
-          <iframe title="Panel Pterodactyl" src={url} className="h-[70vh] w-full rounded-xl border border-borde bg-white" referrerPolicy="no-referrer" />
-        </>
+        // Pterodactyl no deja mostrarse dentro de otra app (X-Frame-Options: DENY) y su sesión
+        // no funcionaría en un marco, así que se abre en el navegador.
+        <div className="space-y-3 text-sm">
+          <p className="text-tenue">
+            Por seguridad, Pterodactyl no permite mostrarse dentro de otra app. Se abre en tu navegador, donde tu sesión del panel queda guardada.
+          </p>
+          <p className="truncate font-mono text-xs text-tenue">{url}</p>
+          <Boton variante="primario" icono={ExternalLink} onClick={() => abrirExterno(url)}>
+            Abrir el panel
+          </Boton>
+        </div>
       )}
     </Tarjeta>
   );

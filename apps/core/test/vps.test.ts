@@ -120,6 +120,29 @@ describe("servidores VPS", () => {
     ctx.advance(6 * 60_000);
     expect((await ejecutar({ confirmacion: "Reiniciar VPS" })).json()).toMatchObject({ codigo: "reauth_requerida" });
   });
+
+  it("archivos: nunca borra ni mueve carpetas del sistema", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const srv = (
+      await ctx.app.inject({
+        method: "POST",
+        url: "/api/vps/servidores",
+        headers: h,
+        payload: { nombre: "Local", host: "127.0.0.1", puerto: 1, usuario: "deploy", tipo: "password", secreto: "x" },
+      })
+    ).json<{ id: string }>();
+    const base = `/api/vps/servidores/${srv.id}/archivos`;
+    for (const ruta of ["/", "/root", "/etc/", "/opt/mi-setup", "/var/lib/../lib"]) {
+      const r = await ctx.app.inject({ method: "DELETE", url: `${base}?ruta=${encodeURIComponent(ruta)}`, headers: h, payload: {} });
+      expect(r.statusCode, ruta).toBe(400);
+    }
+    const mover = await ctx.app.inject({ method: "POST", url: `${base}/renombrar`, headers: h, payload: { de: "/etc", a: "/etc2" } });
+    expect(mover.statusCode).toBe(400);
+    // Una ruta normal pasa las salvaguardas y llega a SSH (que aquí no existe).
+    const normal = await ctx.app.inject({ method: "DELETE", url: `${base}?ruta=/root/viejo.log`, headers: h, payload: {} });
+    expect(normal.json()).toMatchObject({ codigo: "ssh_error" });
+  });
 });
 
 describe("alertas de caída", () => {

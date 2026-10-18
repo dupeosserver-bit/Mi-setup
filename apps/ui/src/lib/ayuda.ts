@@ -59,7 +59,12 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
   },
   vps_archivos: {
-    pasos: ["Elige un servidor para navegar sus carpetas por SFTP.", "Puedes subir, descargar, renombrar y borrar archivos."],
+    pasos: [
+      "Elige un servidor para navegar sus carpetas por SFTP.",
+      "'Subir aquí' sube uno o varios archivos a la carpeta abierta; 'Carpeta' crea una nueva.",
+      "En cada fila: descargar, renombrar (lápiz) o borrar (bote). Borrar una carpeta pide escribir su nombre y tu contraseña o huella.",
+    ],
+    nota: "Las carpetas del sistema (/, /root, /etc, /var, /opt/mi-setup…) no se pueden borrar ni mover desde aquí.",
   },
   vps_bots: {
     pasos: ["Registra cada bot de Discord que corre en tu VPS (servicio, proceso o contenedor).", "Ves si está encendido y puedes reiniciarlo con un toque."],
