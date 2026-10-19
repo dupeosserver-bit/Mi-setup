@@ -1,7 +1,8 @@
 /** Películas y series: buscar, dónde verlas en México, siguiente capítulo y tu lista "por ver". */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bookmark, BookmarkCheck, CalendarClock, Check, Clapperboard, ExternalLink, Search, Star, Trash2, Tv } from "lucide-react";
+import { Bookmark, BookmarkCheck, CalendarClock, Check, Clapperboard, ExternalLink, Film, Play, Radio, Search, Star, Trash2, Tv } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Pestanas, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
@@ -27,7 +28,8 @@ interface Detalle extends Resumen {
   temporadas: number | null;
   estado: string | null;
   siguienteCapitulo: { fecha: string; temporada: number; capitulo: number; nombre: string } | null;
-  dondeVer: { suscripcion: Proveedor[]; renta: Proveedor[]; compra: Proveedor[]; enlace: string | null };
+  dondeVer: { suscripcion: Proveedor[]; gratis?: Proveedor[]; renta: Proveedor[]; compra: Proveedor[]; enlace: string | null };
+  trailer?: { youtube: string; nombre: string } | null;
 }
 interface PorVer {
   id: string;
@@ -37,6 +39,16 @@ interface PorVer {
   poster: string | null;
   vista: boolean;
 }
+
+/** Servicios gratis y legales con anuncios (México). */
+const CANALES_GRATIS = [
+  { nombre: "Pluto TV (canales en vivo)", url: "https://pluto.tv/latam/live-tv" },
+  { nombre: "Tubi", url: "https://tubitv.com/" },
+  { nombre: "ViX gratis", url: "https://vix.com/" },
+  { nombre: "Canela.TV", url: "https://www.canela.tv/" },
+  { nombre: "Películas gratis en YouTube", url: "https://www.youtube.com/feed/storefront?bp=ogUCKAU%3D" },
+  { nombre: "Plex (gratis)", url: "https://watch.plex.tv/es/on-demand" },
+] as const;
 
 const fechaBonita = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
 
@@ -103,13 +115,42 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
     onError: avisarError,
   });
   const d = q.data;
-  const sinDonde = d && !d.dondeVer.suscripcion.length && !d.dondeVer.renta.length && !d.dondeVer.compra.length;
+  const navegar = useNavigate();
+  const [verTrailer, setVerTrailer] = useState(false);
+  // ¿La tienes en Mis videos? (mismo título, sin importar mayúsculas ni acentos)
+  const misVideos = useQuery({ queryKey: ["media", "videos"], queryFn: () => api<{ id: string; titulo: string }[]>("/api/media/videos"), retry: false, enabled: usePuede("videos") });
+  const normal = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const laTienes = d ? (misVideos.data ?? []).find((v) => normal(v.titulo).includes(normal(d.titulo)) && normal(d.titulo).length >= 3) : undefined;
+  const sinDonde = d && !d.dondeVer.suscripcion.length && !d.dondeVer.renta.length && !d.dondeVer.compra.length && !d.dondeVer.gratis?.length;
   return (
     <Modal abierto titulo={d?.titulo ?? "Cargando…"} alCerrar={alCerrar}>
       {q.isLoading ? <Cargando /> : null}
       <ErrorCaja error={q.error} />
       {d ? (
         <div className="space-y-4">
+          {verTrailer && d.trailer ? (
+            <div className="aspect-video overflow-hidden rounded-xl bg-black">
+              <iframe
+                title={d.trailer.nombre}
+                src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(d.trailer.youtube)}?autoplay=1&rel=0`}
+                className="h-full w-full border-0"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {d.trailer ? (
+              <Boton variante="primario" icono={Play} onClick={() => setVerTrailer((v) => !v)}>
+                {verTrailer ? "Ocultar tráiler" : "Ver tráiler"}
+              </Boton>
+            ) : null}
+            {laTienes ? (
+              <Boton variante="primario" icono={Film} onClick={() => navegar("/entretenimiento/videos")}>
+                Ver ahora (la tienes en Mis videos)
+              </Boton>
+            ) : null}
+          </div>
           <div className="flex gap-3">
             {d.poster ? <img src={d.poster} alt="" className="w-24 shrink-0 self-start rounded-xl sm:w-32" /> : null}
             <div className="min-w-0 space-y-2 text-sm">
@@ -142,6 +183,7 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
           <div className="space-y-3">
             <p className="font-semibold">Dónde verla en México</p>
             {sinDonde ? <p className="text-sm text-tenue">No aparece en ninguna plataforma de México por ahora.</p> : null}
+            <Proveedores titulo="Gratis (con anuncios)" lista={d.dondeVer.gratis ?? []} />
             <Proveedores titulo="Incluida en tu suscripción" lista={d.dondeVer.suscripcion} />
             <Proveedores titulo="Rentar" lista={d.dondeVer.renta} />
             <Proveedores titulo="Comprar" lista={d.dondeVer.compra} />
@@ -257,6 +299,17 @@ export default function Peliculas() {
               </Tarjeta>
             </>
           ) : null}
+          <Tarjeta titulo="Ver gratis y legal" icono={Radio}>
+            <p className="mb-3 text-sm text-tenue">Canales y películas gratis (con anuncios) disponibles en México. Se abren en su página o app.</p>
+            <div className="flex flex-wrap gap-2">
+              {CANALES_GRATIS.map((c) => (
+                <Boton key={c.nombre} tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(c.url)}>
+                  {c.nombre}
+                </Boton>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-tenue">Tus propias películas: súbelas en Mis videos y aparece "Ver ahora" al abrir su ficha.</p>
+          </Tarjeta>
         </div>
       )}
       {abierta ? <Ficha tipo={abierta.tipo} id={abierta.id} enLista={enLista.has(`${abierta.tipo}-${abierta.id}`)} alCerrar={() => setAbierta(null)} /> : null}

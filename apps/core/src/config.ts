@@ -47,6 +47,10 @@ export const envBase = z.object({
     ARCHIVOS_DIR: optionalString,
     /** Clave gratis de TMDB (películas y series). */
     TMDB_API_KEY: optionalString,
+    GEMINI_API_KEY: optionalString,
+    GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),
+    MERCADOLIBRE_CLIENT_ID: optionalString,
+    MERCADOLIBRE_CLIENT_SECRET: optionalString,
     SPOTIFY_CLIENT_ID: optionalString,
     SPOTIFY_CLIENT_SECRET: optionalString,
     /** Carpeta con las apps para descargar (APK y EXE). */

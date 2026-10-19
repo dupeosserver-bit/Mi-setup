@@ -52,7 +52,7 @@ function useVisibles(): Set<ModuleId> {
 function agruparVisibles(visibles: Set<ModuleId>) {
   return CATEGORIAS.map((c) => ({
     ...c,
-    modulos: Object.values(MODULOS_UI).filter((mod) => MODULES[mod.id].category === c.id && visibles.has(mod.id)),
+    modulos: Object.values(MODULOS_UI).filter((mod) => MODULES[mod.id].category === c.id && (mod.enMenu !== false || !visibles.has("novedades")) && visibles.has(mod.id)),
   })).filter((c) => c.modulos.length > 0);
 }
 

@@ -3,7 +3,7 @@
  * foto (en tu equipo, gratis) y resumir o traducir textos, páginas y PDFs.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, Download, Eraser, FileText, Globe, Languages, Pencil, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Copy, Download, Eraser, FileText, Globe, ImagePlus, Languages, Pencil, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
@@ -271,24 +271,124 @@ function ResumirTraducir() {
   );
 }
 
+const leerComoDataUrl = (f: File) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("No se pudo leer la foto"));
+    r.readAsDataURL(f);
+  });
+
+/** Nano Banana (Gemini): crear imágenes desde texto o editar/combinar fotos. */
+function CrearImagenes() {
+  const ref = useRef<HTMLInputElement>(null);
+  const [prompt, setPrompt] = useState("");
+  const [proporcion, setProporcion] = useState<"1:1" | "16:9" | "9:16" | "4:3" | "3:4">("1:1");
+  const [referencias, setReferencias] = useState<string[]>([]);
+  const [hechas, setHechas] = useState<{ src: string; prompt: string }[]>([]);
+  const crear = useMutation({
+    mutationFn: () => api<{ imagenes: string[]; texto: string }>("/api/ia-creativa/imagen", { cuerpo: { prompt, proporcion, imagenes: referencias } }),
+    onSuccess: (r) => setHechas((h) => [...r.imagenes.map((src) => ({ src, prompt })), ...h].slice(0, 12)),
+  });
+  const agregar = async (archivos: FileList | null) => {
+    if (!archivos) return;
+    try {
+      const nuevas = await Promise.all([...archivos].slice(0, 3).map(leerComoDataUrl));
+      setReferencias((r) => [...r, ...nuevas].slice(0, 3));
+    } catch (err) {
+      avisarError(err);
+    }
+  };
+  const ideas = [
+    "Logo para una pastelería llamada «Dulce Hogar», estilo acuarela, tonos rosa y crema",
+    "Banner para un servidor de Minecraft llamado MexicanLand, estilo épico, atardecer",
+    "Pastel de chocolate con fresas en una mesa de madera, foto profesional",
+  ];
+
+  return (
+    <Tarjeta titulo="Crear imágenes (Nano Banana)" icono={ImagePlus}>
+      <div className="space-y-3">
+        <AreaTexto value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="Describe la imagen: qué, estilo, colores, luz… (o qué cambiar en tus fotos)" />
+        <div className="flex flex-wrap gap-1">
+          {ideas.map((i) => (
+            <button key={i} type="button" onClick={() => setPrompt(i)} className="rounded-lg border border-borde px-2 py-1 text-left text-xs text-tenue hover:text-texto">
+              {i}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Selector className="w-auto" value={proporcion} onChange={(e) => setProporcion(e.target.value as typeof proporcion)}>
+            <option value="1:1">Cuadrada 1:1</option>
+            <option value="16:9">Horizontal 16:9</option>
+            <option value="9:16">Vertical 9:16 (historias)</option>
+            <option value="4:3">4:3</option>
+            <option value="3:4">3:4</option>
+          </Selector>
+          <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => {
+            void agregar(e.target.files);
+            e.target.value = "";
+          }} />
+          <Boton icono={Plus} disabled={referencias.length >= 3} onClick={() => ref.current?.click()}>
+            Foto para editar ({referencias.length}/3)
+          </Boton>
+          <Boton variante="primario" icono={Sparkles} cargando={crear.isPending} disabled={prompt.trim().length < 3} onClick={() => crear.mutate()}>
+            {referencias.length ? "Editar con IA" : "Crear imagen"}
+          </Boton>
+        </div>
+        {referencias.length ? (
+          <div className="flex flex-wrap gap-2">
+            {referencias.map((r, i) => (
+              <div key={i} className="relative">
+                <img src={r} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                <button type="button" aria-label="Quitar foto" onClick={() => setReferencias((x) => x.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 rounded-full bg-black/80 p-1 text-white">
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <ErrorCaja error={crear.error} />
+        {crear.isPending ? <Cargando texto="Creando la imagen (10 a 30 segundos)…" /> : null}
+        {hechas.length ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {hechas.map((h, i) => (
+              <div key={`${i}-${h.src.length}`} className="space-y-2 rounded-xl border border-borde p-2">
+                <img src={h.src} alt={h.prompt} className="w-full rounded-lg" />
+                <p className="line-clamp-2 text-xs text-tenue">{h.prompt}</p>
+                <div className="flex flex-wrap gap-1">
+                  <a href={h.src} download={`imagen-${i + 1}.png`} className="inline-flex h-8 items-center gap-1 rounded-lg bg-acento px-3 text-xs font-medium text-black">
+                    <Download className="h-3.5 w-3.5" /> Descargar
+                  </a>
+                  <Boton tamano="sm" icono={Pencil} onClick={() => setReferencias([h.src])}>
+                    Seguir editando
+                  </Boton>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <p className="text-xs text-tenue">Usa Nano Banana de Google (Gemini). Necesita GEMINI_API_KEY en Ajustes → Servicios y claves; Google puede cobrar por imagen según tu plan.</p>
+      </div>
+    </Tarjeta>
+  );
+}
+
 export default function IaCreativa() {
-  const [pestana, setPestana] = useState<"prompts" | "fondo" | "texto">("prompts");
+  const [pestana, setPestana] = useState<"prompts" | "imagenes" | "fondo" | "texto">("prompts");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="IA creativa" descripcion="Tus prompts, quitar fondos y resumir o traducir." />
+      <Encabezado titulo="IA creativa" descripcion="Tus prompts, crear imágenes, quitar fondos y resumir o traducir." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
         opciones={[
           { id: "prompts", texto: "Mis prompts" },
+          { id: "imagenes", texto: "Crear imágenes" },
           { id: "fondo", texto: "Quitar fondo" },
           { id: "texto", texto: "Resumir y traducir" },
         ]}
       />
-      {pestana === "prompts" ? <Prompts /> : pestana === "fondo" ? <QuitarFondo /> : <ResumirTraducir />}
-      <p className="text-xs text-tenue">
-        ¿Generar imágenes desde cero? Claude no crea imágenes; se puede agregar con una API de pago (por ejemplo, de imágenes por IA) cuando quieras.
-      </p>
+      {pestana === "prompts" ? <Prompts /> : pestana === "imagenes" ? <CrearImagenes /> : pestana === "fondo" ? <QuitarFondo /> : <ResumirTraducir />}
     </div>
   );
 }

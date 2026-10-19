@@ -27,7 +27,9 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Compras } from "../components/Compras";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -912,23 +914,55 @@ function Precios() {
   );
 }
 
+const Noticias = lazy(() => import("./Noticias"));
+const Cripto = lazy(() => import("./Cripto"));
+const Inversiones = lazy(() => import("./Inversiones"));
+const Divisas = lazy(() => import("./Divisas"));
+
+type PestanaNovedades = "clima" | "noticias" | "compras" | "ofertas" | "gratis" | "steam" | "precios" | "cripto" | "inversiones" | "monedas";
+const PESTANAS: readonly PestanaNovedades[] = ["clima", "noticias", "compras", "ofertas", "gratis", "steam", "precios", "cripto", "inversiones", "monedas"];
+
 export default function Novedades() {
-  const [pestana, setPestana] = useState<"clima" | "ofertas" | "gratis" | "steam" | "precios">("clima");
+  // ?pestana=… permite llegar directo (p. ej. desde el buscador o las rutas viejas).
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get("pestana") as PestanaNovedades | null;
+  const [pestana, setPestanaEstado] = useState<PestanaNovedades>(pedida && PESTANAS.includes(pedida) ? pedida : "clima");
+  const setPestana = (p: PestanaNovedades) => {
+    setPestanaEstado(p);
+    setParams(p === "clima" ? {} : { pestana: p }, { replace: true });
+  };
+  const verNoticias = usePuede("noticias");
+  const verCripto = usePuede("cripto");
+  const verInversiones = usePuede("inversiones");
+  const verDivisas = usePuede("divisas");
+  const opciones: { id: PestanaNovedades; texto: string }[] = [
+    { id: "clima", texto: "Clima" },
+    ...(verNoticias ? [{ id: "noticias" as const, texto: "Noticias" }] : []),
+    { id: "compras", texto: "Compras" },
+    { id: "ofertas", texto: "Ofertas de juegos" },
+    { id: "gratis", texto: "Juegos gratis" },
+    { id: "steam", texto: "Steam" },
+    { id: "precios", texto: "Vigilar precios" },
+    ...(verCripto ? [{ id: "cripto" as const, texto: "Cripto" }] : []),
+    ...(verInversiones ? [{ id: "inversiones" as const, texto: "Inversiones" }] : []),
+    ...(verDivisas ? [{ id: "monedas" as const, texto: "Cambio de monedas" }] : []),
+  ];
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Novedades" descripcion="Clima, ofertas y juegos gratis, y vigilante de precios." />
-      <Pestanas
-        valor={pestana}
-        alCambiar={setPestana}
-        opciones={[
-          { id: "clima", texto: "Clima" },
-          { id: "ofertas", texto: "Ofertas de juegos" },
-          { id: "gratis", texto: "Juegos gratis" },
-          { id: "steam", texto: "Steam" },
-          { id: "precios", texto: "Precios (RAM)" },
-        ]}
-      />
-      {pestana === "clima" ? <Clima /> : pestana === "ofertas" ? <Ofertas /> : pestana === "gratis" ? <JuegosGratis /> : pestana === "steam" ? <Steam /> : <Precios />}
+      <Encabezado titulo="Novedades" descripcion="Clima, noticias, compras, juegos, precios, cripto, inversiones y monedas en un solo lugar." />
+      <Pestanas valor={pestana} alCambiar={setPestana} opciones={opciones} />
+      <Suspense fallback={<Cargando />}>
+        {pestana === "clima" ? <Clima /> : null}
+        {pestana === "noticias" ? <Noticias /> : null}
+        {pestana === "compras" ? <Compras /> : null}
+        {pestana === "ofertas" ? <Ofertas /> : null}
+        {pestana === "gratis" ? <JuegosGratis /> : null}
+        {pestana === "steam" ? <Steam /> : null}
+        {pestana === "precios" ? <Precios /> : null}
+        {pestana === "cripto" ? <Cripto /> : null}
+        {pestana === "inversiones" ? <Inversiones /> : null}
+        {pestana === "monedas" ? <Divisas /> : null}
+      </Suspense>
     </div>
   );
 }

@@ -24,6 +24,8 @@ import { personalRoutes, revisarSuscripciones } from "./modules/personal.js";
 import { extrasRoutes } from "./modules/extras.js";
 import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
+import { comprasRoutes } from "./modules/compras.js";
+import { imagenesRoutes } from "./modules/imagenes.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
@@ -120,7 +122,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
         // Chats en vivo (Twitch y Kick) y modelo para quitar fondos (IA creativa).
         connectSrc: ["'self'", "wss://irc-ws.chat.twitch.tv", "wss://ws-us2.pusher.com", "https://staticimgly.com"],
         workerSrc: ["'self'", "blob:"],
-        frameSrc: ["'self'", pteroOrigin],
+        frameSrc: ["'self'", pteroOrigin, "https://www.youtube-nocookie.com"],
         mediaSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -184,6 +186,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(extrasRoutes(deps));
   await app.register(entretenimientoRoutes(deps));
   await app.register(ciberseguridadRoutes(deps));
+  await app.register(comprasRoutes(deps));
+  await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
   jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });
 

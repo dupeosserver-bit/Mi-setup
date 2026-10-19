@@ -61,6 +61,8 @@ export interface ModuloUi {
   readonly ruta: string;
   readonly icono: LucideIcon;
   readonly Pagina: LazyExoticComponent<ComponentType>;
+  /** false = no sale en el menú (vive como pestaña de otra pantalla). */
+  readonly enMenu?: boolean;
 }
 
 const Pendiente = lazy(() => import("./pages/Pendiente"));
@@ -109,10 +111,11 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   streamer: m("streamer", "/redes/streamer", Tv, lazy(() => import("./pages/Streamer"))),
 
   novedades: m("novedades", "/novedades", Sparkles, lazy(() => import("./pages/Novedades"))),
-  noticias: m("noticias", "/noticias", Newspaper, lazy(() => import("./pages/Noticias"))),
-  cripto: m("cripto", "/cripto", Bitcoin, lazy(() => import("./pages/Cripto"))),
-  inversiones: m("inversiones", "/inversiones", TrendingUp, lazy(() => import("./pages/Inversiones"))),
-  divisas: m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))),
+  // Viven como pestañas de Novedades; sus rutas viejas siguen funcionando.
+  noticias: { ...m("noticias", "/noticias", Newspaper, lazy(() => import("./pages/Noticias"))), enMenu: false },
+  cripto: { ...m("cripto", "/cripto", Bitcoin, lazy(() => import("./pages/Cripto"))), enMenu: false },
+  inversiones: { ...m("inversiones", "/inversiones", TrendingUp, lazy(() => import("./pages/Inversiones"))), enMenu: false },
+  divisas: { ...m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))), enMenu: false },
   herramientas: m("herramientas", "/herramientas", Wrench, lazy(() => import("./pages/Herramientas"))),
   documentos: m("documentos", "/herramientas/documentos", FileText, lazy(() => import("./pages/Documentos"))),
   convertidor: m("convertidor", "/herramientas/convertidor", Repeat, lazy(() => import("./pages/Convertidor"))),

@@ -169,8 +169,16 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
           `/${tipo}/${id}/watch/providers`,
         ),
       ]);
-      const mx = prov.results["MX"];
+      const mx = prov.results["MX"] as
+        | ((typeof prov.results)[string] & { ads?: { provider_name: string; logo_path: string }[]; free?: { provider_name: string; logo_path: string }[] })
+        | undefined;
       const lista = (l?: { provider_name: string; logo_path: string }[]) => (l ?? []).map((p) => ({ nombre: p.provider_name, logo: `https://image.tmdb.org/t/p/w92${p.logo_path}` }));
+      // Tráiler: primero en español; si no hay, en inglés. Solo videos de YouTube.
+      type Video = { key: string; site: string; type: string; name: string; official?: boolean };
+      const buscarVideos = (idioma: string) => tmdb<{ results: Video[] }>(deps, `/${tipo}/${id}/videos`, { language: idioma }).catch(() => ({ results: [] as Video[] }));
+      const elegir = (r: { results: Video[] }) =>
+        r.results.filter((v) => v.site === "YouTube").sort((a, b) => Number(b.type === "Trailer") - Number(a.type === "Trailer") || Number(Boolean(b.official)) - Number(Boolean(a.official)))[0];
+      const trailer = elegir(await buscarVideos("es-MX")) ?? elegir(await buscarVideos("en-US"));
       return {
         ...resumen(d, tipo),
         generos: (d.genres ?? []).map((g) => g.name),
@@ -180,7 +188,8 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
         siguienteCapitulo: d.next_episode_to_air
           ? { fecha: d.next_episode_to_air.air_date, temporada: d.next_episode_to_air.season_number, capitulo: d.next_episode_to_air.episode_number, nombre: d.next_episode_to_air.name }
           : null,
-        dondeVer: { suscripcion: lista(mx?.flatrate), renta: lista(mx?.rent), compra: lista(mx?.buy), enlace: mx?.link ?? null },
+        dondeVer: { suscripcion: lista(mx?.flatrate), gratis: lista([...(mx?.free ?? []), ...(mx?.ads ?? [])]), renta: lista(mx?.rent), compra: lista(mx?.buy), enlace: mx?.link ?? null },
+        trailer: trailer ? { youtube: trailer.key, nombre: trailer.name } : null,
       };
     });
 
