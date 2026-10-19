@@ -129,7 +129,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   sitios: m("sitios", "/sitios", Globe2, lazy(() => import("./pages/Sitios"))),
   editor_fotos: m("editor_fotos", "/estudio/fotos", ImageIcon, lazy(() => import("./pages/EditorFotos"))),
   editor_video: m("editor_video", "/estudio/video", Scissors, lazy(() => import("./pages/EditorVideo"))),
-  bots_discord: m("bots_discord", "/redes/bots", Bot),
+  bots_discord: m("bots_discord", "/redes/bots", Bot, lazy(() => import("./pages/BotsDiscord"))),
   ejercicios: m("ejercicios", "/programacion/ejercicios", GraduationCap, lazy(() => import("./pages/Ejercicios"))),
   documentos: m("documentos", "/herramientas/documentos", FileText, lazy(() => import("./pages/Documentos"))),
   convertidor: m("convertidor", "/herramientas/convertidor", Repeat, lazy(() => import("./pages/Convertidor"))),

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { DialogoConfirmar, DialogoReauth } from "./components/Dialogos";
 import { GuardiaModulo, Layout } from "./components/Layout";
@@ -9,6 +9,8 @@ import { tiempoReal } from "./lib/tiempo-real";
 import { MODULOS_UI } from "./modulos";
 import Inicio from "./pages/Inicio";
 import Login from "./pages/Login";
+
+const BotPublico = lazy(() => import("./pages/BotPublico"));
 
 export function App() {
   const conSesion = useSesion((s) => Boolean(s.refreshToken));
@@ -34,6 +36,15 @@ export function App() {
     <>
       <Routes>
         <Route path="/login" element={conSesion ? <Navigate to="/" replace /> : <Login />} />
+        {/* Página del dueño de un bot (enlace de cliente): no pide cuenta de Mi Setup. */}
+        <Route
+          path="/bot/:token"
+          element={
+            <Suspense fallback={<p className="py-10 text-center text-sm text-tenue">Cargando…</p>}>
+              <BotPublico />
+            </Suspense>
+          }
+        />
         <Route element={conSesion ? <Layout /> : <Navigate to="/login" replace />}>
           <Route index element={<Inicio />} />
           {Object.values(MODULOS_UI).map((m) => (
