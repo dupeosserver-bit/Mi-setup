@@ -549,7 +549,7 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-tenue">Ancho: {ancho} px. El código corre aislado: no puede tocar tu cuenta.</p>
             <label className="flex items-center gap-2 text-xs text-tenue">
-              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-[rgb(var(--acento))]" />
+              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-acento" />
               Actualizar mientras escribo
             </label>
           </div>

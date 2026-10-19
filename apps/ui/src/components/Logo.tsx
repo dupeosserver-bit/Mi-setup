@@ -5,7 +5,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, urlServidor } from "../lib/api";
 import { cx } from "./ui";
 
 export interface AparienciaPublica {
@@ -18,7 +18,10 @@ export interface AparienciaPublica {
 export function useAparienciaPublica() {
   return useQuery({
     queryKey: ["apariencia", "publica"],
-    queryFn: () => api<AparienciaPublica>("/api/apariencia/publica"),
+    queryFn: async (): Promise<AparienciaPublica> => {
+      const a = await api<AparienciaPublica>("/api/apariencia/publica");
+      return { ...a, logo: urlServidor(a.logo), fondo: urlServidor(a.fondo) };
+    },
     staleTime: 5 * 60_000,
   });
 }

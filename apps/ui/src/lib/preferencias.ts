@@ -25,6 +25,22 @@ function leerLocal(): Preferencias {
 
 let quitarEscucha: (() => void) | null = null;
 
+/**
+ * Fondo de pantalla con paneles transparentes: mezcla el color del tema con transparente.
+ * Se lee el color del tema sin el ajuste anterior para no encimar transparencias.
+ */
+function aplicarVidrio(p: Preferencias): void {
+  const raiz = document.documentElement;
+  raiz.style.setProperty("--velo", String(p.vidrio.velo));
+  for (const v of ["--superficie", "--tarjeta"]) raiz.style.removeProperty(v);
+  if (p.vidrio.paneles <= 0) return;
+  const estilo = getComputedStyle(raiz);
+  for (const v of ["--superficie", "--tarjeta"]) {
+    const base = estilo.getPropertyValue(v).trim();
+    if (base) raiz.style.setProperty(v, `color-mix(in srgb, ${base} ${100 - p.vidrio.paneles}%, transparent)`);
+  }
+}
+
 /** Aplica tema, fuente y zoom al documento. */
 export function aplicarPreferencias(p: Preferencias): void {
   const raiz = document.documentElement;
@@ -34,6 +50,7 @@ export function aplicarPreferencias(p: Preferencias): void {
     const consulta = window.matchMedia("(prefers-color-scheme: light)");
     const poner = () => {
       raiz.dataset["tema"] = consulta.matches ? "claro" : "oscuro";
+      aplicarVidrio(p);
     };
     poner();
     consulta.addEventListener("change", poner);
@@ -41,6 +58,7 @@ export function aplicarPreferencias(p: Preferencias): void {
   } else {
     raiz.dataset["tema"] = p.tema;
   }
+  aplicarVidrio(p);
   raiz.style.setProperty("--fuente", FUENTES_APP[p.fuente].css);
   // El zoom escala el tamaño base: toda la interfaz usa rem, así que crece o se achica entera.
   raiz.style.fontSize = `${(16 * p.zoom) / 100}px`;

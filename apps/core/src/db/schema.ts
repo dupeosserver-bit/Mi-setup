@@ -207,6 +207,8 @@ export const notes = pgTable(
     parentId: uuid("parent_id"),
     /** Emoji o ícono de la página. */
     icon: text("icon"),
+    /** Color de la nota (tipo Samsung Notes): nombre de la paleta o null. */
+    color: text("color"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -765,6 +767,8 @@ export const personalMovements = pgTable(
     category: text("category").notNull().default("Otros"),
     description: text("description").notNull().default(""),
     occurredOn: text("occurred_on").notNull(),
+    /** Tarjeta de la billetera con la que se pagó (opcional). */
+    cardId: uuid("card_id").references(() => personalCards.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("movimientos_usuario").on(t.userId, t.occurredOn)],
@@ -995,4 +999,136 @@ export const siteAssets = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_assets_sitio").on(t.siteId)],
+);
+
+// ---------------------------------------------------------------- versión 0.10: billetera, notas con adjuntos y bots de Discord
+
+/** Billetera de Mis finanzas: solo apodo y últimos 4 dígitos; las tarjetas de prueba usan números públicos de pruebas. */
+export const personalCards = pgTable(
+  "personal_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: text("nickname").notNull(),
+    brand: text("brand").notNull().default("otra"),
+    last4: text("last4").notNull(),
+    /** "real" (solo se guardan los últimos 4) o "prueba" (número público de pruebas). */
+    kind: text("kind").notNull().default("real"),
+    color: text("color").notNull().default("#6d28d9"),
+    bank: text("bank").notNull().default(""),
+    testNumber: text("test_number"),
+    expiry: text("expiry"),
+    cvv: text("cvv"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tarjetas_usuario").on(t.userId)],
+);
+
+/** Imágenes y archivos adjuntos de una nota (guardados en ARCHIVOS_DIR/notas). */
+export const noteAttachments = pgTable(
+  "note_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => notes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    storedName: text("stored_name").notNull(),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("note_attachments_nota").on(t.noteId)],
+);
+
+/** Bots de Discord que Mi Setup mantiene encendidos (creador estilo BotGhost). El token va cifrado. */
+export const hostedBots = pgTable(
+  "hosted_bots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Cliente al que se le vende el bot (opcional, solo para recordar). */
+    clientName: text("client_name").notNull().default(""),
+    tokenEnc: text("token_enc").notNull(),
+    applicationId: text("application_id"),
+    botName: text("bot_name"),
+    /** Configuración de todos los módulos (bienvenida, niveles, tickets…). */
+    config: jsonb("config").notNull().default({}),
+    /** Si debe estar encendido (se reconecta solo al reiniciar Mi Setup). */
+    enabled: boolean("enabled").notNull().default(false),
+    /** Vencimiento del servicio: al llegar la fecha el bot se apaga solo. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** Hash SHA-256 del enlace para que el dueño del bot lo configure. */
+    shareHash: text("share_hash"),
+    shareEnabled: boolean("share_enabled").notNull().default(false),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("hosted_bots_dueno").on(t.ownerId), uniqueIndex("hosted_bots_enlace").on(t.shareHash)],
+);
+
+/** Niveles y monedas de cada miembro de cada servidor de Discord (por bot). */
+export const botMembers = pgTable(
+  "bot_members",
+  {
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => hostedBots.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    xp: integer("xp").notNull().default(0),
+    level: integer("level").notNull().default(0),
+    messages: integer("messages").notNull().default(0),
+    coins: bigint("coins", { mode: "number" }).notNull().default(0),
+    bank: bigint("bank", { mode: "number" }).notNull().default(0),
+    dailyAt: timestamp("daily_at", { withTimezone: true }),
+    workAt: timestamp("work_at", { withTimezone: true }),
+    lastXpAt: timestamp("last_xp_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.botId, t.guildId, t.userId] })],
+);
+
+/** Advertencias de moderación. */
+export const botWarns = pgTable(
+  "bot_warns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => hostedBots.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull(),
+    userId: text("user_id").notNull(),
+    modId: text("mod_id").notNull(),
+    reason: text("reason").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("bot_warns_miembro").on(t.botId, t.guildId, t.userId)],
+);
+
+/** Tickets abiertos con el panel de tickets. */
+export const botTickets = pgTable(
+  "bot_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    botId: uuid("bot_id")
+      .notNull()
+      .references(() => hostedBots.id, { onDelete: "cascade" }),
+    guildId: text("guild_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    userId: text("user_id").notNull(),
+    number: integer("number").notNull(),
+    status: text("status").notNull().default("abierto"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+  },
+  (t) => [index("bot_tickets_bot").on(t.botId, t.guildId)],
 );

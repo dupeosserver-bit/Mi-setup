@@ -22,6 +22,9 @@ function servidorGuardado(): string | null {
 
 export const API_BASE = ((PUEDE_CAMBIAR_SERVIDOR && servidorGuardado()) || SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
 
+/** Ruta del servidor (/uploads/…) como dirección completa: en el celular la app no vive en el mismo sitio que el servidor. */
+export const urlServidor = <T extends string | null | undefined>(ruta: T): T => (typeof ruta === "string" && ruta.startsWith("/") ? (`${API_BASE}${ruta}` as T) : ruta);
+
 /** Cambia el servidor (null = el predeterminado), cierra la sesión y recarga la app. */
 export function cambiarServidor(url: string | null): void {
   try {

@@ -354,7 +354,7 @@ export function Layout() {
 
   const fondo = apariencia?.fondo
     ? {
-        backgroundImage: `linear-gradient(color-mix(in srgb, var(--fondo) 90%, transparent), color-mix(in srgb, var(--fondo) 95%, transparent)), url(${apariencia.fondo})`,
+        backgroundImage: `linear-gradient(color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent), color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent)), url(${apariencia.fondo})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }

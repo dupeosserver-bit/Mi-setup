@@ -129,7 +129,7 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
         )}
         <ErrorCaja error={versiones.error} />
         <Campo etiqueta={`Memoria RAM: ${(ram / 1024).toFixed(1)} GB`}>
-          <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-[rgb(var(--acento))]" />
+          <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
         </Campo>
         <Campo etiqueta="Puerto">
           <Entrada type="number" min={1024} max={65535} value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
@@ -283,7 +283,7 @@ function Ajustes({ srv, s, alCambio }: { srv: ServidoresLocales; s: ServidorLoca
           <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </Campo>
         <Campo etiqueta={`RAM: ${(ram / 1024).toFixed(1)} GB`}>
-          <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-[rgb(var(--acento))]" />
+          <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
         </Campo>
         <Campo etiqueta="Puerto">
           <Entrada type="number" value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />

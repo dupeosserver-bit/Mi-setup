@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   BarChart3,
   Check,
+  CheckCircle2,
+  Cloud,
   Copy,
   Crop,
   Database,
@@ -20,12 +22,14 @@ import {
   KeyRound,
   LayoutTemplate,
   Plus,
+  RefreshCw,
   Settings2,
   Smartphone,
   Sparkles,
   Trash2,
   Upload,
   Users,
+  XCircle,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -619,6 +623,80 @@ function Estadisticas({ sitio }: { sitio: Sitio }) {
   );
 }
 
+// ---------------------------------------------------------------- diagnóstico de la dirección
+interface Diagnostico {
+  host: string;
+  url: string;
+  pasos: { id: string; ok: boolean; detalle: string }[];
+  listo: boolean;
+  cloudflare: boolean;
+  dnsFalta: boolean;
+}
+
+/** ¿Por qué mi sitio publicado no abre? Revisa publicación, DNS y HTTPS y ofrece arreglarlo con Cloudflare. */
+function Conexion({ sitio }: { sitio: Sitio }) {
+  const q = useQuery({ queryKey: ["sitios", sitio.id, "diagnostico"], queryFn: () => api<Diagnostico>(`/api/sitios/${sitio.id}/diagnostico`), staleTime: 0, retry: false });
+  const maestra = usePuede("sitios", "administrar");
+  const arreglar = useMutation({
+    mutationFn: () => (sitio.dominio ? api("/api/cloudflare/dominio", { cuerpo: { dominio: sitio.dominio } }) : api("/api/cloudflare/comodin", { cuerpo: {} })),
+    onSuccess: () => {
+      avisar("Registro DNS listo en Cloudflare. Puede tardar un par de minutos en verse.");
+      void q.refetch();
+    },
+    onError: avisarError,
+  });
+  const d = q.data;
+  return (
+    <Tarjeta
+      titulo="¿Abre desde internet?"
+      icono={Cloud}
+      acciones={
+        <Boton tamano="sm" variante="fantasma" icono={RefreshCw} cargando={q.isFetching} onClick={() => void q.refetch()}>
+          Revisar
+        </Boton>
+      }
+    >
+      <ErrorCaja error={q.error} />
+      {q.isLoading ? <Cargando texto="Revisando publicación, DNS y HTTPS…" /> : null}
+      {d ? (
+        <>
+          <ul className="space-y-1.5 text-sm">
+            {d.pasos.map((p) => (
+              <li key={p.id} className="flex items-start gap-2">
+                {p.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ok" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-peligro" />}
+                <span className={p.ok ? "text-tenue" : ""}>{p.detalle}</span>
+              </li>
+            ))}
+          </ul>
+          {d.listo ? (
+            <Boton className="mt-3" tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(d.url)}>
+              Abrir {d.host}
+            </Boton>
+          ) : null}
+          {d.dnsFalta ? (
+            d.cloudflare ? (
+              maestra ? (
+                <Boton className="mt-3" variante="primario" icono={Cloud} cargando={arreglar.isPending} onClick={() => arreglar.mutate()}>
+                  {sitio.dominio ? `Crear el registro de ${sitio.dominio} en Cloudflare` : "Crear el registro «*» en Cloudflare"}
+                </Boton>
+              ) : (
+                <p className="mt-3 text-xs text-tenue">Pídele a la cuenta maestra que cree el registro DNS.</p>
+              )
+            ) : (
+              <p className="mt-3 text-xs text-tenue">
+                Para que Mi Setup lo haga solo: Ajustes → Servicios y claves → Cloudflare (pega tu token). A mano: en Cloudflare crea un registro A con nombre {sitio.dominio ? sitio.dominio : "*"} hacia la IP del VPS, con la nube gris.
+              </p>
+            )
+          ) : null}
+          {!d.listo && !d.dnsFalta ? (
+            <p className="mt-3 text-xs text-tenue">Si el DNS ya apunta bien y HTTPS no responde, en el VPS corre: docker compose restart caddy</p>
+          ) : null}
+        </>
+      ) : null}
+    </Tarjeta>
+  );
+}
+
 // ---------------------------------------------------------------- ajustes
 function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void }) {
   const [nombre, setNombre] = useState(sitio.nombre);
@@ -651,6 +729,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   );
   return (
     <div className="space-y-4">
+      {sitio.publicado ? <Conexion sitio={sitio} /> : null}
       <Tarjeta titulo="Nombre y dirección" icono={Globe}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Campo etiqueta="Nombre">
@@ -883,6 +962,11 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
         <button type="button" className="truncate text-xs text-tenue underline" onClick={() => abrirExterno(s.url)}>
           {s.url.replace(/^https?:\/\//, "")}
         </button>
+        {s.publicado ? (
+          <button type="button" className="text-xs text-acento underline" onClick={() => setPestana("ajustes")}>
+            ¿No abre? Revisar
+          </button>
+        ) : null}
       </div>
       <Pestanas
         valor={pestana}

@@ -48,6 +48,11 @@ export const envBase = z.object({
     /** Clave gratis de TMDB (películas y series). */
     TMDB_API_KEY: optionalString,
     GEMINI_API_KEY: optionalString,
+    /** Token de Cloudflare (permiso Zone → DNS → Edit) para crear los registros DNS de los sitios. */
+    CLOUDFLARE_API_TOKEN: optionalString,
+    /** App de TikTok (developers.tiktok.com) para publicar clips. */
+    TIKTOK_CLIENT_KEY: optionalString,
+    TIKTOK_CLIENT_SECRET: optionalString,
     CURSEFORGE_API_KEY: optionalString,
     GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),
     MERCADOLIBRE_CLIENT_ID: optionalString,

@@ -162,6 +162,8 @@ export function nombrePorDefecto(): string {
 export function abrirExterno(url: string): void {
   const pc = escritorio();
   if (pc) pc.abrirExterno(url);
+  // En el celular, window.open no abre otras apps (rustdesk://, whatsapp://…): Capacitor las lanza al navegar a ellas.
+  else if (esMovil() && !/^https?:/i.test(url)) window.location.href = url;
   else window.open(url, "_blank", "noopener,noreferrer");
 }
 

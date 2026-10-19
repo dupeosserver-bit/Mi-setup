@@ -93,7 +93,8 @@ export default function ControlRemoto() {
     mutationFn: (id: string) => api<{ rustdeskId: string; contrasena: string | null }>(`/api/control-remoto/${id}/conectar`, { metodo: "POST" }),
     onSuccess: async (r) => {
       if (r.contrasena) await copiarSeguro(r.contrasena, "Contraseña copiada");
-      abrirExterno(`rustdesk://${encodeURIComponent(r.rustdeskId)}`);
+      // Formato documentado de RustDesk (PC y Android); la contraseña ya quedó copiada.
+      abrirExterno(`rustdesk://connection/new/${encodeURIComponent(r.rustdeskId)}`);
       setAyuda(true);
     },
     onError: avisarError,

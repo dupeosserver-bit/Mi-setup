@@ -69,6 +69,13 @@ export const preferenciasSchema = z.object({
   zoom: z.number().int().min(70).max(150).default(100),
   /** Ya vio el tutorial de bienvenida (se muestra una vez por cuenta). */
   tutorialVisto: z.boolean().default(false),
+  /** Fondo de pantalla: qué tan transparentes son los paneles (%) y cuánto se oscurece la imagen (%). */
+  vidrio: z
+    .object({
+      paneles: z.number().int().min(0).max(85).default(0),
+      velo: z.number().int().min(0).max(100).default(90),
+    })
+    .default({}),
   terminal: z
     .object({
       tema: z.enum(claves(TEMAS_TERMINAL)).default("mi-setup"),

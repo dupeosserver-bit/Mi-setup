@@ -1,6 +1,6 @@
 import { can, type MeResponse, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { QueryClient, useQuery } from "@tanstack/react-query";
-import { api, ApiError } from "./api";
+import { api, ApiError, urlServidor } from "./api";
 import { useSesion } from "./sesion";
 
 export const queryClient = new QueryClient({
@@ -37,5 +37,13 @@ export interface Apariencia {
 
 export function useApariencia() {
   const hay = useSesion((s) => Boolean(s.refreshToken));
-  return useQuery({ queryKey: ["apariencia"], queryFn: () => api<Apariencia>("/api/apariencia"), enabled: hay });
+  return useQuery({
+    queryKey: ["apariencia"],
+    // En el celular /uploads/… no existe en la app: se completa con la dirección del servidor.
+    queryFn: async (): Promise<Apariencia> => {
+      const a = await api<Apariencia>("/api/apariencia");
+      return { logo: urlServidor(a.logo), fondo: urlServidor(a.fondo), avatar: urlServidor(a.avatar) };
+    },
+    enabled: hay,
+  });
 }

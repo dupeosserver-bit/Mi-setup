@@ -279,6 +279,25 @@ function Apariencia() {
             </Campo>
           </div>
         </Tarjeta>
+        <Tarjeta titulo="Fondo transparente">
+          {apariencia?.fondo ? null : <p className="mb-3 text-xs text-tenue">Primero pon un fondo de pantalla (en «Imágenes», lo cambia la cuenta maestra); luego aquí lo dejas ver.</p>}
+          <div className="space-y-4">
+            <Campo etiqueta={`Paneles transparentes: ${prefs.vidrio.paneles}%`} ayuda="Barra lateral, tarjetas y cajas dejan ver el fondo de pantalla.">
+              <input type="range" min={0} max={85} step={5} value={prefs.vidrio.paneles} onChange={(e) => guardar((p) => ({ ...p, vidrio: { ...p.vidrio, paneles: Number(e.target.value) } }))} className="w-full accent-acento" />
+            </Campo>
+            <Campo etiqueta={`Oscurecer la imagen: ${prefs.vidrio.velo}%`} ayuda="Menos % = el fondo se ve más claro y nítido.">
+              <input type="range" min={0} max={100} step={5} value={prefs.vidrio.velo} onChange={(e) => guardar((p) => ({ ...p, vidrio: { ...p.vidrio, velo: Number(e.target.value) } }))} className="w-full accent-acento" />
+            </Campo>
+            <div className="flex flex-wrap gap-2">
+              <Boton tamano="sm" onClick={() => guardar((p) => ({ ...p, vidrio: { paneles: 60, velo: 35 } }))}>
+                Ver el fondo
+              </Boton>
+              <Boton tamano="sm" variante="fantasma" onClick={() => guardar((p) => ({ ...p, vidrio: { paneles: 0, velo: 90 } }))}>
+                Restablecer
+              </Boton>
+            </div>
+          </div>
+        </Tarjeta>
         <Tarjeta titulo="Imágenes">
           <div className="mb-3 flex items-center gap-3 rounded-xl bg-fondo p-3">
             <Logo />
