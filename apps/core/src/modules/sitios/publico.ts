@@ -60,7 +60,7 @@ export function armarPagina(sitio: Pick<FilaSitio, "name" | "settings">, pagina:
   const descripcion = a.descripcion ?? "";
   const imagen = urlArchivo(a.imagenCompartir);
   const icono = urlArchivo(a.icono);
-  const fuentes = (a.fuentes ?? []).filter((f) => /^[\w \-]{2,40}$/.test(f));
+  const fuentes = (a.fuentes ?? []).filter((f) => /^[\w -]{2,40}$/.test(f));
   const cfg = { whatsapp: (a.whatsapp ?? "").replace(/\D/g, ""), color: a.color ?? "", moneda: a.moneda ?? "MXN", app: Boolean(a.app) };
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(titulo)}</title>${descripcion ? `<meta name="description" content="${esc(descripcion)}">` : ""}

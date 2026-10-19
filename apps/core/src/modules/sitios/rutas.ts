@@ -35,7 +35,7 @@ const ajustesSchema = z.object({
   moneda: z.enum(["MXN", "USD", "EUR"]).optional(),
   app: z.boolean().optional(),
   nombreCorto: z.string().max(12).optional(),
-  fuentes: z.array(z.string().regex(/^[\w \-]{2,40}$/)).max(5).optional(),
+  fuentes: z.array(z.string().regex(/^[\w -]{2,40}$/)).max(5).optional(),
   servidores: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9-]{8,36}$/), nombre: z.string().max(60), direccion: z.string().max(100).optional() })).max(10).optional(),
   avisos: z.boolean().optional(),
 });

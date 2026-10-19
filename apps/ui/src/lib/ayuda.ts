@@ -127,6 +127,17 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
     nota: "Los servidores viven en Documentos → MiSetup Servidores. Sus archivos se editan en Programación → Código.",
   },
+  sitios: {
+    pasos: [
+      "«Nuevo sitio»: ponle nombre y dirección (nombre.mexicanland.net) y elige una plantilla (pastelería, servidor de Minecraft, streamer, landing, link in bio, invitación) o «Hazlo con IA».",
+      "Editor: arrastra bloques (cuadritos) a la página. Selecciona algo y cambia su estilo (pincel), sus propiedades (engrane) o mira las capas. «Libre» te deja mover todo como en FancyMenu.",
+      "Bloques de Mi Setup: producto con carrito (pedidos por WhatsApp), lista desde tabla, formulario, contador, clima, último video, en vivo, estado de servidores e inicio de sesión.",
+      "Imágenes: sube fotos (se optimizan solas), recórtalas, quítales el fondo o créalas con IA. Datos: tablas tipo Excel que el sitio muestra solo.",
+      "Publicar: los visitantes ven lo nuevo solo al tocar Publicar. Cada publicación queda en el historial por si quieres regresar.",
+      "Mensajes y pedidos, estadísticas y cuentas del área privada están en sus pestañas; en Ajustes: dominio propio, SEO, app instalable, quién puede editar y exportar en ZIP.",
+    ],
+    nota: "Para que funcionen los subdominios, en Cloudflare agrega una vez un registro A llamado * hacia la IP de tu VPS (nube gris). Ver USO.md.",
+  },
   ejercicios: {
     pasos: [
       "Elige nivel (fácil, medio o difícil) y un ejercicio. Lee lo que pide y escribe tu solución.",
