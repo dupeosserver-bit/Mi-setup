@@ -344,3 +344,38 @@ La imagen de Docker ahora incluye **ffmpeg** (convertidor) y un volumen nuevo pa
 - **Programación → Código** (app de Windows): editor tipo VS Code con tus carpetas, plantillas (plugin de Paper/Spigot, mod de Fabric, datapack, web, Python, Node), comprimir/descomprimir y **Compilar** en su terminal. Para plugins y mods instala Java 21 (Microsoft) y Gradle con un botón, una sola vez (se guardan dentro de Mi Setup, ~300 MB). Solo toca carpetas que tú elijas y borrar manda a la Papelera.
 - **Programación → Ejercicios**: 30 retos (10 fáciles, 10 medios, 10 difíciles) en JavaScript, Python y HTML/CSS. Se califican solos, tienen pistas y "Pedir ayuda a la IA". Tu avance se guarda en tu cuenta. Python se descarga la primera vez (unos segundos).
 - **vpsm**: si mueves `mexicanland-vault.sh` de carpeta, al abrirlo una vez (`/root/Sh/mexicanland-vault.sh`) arregla solo los lanzadores `vpsm` y `vpsm-cron`.
+
+## Versiones 0.8 y 0.9
+
+### Servidores en mi PC (Host local)
+
+Funciona en la app de Windows. Menú → Host local → Servidores en mi PC → **Nuevo servidor**: eliges Paper, Fabric, Forge, Vanilla o un comando propio, la versión, la RAM y el puerto, y aceptas la EULA de Minecraft. Java se descarga solo.
+
+- **Consola:** iniciar, detener y mandar comandos.
+- **Mods / plugins:** busca en Modrinth. Para CurseForge pon `CURSEFORGE_API_KEY` en el `.env` del VPS.
+- **Compartir:** usa playit.gg para que tus amigos entren sin abrir puertos.
+- **Pasar a mi VPS:** sube el servidor (o solo el mundo) a un servidor de Pterodactyl. Si pesa más de 100 MB, sube `upload_limit` en `/etc/pterodactyl/config.yml` de Wings y reinicia Wings.
+
+### Sitios y apps
+
+Menú → Sitios web → **Nuevo sitio**. Puedes partir de una plantilla o pedírselo a la IA. Después:
+
+1. Arrastra bloques en el editor.
+2. Toca **Publicar**.
+
+Cada pestaña sirve para algo:
+
+- **Imágenes:** recortar, quitar el fondo y crear imágenes con IA.
+- **Mensajes y pedidos:** los formularios y los pedidos que te mandan.
+- **Datos:** tablas para listas en tu sitio.
+- **Cuentas:** visitantes que pueden iniciar sesión.
+- **Estadísticas:** visitas y clics.
+- **Ajustes:** dirección, dominio, SEO, WhatsApp, app instalable, historial y exportar ZIP.
+
+Para que funcionen las direcciones `tusitio.mexicanland.net`:
+
+1. En Cloudflare crea un registro **A** con nombre `*` hacia la IP del VPS, con la **nube gris** (solo DNS).
+2. Para un dominio propio, el dueño crea un registro **A** hacia la misma IP y lo escribe en Ajustes.
+3. El certificado HTTPS se pide solo la primera vez que alguien abre el sitio.
+
+El `docker compose up -d --build` recarga el Caddyfile nuevo.
