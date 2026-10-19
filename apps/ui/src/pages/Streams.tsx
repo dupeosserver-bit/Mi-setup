@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Save, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EstadoCuenta, useCuentas, type CuentaRed } from "../components/CuentaRed";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Tarjeta, avisar, avisarError } from "../components/ui";
+import { ClipsPanel } from "../components/ClipsPanel";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisar, avisarError } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 
@@ -90,13 +91,23 @@ function Editor({ c }: { c: CuentaRed }) {
 
 export default function Streams() {
   const cuentas = useCuentas();
-  const lista = (cuentas.data ?? []).filter((c) => c.plataforma !== "x");
+  const [pestana, setPestana] = useState<"streams" | "clips">("streams");
+  const lista = (cuentas.data ?? []).filter((c) => c.plataforma !== "x" && c.plataforma !== "tiktok");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Streams" descripcion="Cambia el título y el juego de tus transmisiones. La IA también puede proponerlo; tú apruebas." />
-      {cuentas.isLoading ? <Cargando /> : null}
+      <Encabezado titulo="Streams" descripcion="Cambia el título y el juego de tus transmisiones, y saca clips para TikTok. La IA también puede proponer; tú apruebas." />
+      <Pestanas
+        valor={pestana}
+        alCambiar={setPestana}
+        opciones={[
+          { id: "streams", texto: "Mis streams" },
+          { id: "clips", texto: "Clips y TikTok" },
+        ]}
+      />
+      {pestana === "clips" ? <ClipsPanel /> : null}
+      {pestana === "streams" && cuentas.isLoading ? <Cargando /> : null}
       <ErrorCaja error={cuentas.error} />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className={pestana === "streams" ? "grid grid-cols-1 gap-4 lg:grid-cols-3" : "hidden"}>
         {lista.map((c) => (
           <Tarjeta key={c.plataforma} titulo={c.nombre}>
             <EstadoCuenta c={c} />

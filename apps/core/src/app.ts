@@ -27,6 +27,7 @@ import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
 import { comprasRoutes } from "./modules/compras.js";
 import { ejerciciosRoutes } from "./modules/ejercicios.js";
+import { clipsRoutes, limpiarFuentes } from "./modules/clips.js";
 import { cloudflareRoutes } from "./modules/cloudflare.js";
 import { estudioRoutes } from "./modules/estudio.js";
 import { hostLocalRoutes } from "./modules/hostlocal.js";
@@ -205,6 +206,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(hostLocalRoutes(deps));
   await app.register(cloudflareRoutes(deps));
   await app.register(estudioRoutes(deps));
+  await app.register(clipsRoutes(deps, appDeps.clienteIa));
+  jobs.push({ nombre: "limpiar-clips", cadaMs: 6 * 60 * 60_000, alInicio: false, run: () => limpiarFuentes(deps) });
   await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa));
   await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });

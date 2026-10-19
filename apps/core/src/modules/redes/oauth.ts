@@ -15,7 +15,7 @@ import { HttpError, missingConfig } from "../../http-error.js";
 import { currentUser } from "../../security/rbac.js";
 import { requireCipher, type ModuleDeps } from "../common.js";
 
-export const PLATAFORMAS = ["twitch", "youtube", "kick", "x"] as const;
+export const PLATAFORMAS = ["twitch", "youtube", "kick", "x", "tiktok"] as const;
 export type PlataformaId = (typeof PLATAFORMAS)[number];
 
 interface Plataforma {
@@ -30,6 +30,10 @@ interface Plataforma {
   /** X usa autenticación básica (client_id:secret) en el intercambio. */
   readonly basica?: boolean;
   readonly extraAuth?: Record<string, string>;
+  /** TikTok llama client_key a lo que los demás llaman client_id. */
+  readonly paramId?: string;
+  /** TikTok separa los permisos con comas. */
+  readonly separadorScopes?: string;
   perfil(token: string, clientId: string): Promise<{ id: string; nombre: string }>;
 }
 
@@ -46,7 +50,29 @@ export async function pedirJson<T>(servicio: string, url: string, init: RequestI
   return (texto ? JSON.parse(texto) : {}) as T;
 }
 
+interface RespuestaTikTok {
+  data?: { user?: { open_id?: string; display_name?: string } };
+}
+
 export const PLATAFORMA: Record<PlataformaId, Plataforma> = {
+  tiktok: {
+    nombre: "TikTok",
+    modulo: "streams",
+    idVar: "TIKTOK_CLIENT_KEY",
+    secretoVar: "TIKTOK_CLIENT_SECRET",
+    authUrl: "https://www.tiktok.com/v2/auth/authorize/",
+    tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
+    scopes: ["user.info.basic", "video.upload", "video.publish"],
+    pkce: true,
+    paramId: "client_key",
+    separadorScopes: ",",
+    async perfil(token) {
+      const r = await pedirJson<RespuestaTikTok>("TikTok", "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name", { headers: { authorization: `Bearer ${token}` } });
+      const u = r.data?.user;
+      if (!u?.open_id) throw new HttpError(502, "TikTok no devolvió el usuario");
+      return { id: u.open_id, nombre: u.display_name ?? "TikTok" };
+    },
+  },
   twitch: {
     nombre: "Twitch",
     modulo: "streams",
@@ -54,7 +80,7 @@ export const PLATAFORMA: Record<PlataformaId, Plataforma> = {
     secretoVar: "TWITCH_CLIENT_SECRET",
     authUrl: "https://id.twitch.tv/oauth2/authorize",
     tokenUrl: "https://id.twitch.tv/oauth2/token",
-    scopes: ["channel:manage:broadcast"],
+    scopes: ["channel:manage:broadcast", "clips:edit"],
     pkce: false,
     async perfil(token, clientId) {
       const r = await pedirJson<{ data: { id: string; display_name: string }[] }>("Twitch", "https://api.twitch.tv/helix/users", {
@@ -151,7 +177,7 @@ async function pedirToken(deps: ModuleDeps, p: PlataformaId, cuerpo: Record<stri
   const def = PLATAFORMA[p];
   const { id, secreto } = credenciales(deps, p);
   const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded", accept: "application/json" };
-  const form = new URLSearchParams({ ...cuerpo, client_id: id });
+  const form = new URLSearchParams({ ...cuerpo, [def.paramId ?? "client_id"]: id });
   if (def.basica) headers["authorization"] = `Basic ${Buffer.from(`${id}:${secreto}`).toString("base64")}`;
   else form.set("client_secret", secreto);
   return pedirJson<RespuestaToken>(def.nombre, def.tokenUrl, { method: "POST", headers, body: form.toString() });
@@ -234,9 +260,9 @@ export function oauthRoutes(deps: ModuleDeps) {
       const url = new URL(def.authUrl);
       url.search = new URLSearchParams({
         response_type: "code",
-        client_id: id,
+        [def.paramId ?? "client_id"]: id,
         redirect_uri: urlRetorno(deps, plataforma),
-        scope: def.scopes.join(" "),
+        scope: def.scopes.join(def.separadorScopes ?? " "),
         state,
         ...(verificador ? { code_challenge: createHash("sha256").update(verificador).digest("base64url"), code_challenge_method: "S256" } : {}),
         ...def.extraAuth,

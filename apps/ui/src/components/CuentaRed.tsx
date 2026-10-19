@@ -8,7 +8,7 @@ import { abrirExterno } from "../lib/plataforma";
 import { Boton, FaltaConfigurar, Insignia, avisar, avisarError } from "./ui";
 
 export interface CuentaRed {
-  plataforma: "twitch" | "youtube" | "kick" | "x";
+  plataforma: "twitch" | "youtube" | "kick" | "x" | "tiktok";
   nombre: string;
   configurada: boolean;
   faltan: string[];

@@ -19,8 +19,8 @@ RUN pnpm --filter "@mi-setup/core..." build \
   && cp -r apps/ui/dist /out/public
 
 FROM node:22-alpine AS runtime
-# ffmpeg: convertir audio y video (Herramientas → Convertidor).
-RUN apk add --no-cache ffmpeg
+# ffmpeg: convertir audio y video (Convertidor) y cortar clips; yt-dlp: traer tus streams de Twitch, Kick y YouTube (Clips).
+RUN apk add --no-cache ffmpeg yt-dlp
 ENV NODE_ENV=production \
     UI_DIR=/app/public \
     UPLOADS_DIR=/data/uploads \
