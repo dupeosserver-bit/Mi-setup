@@ -138,6 +138,37 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
     nota: "Para que funcionen los subdominios, en Cloudflare agrega una vez un registro A llamado * hacia la IP de tu VPS (nube gris). Ver USO.md.",
   },
+  editor_fotos: {
+    pasos: [
+      "«Nuevo» crea un lienzo (cuadrado, vertical para TikTok, portada…) o abre una foto desde «Abrir».",
+      "Herramientas de arriba: seleccionar, pincel, texto (toca el lienzo), formas y línea. Elige el color a la izquierda.",
+      "Toca algo del lienzo para cambiar su color, borde, opacidad, mezcla, fuente y, en fotos, brillo, contraste, saturación, desenfoque, blanco y negro y más.",
+      "Capas: súbelas o bájalas, escóndelas con el ojo o bloquéalas con el candado. Ctrl+Z deshace, Supr borra, Ctrl+D duplica.",
+      "Recortar, quitar el fondo de una imagen y retocar con IA están en los íconos de la barra.",
+      "Guardar deja el proyecto con sus capas en tu cuenta; Exportar baja PNG, JPG o WebP.",
+    ],
+    nota: "Retocar con IA necesita la clave de Gemini (Ajustes → Servicios). Quitar fondo baja un modelo la primera vez (~40 MB).",
+  },
+  editor_video: {
+    pasos: [
+      "Agrega tus videos, fotos y música con «Agregar archivos»: se quedan en tu dispositivo, no se suben.",
+      "Cada clip se ordena en la línea de tiempo; toca uno para cortarlo, dividirlo en la posición actual, cambiar su velocidad, volumen, filtros o voltearlo.",
+      "Textos: agrega títulos con su color y tamaño y elige cuándo salen.",
+      "Elige el formato (horizontal, vertical para TikTok o cuadrado) y la calidad.",
+      "«Exportar» arma el video en tiempo real (dura lo mismo que el video) y lo puedes guardar en tu cuenta o bajar.",
+    ],
+    nota: "No cierres la pestaña mientras exporta. Para videos largos usa la PC.",
+  },
+  bots_discord: {
+    pasos: [
+      "En discord.com/developers crea tu aplicación, ve a Bot y copia el token. Invita al bot a tu servidor con el enlace OAuth2 (permisos de administrador o los que necesites).",
+      "«Nuevo bot»: pega el token (se guarda cifrado y nunca se vuelve a mostrar) y Mi Setup lo mantiene encendido en tu VPS.",
+      "Configura por módulos: bienvenida y despedida, moderación y filtros, niveles y XP, economía, tickets, roles con botones, comandos personalizados, registros y respaldos del servidor.",
+      "Encender, apagar o reiniciar desde el panel. Los cambios se aplican al guardar.",
+      "Si lo vendes: pon un cliente, una fecha de vencimiento y comparte el enlace para que el dueño edite su bot sin ver tu cuenta ni el token.",
+    ],
+    nota: "El bot solo hace lo que activas aquí. Al vencer el servicio se apaga solo.",
+  },
   ejercicios: {
     pasos: [
       "Elige nivel (fácil, medio o difícil) y un ejercicio. Lee lo que pide y escribe tu solución.",

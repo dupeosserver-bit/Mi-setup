@@ -15,6 +15,7 @@ export const MODULE_CATEGORIES = [
   "programacion",
   "host_local",
   "sitios",
+  "estudio",
   "entretenimiento",
   "casa",
   "control_remoto",
@@ -75,6 +76,7 @@ export const MODULES = {
   streams: { label: "Streams", category: "redes", masterOnly: false },
   x: { label: "X (Twitter)", category: "redes", masterOnly: false },
   discord: { label: "Discord", category: "redes", masterOnly: false },
+  bots_discord: { label: "Bots de Discord (creador)", category: "redes", masterOnly: false },
   streamer: { label: "Modo streamer", category: "redes", masterOnly: false },
 
   // Novedades
@@ -87,6 +89,10 @@ export const MODULES = {
   cripto: { label: "Cripto", category: "novedades", masterOnly: false },
   inversiones: { label: "Inversiones", category: "novedades", masterOnly: false },
   divisas: { label: "Cambio de monedas", category: "novedades", masterOnly: false },
+
+  // Estudio creativo
+  editor_fotos: { label: "Editor de fotos", category: "estudio", masterOnly: false },
+  editor_video: { label: "Editor de video", category: "estudio", masterOnly: false },
 
   // Herramientas
   herramientas: { label: "Herramientas", category: "herramientas", masterOnly: false },

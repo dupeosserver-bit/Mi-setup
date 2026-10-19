@@ -1132,3 +1132,25 @@ export const botTickets = pgTable(
   },
   (t) => [index("bot_tickets_bot").on(t.botId, t.guildId)],
 );
+
+/** Estudio creativo: proyectos del editor de fotos, imágenes exportadas y videos terminados (archivos en ARCHIVOS_DIR/estudio). */
+export const studioProjects = pgTable(
+  "studio_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "foto" (proyecto con capas), "imagen" (exportada) o "video". */
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    storedName: text("stored_name").notNull(),
+    mime: text("mime").notNull(),
+    size: bigint("size", { mode: "number" }).notNull(),
+    /** Miniatura pequeña (data:image/…) para la galería. */
+    thumb: text("thumb").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("studio_usuario").on(t.userId, t.kind, t.updatedAt)],
+);
