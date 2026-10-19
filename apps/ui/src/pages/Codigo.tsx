@@ -399,23 +399,34 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
     }
   };
 
-  const proyecto = raiz ? comandoDelProyecto(contenido.get(raiz) ?? []) : null;
+  // Proyecto = la carpeta más cercana (desde lo que elegiste o el archivo abierto hacia arriba) que tenga build.gradle, package.json…
+  let carpetaProyecto: string | null = null;
+  let proyecto: ReturnType<typeof comandoDelProyecto> = null;
+  for (let c = seleccion && contenido.has(seleccion) ? seleccion : (seleccion ?? activo) ? padreDe((seleccion ?? activo)!) : raiz; c && raiz && c.length >= raiz.length; c = padreDe(c)) {
+    const encontrado = contenido.has(c) ? comandoDelProyecto(contenido.get(c) ?? []) : null;
+    if (encontrado) {
+      carpetaProyecto = c;
+      proyecto = encontrado;
+      break;
+    }
+    if (c === raiz) break;
+  }
   const necesitaJava = Boolean(proyecto?.comando?.includes("gradle")) && herr !== null && (!herr.java || !herr.gradle);
   const ejecutarProyecto = async () => {
-    if (!raiz || !proyecto) return;
+    if (!carpetaProyecto || !proyecto) return;
     await Promise.all(archivosRef.current.filter((a) => a.texto !== a.guardado).map((a) => guardarRef.current(a.ruta)));
     if (proyecto.zip) {
       try {
-        const lista = (contenido.get(raiz) ?? []).filter((e) => !e.nombre.toLowerCase().endsWith(".zip"));
-        const zip = await fs.comprimir(lista.map((e) => e.ruta), `${nombreDe(raiz)}.zip`);
+        const lista = (contenido.get(carpetaProyecto) ?? []).filter((e) => !e.nombre.toLowerCase().endsWith(".zip"));
+        const zip = await fs.comprimir(lista.map((e) => e.ruta), `${nombreDe(carpetaProyecto)}.zip`);
         avisar(`Listo: ${nombreDe(zip)}`);
-        void cargar(raiz);
+        void cargar(carpetaProyecto);
       } catch (err) {
         avisarError(err);
       }
       return;
     }
-    if (proyecto.comando) nuevaConsola(proyecto.texto, raiz, proyecto.comando);
+    if (proyecto.comando) nuevaConsola(`${proyecto.texto} · ${nombreDe(carpetaProyecto)}`, carpetaProyecto, proyecto.comando);
   };
 
   const montar: OnMount = (editor, monaco) => {
@@ -457,7 +468,7 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
         </Boton>
         {proyecto ? (
           <Boton tamano="sm" variante="primario" icono={proyecto.texto === "Compilar" ? Hammer : Play} disabled={necesitaJava} onClick={() => void ejecutarProyecto()}>
-            {proyecto.texto}
+            {proyecto.texto} {carpetaProyecto && carpetaProyecto !== raiz ? `«${nombreDe(carpetaProyecto)}»` : ""}
           </Boton>
         ) : null}
         <Boton tamano="sm" icono={SquareTerminal} onClick={() => (raiz ? nuevaConsola("Terminal", raiz) : undefined)}>

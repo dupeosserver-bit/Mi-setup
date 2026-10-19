@@ -9,8 +9,7 @@ import { execFile } from "node:child_process";
 import { createWriteStream, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import { once } from "node:events";
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { PLANTILLAS } from "./plantillas";
 
@@ -18,7 +17,8 @@ const MAX_LEER = 5 * 1024 * 1024;
 const ARCHIVO_CARPETAS = () => join(app.getPath("userData"), "carpetas-codigo.json");
 const DIR_HERRAMIENTAS = () => join(app.getPath("userData"), "herramientas");
 
-const JDK_URL = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse";
+// Microsoft Build of OpenJDK: su zip abre con el tar de Windows (el de Adoptium usa Deflate64 y no).
+const JDK_URL = "https://aka.ms/download-jdk/microsoft-jdk-21-windows-x64.zip";
 const GRADLE_URL = "https://services.gradle.org/distributions/gradle-8.12-bin.zip";
 
 function leerCarpetas(): string[] {
@@ -60,7 +60,8 @@ function nombreValido(n: unknown): string {
 
 function tar(args: string[], cwd?: string): Promise<void> {
   return new Promise((ok, mal) =>
-    execFile("tar.exe", args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, timeout: 10 * 60_000 }, (err, _o, e) =>
+    // Siempre el tar de Windows (bsdtar): otro tar en el PATH (p. ej. el de Git) confunde "C:" con un servidor.
+    execFile(join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "tar.exe"), args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, timeout: 10 * 60_000 }, (err, _o, e) =>
       err ? mal(new Error((e || err.message).toString().slice(0, 300))) : ok(),
     ),
   );
@@ -95,16 +96,25 @@ async function descargar(url: string, destino: string, alAvance: (pct: number) =
   const total = Number(r.headers.get("content-length") ?? 0);
   let llevados = 0;
   let ultimo = -1;
-  const flujo = Readable.fromWeb(r.body as never);
-  flujo.on("data", (c: Buffer) => {
-    llevados += c.length;
-    const pct = total ? Math.floor((llevados / total) * 100) : 0;
-    if (pct !== ultimo) {
-      ultimo = pct;
-      alAvance(pct);
+  const salida = createWriteStream(destino);
+  const lector = r.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await lector.read();
+      if (done) break;
+      // Se copia cada trozo: el que entrega fetch puede reusarse y corromper el archivo.
+      if (!salida.write(Buffer.from(value))) await once(salida, "drain");
+      llevados += value.length;
+      const pct = total ? Math.floor((llevados / total) * 100) : 0;
+      if (pct !== ultimo) {
+        ultimo = pct;
+        alAvance(pct);
+      }
     }
-  });
-  await pipeline(flujo, createWriteStream(destino));
+  } finally {
+    await new Promise<void>((ok, mal) => salida.end((err?: Error | null) => (err ? mal(err) : ok())));
+  }
+  if (total && llevados !== total) throw new Error("La descarga quedó incompleta; vuelve a intentarlo.");
 }
 
 export function registrarArchivosLocales(deLaApp: (e: IpcMainEvent | IpcMainInvokeEvent) => boolean, ventana: () => BrowserWindow | null): void {
@@ -239,7 +249,7 @@ export function registrarArchivosLocales(deLaApp: (e: IpcMainEvent | IpcMainInvo
     return { java: Boolean(r.java), gradle: Boolean(r.gradle) };
   });
 
-  // Descarga Java 21 (Adoptium) y Gradle a la carpeta de la app (una sola vez, ~300 MB).
+  // Descarga Java 21 (Microsoft OpenJDK) y Gradle a la carpeta de la app (una sola vez, ~300 MB).
   manejar("herr:instalar", async () => {
     const dir = DIR_HERRAMIENTAS();
     await mkdir(dir, { recursive: true });

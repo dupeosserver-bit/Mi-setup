@@ -25,6 +25,7 @@ import { extrasRoutes } from "./modules/extras.js";
 import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
 import { comprasRoutes } from "./modules/compras.js";
+import { ejerciciosRoutes } from "./modules/ejercicios.js";
 import { imagenesRoutes } from "./modules/imagenes.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
@@ -187,6 +188,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(entretenimientoRoutes(deps));
   await app.register(ciberseguridadRoutes(deps));
   await app.register(comprasRoutes(deps));
+  await app.register(ejerciciosRoutes(deps));
   await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
   jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });
