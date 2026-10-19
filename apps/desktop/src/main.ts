@@ -23,6 +23,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { leerMetricas, leerSistema } from "./metricas";
+import { registrarArchivosLocales } from "./archivos-locales";
 import { registrarTerminalLocal } from "./terminal-local";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
@@ -294,6 +295,7 @@ function crearBandeja(): void {
 
 function registrarIpc(): void {
   cerrarTerminales = registrarTerminalLocal(deLaApp, () => ventana).cerrarTodas;
+  registrarArchivosLocales(deLaApp, () => ventana);
   ipcMain.on("version", (e) => {
     e.returnValue = app.getVersion();
   });

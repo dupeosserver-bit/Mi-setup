@@ -102,8 +102,27 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   ia_creativa: {
     pasos: [
       "Prompts: guarda tus prompts favoritos como plantillas con espacios {así} para rellenar, y úsalos con un toque.",
+      "Crear imágenes (Nano Banana): describe la imagen o sube hasta 3 fotos para editarlas o combinarlas. Necesita la clave GEMINI_API_KEY.",
       "Quitar fondo: sube una foto y te deja solo la persona u objeto (en tu equipo, gratis).",
       "Resumir y traducir: pega un texto, sube un PDF o pon un enlace.",
+    ],
+  },
+  codigo: {
+    pasos: [
+      "En la app de Windows toca «Abrir carpeta» y elige la carpeta de tu proyecto (solo se puede tocar lo que esté dentro).",
+      "Abre archivos a la izquierda; se editan con el mismo editor de VS Code. Ctrl+S guarda; el punto ● avisa si falta guardar.",
+      "«Nuevo proyecto»: plugin de Paper/Spigot, mod de Fabric, datapack, página web, Python o Node, listos para usar.",
+      "«Compilar» corre el comando del proyecto en la terminal de abajo. Para plugins y mods instala Java y Gradle con un botón (una sola vez).",
+      "Al pasar el mouse sobre un archivo: comprimir en .zip, descomprimir (.zip, .jar, .mrpack), cambiar nombre o mandar a la papelera.",
+    ],
+    nota: "En el navegador y el celular queda un bloc de código para practicar; tus archivos solo se abren desde la app de PC.",
+  },
+  ejercicios: {
+    pasos: [
+      "Elige nivel (fácil, medio o difícil) y un ejercicio. Lee lo que pide y escribe tu solución.",
+      "«Probar» corre las pruebas: verás cuáles pasan y cuáles no, con lo que esperaba y lo que salió.",
+      "Si te atoras, toca «Pista» o «Pedir ayuda a la IA» (te explica el error sin darte todo resuelto).",
+      "Tu avance se guarda en tu cuenta y se ve en PC y celular.",
     ],
   },
   recordatorios: {

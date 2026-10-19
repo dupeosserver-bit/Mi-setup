@@ -12,6 +12,7 @@ export const MODULE_CATEGORIES = [
   "redes",
   "novedades",
   "herramientas",
+  "programacion",
   "entretenimiento",
   "casa",
   "control_remoto",
@@ -76,6 +77,8 @@ export const MODULES = {
 
   // Novedades
   novedades: { label: "Novedades", category: "novedades", masterOnly: false },
+  codigo: { label: "Código (editor)", category: "programacion", masterOnly: false },
+  ejercicios: { label: "Ejercicios de código", category: "programacion", masterOnly: false },
   noticias: { label: "Noticias", category: "novedades", masterOnly: false },
   cripto: { label: "Cripto", category: "novedades", masterOnly: false },
   inversiones: { label: "Inversiones", category: "novedades", masterOnly: false },

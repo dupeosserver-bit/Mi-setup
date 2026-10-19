@@ -2,6 +2,8 @@
 import type { ModuleCategory, ModuleId } from "@mi-setup/shared";
 import {
   Activity,
+  Code2,
+  GraduationCap,
   CalendarDays,
   Clapperboard,
   ClipboardList,
@@ -117,6 +119,8 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   inversiones: { ...m("inversiones", "/inversiones", TrendingUp, lazy(() => import("./pages/Inversiones"))), enMenu: false },
   divisas: { ...m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))), enMenu: false },
   herramientas: m("herramientas", "/herramientas", Wrench, lazy(() => import("./pages/Herramientas"))),
+  codigo: m("codigo", "/programacion/codigo", Code2, lazy(() => import("./pages/Codigo"))),
+  ejercicios: m("ejercicios", "/programacion/ejercicios", GraduationCap, lazy(() => import("./pages/Ejercicios"))),
   documentos: m("documentos", "/herramientas/documentos", FileText, lazy(() => import("./pages/Documentos"))),
   convertidor: m("convertidor", "/herramientas/convertidor", Repeat, lazy(() => import("./pages/Convertidor"))),
   enlaces: m("enlaces", "/herramientas/enlaces", Link, lazy(() => import("./pages/Enlaces"))),
@@ -140,6 +144,7 @@ export const CATEGORIAS: readonly { id: ModuleCategory; titulo: string; icono: L
   { id: "redes", titulo: "Redes y streams", icono: Radio },
   { id: "novedades", titulo: "Novedades", icono: Newspaper },
   { id: "herramientas", titulo: "Herramientas", icono: Wrench },
+  { id: "programacion", titulo: "Programación", icono: Code2 },
   { id: "entretenimiento", titulo: "Entretenimiento", icono: Clapperboard },
   { id: "casa", titulo: "Casa", icono: House },
   { id: "control_remoto", titulo: "Control remoto", icono: MonitorUp },

@@ -9,6 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawn, type IPty } from "@lydell/node-pty";
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { dentroDeCarpetas, entornoHerramientas } from "./archivos-locales";
 
 interface Shell {
   id: "pwsh" | "powershell" | "cmd";
@@ -59,18 +60,24 @@ export function registrarTerminalLocal(
 
   ipcMain.handle("pty:historial", (e, id: unknown) => (deLaApp(e) && typeof id === "string" ? (sesiones.get(id)?.historial ?? "") : ""));
 
-  ipcMain.handle("pty:abrir", (e, shellId: unknown, cols: unknown, rows: unknown) => {
+  ipcMain.handle("pty:abrir", async (e, shellId: unknown, cols: unknown, rows: unknown, opciones: unknown) => {
     if (!deLaApp(e)) return null;
     const shell = shellsDisponibles().find((s) => s.id === shellId) ?? shellsDisponibles()[0];
     if (!shell) throw new Error("No encontré PowerShell ni CMD en esta PC");
     if ([...sesiones.values()].filter((s) => s.viva).length >= MAX_SESIONES) throw new Error(`Máximo ${MAX_SESIONES} terminales abiertas a la vez`);
+    // Desde la pantalla Código: abrir en la carpeta del proyecto (solo carpetas que elegiste) y escribir un comando.
+    const o = (typeof opciones === "object" && opciones !== null ? opciones : {}) as { cwd?: unknown; comando?: unknown };
+    const cwd = o.cwd !== undefined ? dentroDeCarpetas(o.cwd) : homedir();
+    if (!cwd) throw new Error("Esa carpeta no está en tus carpetas de código");
+    const comando = typeof o.comando === "string" && o.comando.length <= 500 && !/[\r\n]/.test(o.comando) ? o.comando : null;
     const pty = spawn(shell.ruta, shell.args, {
       name: "xterm-256color",
       cols: numero(cols, 20, 500, 100),
       rows: numero(rows, 5, 200, 30),
-      cwd: homedir(),
-      env: process.env as Record<string, string>,
+      cwd,
+      env: { ...(process.env as Record<string, string>), ...(await entornoHerramientas()) },
     });
+    if (comando) setTimeout(() => pty.write(`${comando}\r`), 900);
     const id = crypto.randomUUID();
     const sesion: Sesion = { id, shell, pty, historial: "", viva: true };
     sesiones.set(id, sesion);

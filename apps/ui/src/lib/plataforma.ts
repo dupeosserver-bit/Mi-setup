@@ -20,13 +20,51 @@ export interface PuenteEscritorio {
   ventana(accion: "minimizar" | "maximizar" | "cerrar" | "recargar" | "pantallaCompleta"): void;
   /** PowerShell / CMD de la PC (versión 0.5.1 o más nueva de la app de Windows). */
   readonly terminalLocal?: TerminalLocal;
+  /** Archivos de la PC para la pantalla Código (versión 0.7 o más nueva). */
+  readonly archivosLocales?: ArchivosLocales;
+}
+
+export interface EntradaLocal {
+  nombre: string;
+  ruta: string;
+  tipo: "archivo" | "carpeta";
+  tamano: number;
+  modificado: number;
+}
+
+export interface PlantillaProyecto {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  necesitaJava: boolean;
+  comando: string | null;
+}
+
+export interface ArchivosLocales {
+  carpetas(): Promise<string[]>;
+  elegirCarpeta(): Promise<string | null>;
+  quitarCarpeta(ruta: string): Promise<boolean>;
+  listar(ruta: string): Promise<EntradaLocal[]>;
+  leer(ruta: string): Promise<string>;
+  escribir(ruta: string, texto: string): Promise<boolean>;
+  crear(carpeta: string, nombre: string, tipo: "archivo" | "carpeta"): Promise<string>;
+  renombrar(ruta: string, nuevo: string): Promise<string>;
+  borrar(ruta: string): Promise<boolean>;
+  mostrar(ruta: string): Promise<boolean>;
+  comprimir(rutas: string[], nombreZip: string): Promise<string>;
+  descomprimir(ruta: string): Promise<string>;
+  plantillas(): Promise<PlantillaProyecto[]>;
+  crearProyecto(carpeta: string, plantilla: string, nombre: string): Promise<string>;
+  herramientas(): Promise<{ java: boolean; gradle: boolean }>;
+  instalarHerramientas(): Promise<{ java: boolean; gradle: boolean }>;
+  alAvanceHerramientas(cb: (texto: string) => void): () => void;
 }
 
 export interface TerminalLocal {
   shells(): Promise<{ id: string; nombre: string }[]>;
   lista(): Promise<{ id: string; shell: string; nombre: string; viva: boolean }[]>;
   historial(id: string): Promise<string>;
-  abrir(shell: string, cols: number, rows: number): Promise<{ id: string; nombre: string }>;
+  abrir(shell: string, cols: number, rows: number, opciones?: { cwd?: string; comando?: string }): Promise<{ id: string; nombre: string }>;
   escribir(id: string, datos: string): void;
   tamano(id: string, cols: number, rows: number): void;
   cerrar(id: string): void;
