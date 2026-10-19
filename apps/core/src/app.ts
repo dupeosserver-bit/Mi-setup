@@ -27,6 +27,7 @@ import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
 import { comprasRoutes } from "./modules/compras.js";
 import { ejerciciosRoutes } from "./modules/ejercicios.js";
+import { botsDiscordModule, type FabricaMotor, type GestorBots, type ValidarToken } from "./modules/bots-discord/index.js";
 import { clipsRoutes, limpiarFuentes } from "./modules/clips.js";
 import { cloudflareRoutes } from "./modules/cloudflare.js";
 import { estudioRoutes } from "./modules/estudio.js";
@@ -76,6 +77,10 @@ export interface AppDeps {
   readonly clienteIa?: ClienteIa;
   /** IA local falsa (pruebas). */
   readonly clienteIaLocal?: ClienteIa;
+  /** Motor de bots de Discord falso (pruebas). */
+  readonly fabricaBots?: FabricaMotor;
+  /** Validación del token de un bot (pruebas). */
+  readonly validarTokenBot?: ValidarToken;
 }
 
 export interface App {
@@ -85,6 +90,8 @@ export interface App {
   readonly deps: ModuleDeps;
   /** Tareas periódicas; index.ts las arranca. */
   readonly jobs: Job[];
+  /** Gestor de los bots de Discord encendidos (pruebas y cierre ordenado). */
+  readonly gestorBots: GestorBots;
   /** Se llama después de migrar: aplica las claves guardadas en Ajustes y crea los roles iniciales. */
   readonly preparar: () => Promise<void>;
 }
@@ -207,6 +214,13 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(cloudflareRoutes(deps));
   await app.register(estudioRoutes(deps));
   await app.register(clipsRoutes(deps, appDeps.clienteIa));
+  const bots = botsDiscordModule(deps, { ...(appDeps.fabricaBots ? { fabrica: appDeps.fabricaBots } : {}), ...(appDeps.validarTokenBot ? { validarToken: appDeps.validarTokenBot } : {}) });
+  await app.register(bots.routes);
+  app.addHook("onClose", async () => bots.gestor.detenerTodos());
+  jobs.push(
+    { nombre: "bots-encender", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => bots.gestor.encenderPendientes() },
+    { nombre: "bots-vencimiento", cadaMs: 5 * 60_000, alInicio: true, run: async () => void (await bots.gestor.apagarVencidos()) },
+  );
   jobs.push({ nombre: "limpiar-clips", cadaMs: 6 * 60 * 60_000, alInicio: false, run: () => limpiarFuentes(deps) });
   await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa));
   await app.register(imagenesRoutes(deps));
@@ -255,5 +269,5 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
     await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
   };
 
-  return { app, auth, hub, deps, jobs, preparar };
+  return { app, auth, hub, deps, jobs, gestorBots: bots.gestor, preparar };
 }

@@ -5,3 +5,4 @@ export * from "./realtime.js";
 export * from "./permissions.js";
 export * from "./schemas.js";
 export * from "./preferencias.js";
+export * from "./bots.js";
