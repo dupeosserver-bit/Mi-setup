@@ -48,6 +48,7 @@ export const envBase = z.object({
     /** Clave gratis de TMDB (películas y series). */
     TMDB_API_KEY: optionalString,
     GEMINI_API_KEY: optionalString,
+    CURSEFORGE_API_KEY: optionalString,
     GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),
     MERCADOLIBRE_CLIENT_ID: optionalString,
     MERCADOLIBRE_CLIENT_SECRET: optionalString,

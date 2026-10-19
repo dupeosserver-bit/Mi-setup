@@ -24,6 +24,7 @@ import {
 import { autoUpdater } from "electron-updater";
 import { leerMetricas, leerSistema } from "./metricas";
 import { registrarArchivosLocales } from "./archivos-locales";
+import { registrarServidoresLocales } from "./servidores-locales";
 import { registrarTerminalLocal } from "./terminal-local";
 import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
 
@@ -48,6 +49,8 @@ let ventana: BrowserWindow | null = null;
 let bandeja: Tray | null = null;
 let saliendo = false;
 let cerrarTerminales: () => void = () => undefined;
+let servidoresLocales: { detenerTodos: () => Promise<void>; hayEncendidos: () => boolean } | null = null;
+let apagandoServidores = false;
 
 function icono(): string | null {
   const candidatos = [join(process.resourcesPath ?? "", "icon.png"), join(__dirname, "..", "build", "icon.png")];
@@ -296,6 +299,7 @@ function crearBandeja(): void {
 function registrarIpc(): void {
   cerrarTerminales = registrarTerminalLocal(deLaApp, () => ventana).cerrarTodas;
   registrarArchivosLocales(deLaApp, () => ventana);
+  servidoresLocales = registrarServidoresLocales(deLaApp, () => ventana);
   ipcMain.on("version", (e) => {
     e.returnValue = app.getVersion();
   });
@@ -331,7 +335,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", mostrar);
-  app.on("before-quit", () => {
+  app.on("before-quit", (e) => {
+    // Servidores de Host local encendidos: se apagan con "stop" (guardan el mundo) y luego se sale.
+    if (servidoresLocales?.hayEncendidos() && !apagandoServidores) {
+      e.preventDefault();
+      apagandoServidores = true;
+      void servidoresLocales.detenerTodos().finally(() => app.quit());
+      return;
+    }
     saliendo = true;
     cerrarTerminales();
   });

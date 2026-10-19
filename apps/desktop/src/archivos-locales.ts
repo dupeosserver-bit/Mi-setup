@@ -7,7 +7,7 @@
  */
 import { execFile } from "node:child_process";
 import { createWriteStream, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { once } from "node:events";
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
@@ -35,6 +35,12 @@ function guardarCarpetas(carpetas: string[]): void {
 }
 
 /** ¿La ruta está dentro de alguna carpeta elegida? (sin escaparse con ..) */
+/** Agrega una carpeta a la lista (la usa Host local para las carpetas de cada servidor). */
+export function agregarCarpeta(ruta: string): void {
+  const lista = leerCarpetas();
+  if (!lista.includes(ruta)) guardarCarpetas([...lista, ruta]);
+}
+
 export function dentroDeCarpetas(ruta: unknown): string | null {
   if (typeof ruta !== "string" || !ruta) return null;
   const r = resolve(ruta);
@@ -90,7 +96,7 @@ export async function entornoHerramientas(): Promise<Record<string, string>> {
   return { ...(java ? { JAVA_HOME: java } : {}), Path: [...extra, pathActual].join(";"), PATH: [...extra, pathActual].join(";") };
 }
 
-async function descargar(url: string, destino: string, alAvance: (pct: number) => void): Promise<void> {
+export async function descargar(url: string, destino: string, alAvance: (pct: number) => void): Promise<void> {
   const r = await fetch(url, { redirect: "follow" });
   if (!r.ok || !r.body) throw new Error(`No se pudo descargar (${r.status})`);
   const total = Number(r.headers.get("content-length") ?? 0);
@@ -115,6 +121,31 @@ async function descargar(url: string, destino: string, alAvance: (pct: number) =
     await new Promise<void>((ok, mal) => salida.end((err?: Error | null) => (err ? mal(err) : ok())));
   }
   if (total && llevados !== total) throw new Error("La descarga quedó incompleta; vuelve a intentarlo.");
+}
+
+/**
+ * Java de Microsoft de la versión pedida (21, 25…), en la carpeta de la app.
+ * Para 21 sirve también el que instala el botón de Código.
+ */
+export async function asegurarJava(mayor: number, alAvance: (texto: string) => void): Promise<string> {
+  const base = DIR_HERRAMIENTAS();
+  const candidatos = [join(base, `java-${mayor}`), ...(mayor === 21 ? [join(base, "java")] : [])];
+  for (const c of candidatos) {
+    const jdk = await buscarDentro(c, "jdk");
+    if (jdk && existsSync(join(jdk, "bin", "java.exe"))) return join(jdk, "bin", "java.exe");
+  }
+  const destino = join(base, `java-${mayor}`);
+  const zip = join(base, `java-${mayor}.zip`);
+  await mkdir(base, { recursive: true });
+  await descargar(`https://aka.ms/download-jdk/microsoft-jdk-${mayor}-windows-x64.zip`, zip, (pct) => alAvance(`Bajando Java ${mayor}… ${pct}%`));
+  alAvance(`Descomprimiendo Java ${mayor}…`);
+  await rm(destino, { recursive: true, force: true });
+  await mkdir(destino, { recursive: true });
+  await tar(["-x", "-f", zip, "-C", destino]);
+  await rm(zip, { force: true });
+  const jdk = await buscarDentro(destino, "jdk");
+  if (!jdk || !existsSync(join(jdk, "bin", "java.exe"))) throw new Error(`No se pudo preparar Java ${mayor}`);
+  return join(jdk, "bin", "java.exe");
 }
 
 export function registrarArchivosLocales(deLaApp: (e: IpcMainEvent | IpcMainInvokeEvent) => boolean, ventana: () => BrowserWindow | null): void {
@@ -198,6 +229,22 @@ export function registrarArchivosLocales(deLaApp: (e: IpcMainEvent | IpcMainInvo
     if (leerCarpetas().some((c) => resolve(c) === r)) throw new Error("Para quitar una carpeta raíz usa «Quitar de la lista».");
     await shell.trashItem(r);
     return true;
+  });
+
+  // Copiar archivos de cualquier parte de la PC (ventana de Windows) a una carpeta tuya.
+  manejar("fs:importar", async (carpeta) => {
+    const destino = exigir(carpeta);
+    const w = ventana();
+    const opciones = { title: "Elige los archivos a copiar", properties: ["openFile", "multiSelections"] as ("openFile" | "multiSelections")[] };
+    const r = w ? await dialog.showOpenDialog(w, opciones) : await dialog.showOpenDialog(opciones);
+    if (r.canceled) return [];
+    const copiados: string[] = [];
+    for (const origen of r.filePaths) {
+      const final = join(destino, basename(origen));
+      await copyFile(origen, final);
+      copiados.push(final);
+    }
+    return copiados;
   });
 
   manejar("fs:mostrar", (ruta) => {

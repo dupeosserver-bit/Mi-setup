@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("miSetup", {
     renombrar: (ruta: string, nuevo: string) => ipcRenderer.invoke("fs:renombrar", ruta, nuevo),
     borrar: (ruta: string) => ipcRenderer.invoke("fs:borrar", ruta),
     mostrar: (ruta: string) => ipcRenderer.invoke("fs:mostrar", ruta),
+    importar: (carpeta: string) => ipcRenderer.invoke("fs:importar", carpeta),
     comprimir: (rutas: string[], nombreZip: string) => ipcRenderer.invoke("fs:comprimir", rutas, nombreZip),
     descomprimir: (ruta: string) => ipcRenderer.invoke("fs:descomprimir", ruta),
     plantillas: () => ipcRenderer.invoke("fs:plantillas"),
@@ -35,6 +36,45 @@ contextBridge.exposeInMainWorld("miSetup", {
       const fn = (_e: unknown, texto: string) => cb(texto);
       ipcRenderer.on("herr:avance", fn);
       return () => ipcRenderer.removeListener("herr:avance", fn);
+    },
+  },
+  /** Host local: servidores de juego en esta PC. */
+  servidoresLocales: {
+    lista: () => ipcRenderer.invoke("srv:lista"),
+    versiones: (tipo: string) => ipcRenderer.invoke("srv:versiones", tipo),
+    crear: (datos: unknown) => ipcRenderer.invoke("srv:crear", datos),
+    iniciar: (id: string) => ipcRenderer.invoke("srv:iniciar", id),
+    detener: (id: string) => ipcRenderer.invoke("srv:detener", id),
+    forzar: (id: string) => ipcRenderer.invoke("srv:forzar", id),
+    comando: (id: string, texto: string) => ipcRenderer.invoke("srv:comando", id, texto),
+    log: (id: string) => ipcRenderer.invoke("srv:log", id),
+    actualizar: (id: string, cambios: unknown) => ipcRenderer.invoke("srv:actualizar", id, cambios),
+    propiedades: (id: string) => ipcRenderer.invoke("srv:propiedades", id),
+    guardarPropiedades: (id: string, cambios: unknown) => ipcRenderer.invoke("srv:guardarPropiedades", id, cambios),
+    borrar: (id: string) => ipcRenderer.invoke("srv:borrar", id),
+    addons: (id: string) => ipcRenderer.invoke("srv:addons", id),
+    modrinthBuscar: (id: string, q: string) => ipcRenderer.invoke("srv:modrinthBuscar", id, q),
+    modrinthInstalar: (id: string, proyecto: string) => ipcRenderer.invoke("srv:modrinthInstalar", id, proyecto),
+    instalarDesdeUrl: (id: string, url: string, nombre: string) => ipcRenderer.invoke("srv:instalarDesdeUrl", id, url, nombre),
+    quitarAddon: (id: string, nombre: string) => ipcRenderer.invoke("srv:quitarAddon", id, nombre),
+    playit: () => ipcRenderer.invoke("srv:playit"),
+    empaquetar: (id: string, soloMundo: boolean) => ipcRenderer.invoke("srv:empaquetar", id, soloMundo),
+    subirZip: (zip: string, url: string) => ipcRenderer.invoke("srv:subirZip", zip, url),
+    abrirCarpeta: (id: string) => ipcRenderer.invoke("srv:abrirCarpeta", id),
+    alSalida: (cb: (id: string, texto: string) => void) => {
+      const fn = (_e: unknown, id: string, texto: string) => cb(id, texto);
+      ipcRenderer.on("srv:salida", fn);
+      return () => ipcRenderer.removeListener("srv:salida", fn);
+    },
+    alEstado: (cb: (servidor: unknown) => void) => {
+      const fn = (_e: unknown, s: unknown) => cb(s);
+      ipcRenderer.on("srv:estado", fn);
+      return () => ipcRenderer.removeListener("srv:estado", fn);
+    },
+    alProgreso: (cb: (texto: string) => void) => {
+      const fn = (_e: unknown, t: string) => cb(t);
+      ipcRenderer.on("srv:progreso", fn);
+      return () => ipcRenderer.removeListener("srv:progreso", fn);
     },
   },
   /** Terminal de esta PC (PowerShell / CMD). */

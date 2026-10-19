@@ -22,6 +22,61 @@ export interface PuenteEscritorio {
   readonly terminalLocal?: TerminalLocal;
   /** Archivos de la PC para la pantalla Código (versión 0.7 o más nueva). */
   readonly archivosLocales?: ArchivosLocales;
+  /** Host local (versión 0.8 o más nueva). */
+  readonly servidoresLocales?: ServidoresLocales;
+}
+
+export type TipoServidor = "paper" | "fabric" | "forge" | "vanilla" | "personalizado";
+export interface ServidorLocal {
+  id: string;
+  nombre: string;
+  tipo: TipoServidor;
+  version: string;
+  carpeta: string;
+  ramMb: number;
+  puerto: number;
+  java: number;
+  comando?: string;
+  creado: string;
+  estado: "detenido" | "iniciando" | "encendido" | "deteniendo";
+  jugadores: string[];
+  desde: number | null;
+  ip: string | null;
+}
+export interface Addon {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  icono: string | null;
+  descargas: number;
+  autor: string;
+  url: string;
+}
+export interface ServidoresLocales {
+  lista(): Promise<ServidorLocal[]>;
+  versiones(tipo: TipoServidor): Promise<string[]>;
+  crear(datos: { nombre: string; tipo: TipoServidor; version?: string; ramMb: number; puerto: number; eula?: boolean; comando?: string }): Promise<ServidorLocal | null>;
+  iniciar(id: string): Promise<ServidorLocal>;
+  detener(id: string): Promise<void>;
+  forzar(id: string): Promise<boolean>;
+  comando(id: string, texto: string): Promise<boolean>;
+  log(id: string): Promise<string>;
+  actualizar(id: string, cambios: { nombre?: string; ramMb?: number; puerto?: number }): Promise<ServidorLocal>;
+  propiedades(id: string): Promise<Record<string, string>>;
+  guardarPropiedades(id: string, cambios: Record<string, string>): Promise<Record<string, string>>;
+  borrar(id: string): Promise<boolean>;
+  addons(id: string): Promise<{ nombre: string; tamano: number }[]>;
+  modrinthBuscar(id: string, q: string): Promise<Addon[]>;
+  modrinthInstalar(id: string, proyecto: string): Promise<string>;
+  instalarDesdeUrl(id: string, url: string, nombre: string): Promise<string>;
+  quitarAddon(id: string, nombre: string): Promise<boolean>;
+  playit(): Promise<string>;
+  empaquetar(id: string, soloMundo: boolean): Promise<{ zip: string; tamano: number }>;
+  subirZip(zip: string, url: string): Promise<{ archivo: string }>;
+  abrirCarpeta(id: string): Promise<boolean>;
+  alSalida(cb: (id: string, texto: string) => void): () => void;
+  alEstado(cb: (s: ServidorLocal) => void): () => void;
+  alProgreso(cb: (texto: string) => void): () => void;
 }
 
 export interface EntradaLocal {
@@ -51,6 +106,7 @@ export interface ArchivosLocales {
   renombrar(ruta: string, nuevo: string): Promise<string>;
   borrar(ruta: string): Promise<boolean>;
   mostrar(ruta: string): Promise<boolean>;
+  importar(carpeta: string): Promise<string[]>;
   comprimir(rutas: string[], nombreZip: string): Promise<string>;
   descomprimir(ruta: string): Promise<string>;
   plantillas(): Promise<PlantillaProyecto[]>;

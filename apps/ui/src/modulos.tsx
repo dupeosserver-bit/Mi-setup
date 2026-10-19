@@ -3,6 +3,7 @@ import type { ModuleCategory, ModuleId } from "@mi-setup/shared";
 import {
   Activity,
   Code2,
+  Boxes,
   GraduationCap,
   CalendarDays,
   Clapperboard,
@@ -120,6 +121,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   divisas: { ...m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))), enMenu: false },
   herramientas: m("herramientas", "/herramientas", Wrench, lazy(() => import("./pages/Herramientas"))),
   codigo: m("codigo", "/programacion/codigo", Code2, lazy(() => import("./pages/Codigo"))),
+  host_local: m("host_local", "/host-local", Boxes, lazy(() => import("./pages/HostLocal"))),
   ejercicios: m("ejercicios", "/programacion/ejercicios", GraduationCap, lazy(() => import("./pages/Ejercicios"))),
   documentos: m("documentos", "/herramientas/documentos", FileText, lazy(() => import("./pages/Documentos"))),
   convertidor: m("convertidor", "/herramientas/convertidor", Repeat, lazy(() => import("./pages/Convertidor"))),
@@ -145,6 +147,7 @@ export const CATEGORIAS: readonly { id: ModuleCategory; titulo: string; icono: L
   { id: "novedades", titulo: "Novedades", icono: Newspaper },
   { id: "herramientas", titulo: "Herramientas", icono: Wrench },
   { id: "programacion", titulo: "Programación", icono: Code2 },
+  { id: "host_local", titulo: "Host local", icono: Boxes },
   { id: "entretenimiento", titulo: "Entretenimiento", icono: Clapperboard },
   { id: "casa", titulo: "Casa", icono: House },
   { id: "control_remoto", titulo: "Control remoto", icono: MonitorUp },

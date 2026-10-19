@@ -18,6 +18,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Upload,
   Hammer,
   PackageOpen,
   Pencil,
@@ -29,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
 import { Boton, Campo, Encabezado, Entrada, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { confirmar } from "../lib/confirmar";
@@ -263,6 +265,9 @@ function BlocDeCodigo() {
 }
 
 function Ide({ fs }: { fs: ArchivosLocales }) {
+  // ?carpeta=… (p. ej. desde Host local) abre directo esa carpeta si es una de las tuyas.
+  const [params] = useSearchParams();
+  const pedida = params.get("carpeta");
   const [carpetas, setCarpetas] = useState<string[]>([]);
   const [raiz, setRaiz] = useState<string | null>(null);
   const [contenido, setContenido] = useState(new Map<string, EntradaLocal[]>());
@@ -295,7 +300,8 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
   useEffect(() => {
     void fs.carpetas().then((c) => {
       setCarpetas(c);
-      if (c[0]) setRaiz((r) => r ?? c[0]!);
+      if (pedida && c.includes(pedida)) setRaiz(pedida);
+      else if (c[0]) setRaiz((r) => r ?? c[0]!);
     });
     void fs.herramientas().then(setHerr, () => undefined);
     return fs.alAvanceHerramientas(setInstalando);
@@ -524,6 +530,26 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
             </button>
             <button type="button" title="Nueva carpeta" className="p-1 hover:text-acento" onClick={() => void crearEn("carpeta")}>
               <FolderPlus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Copiar archivos de tu PC aquí"
+              className="p-1 hover:text-acento"
+              onClick={async () => {
+                const destino = seleccion && contenido.has(seleccion) ? seleccion : seleccion ? padreDe(seleccion) : raiz;
+                if (!destino) return;
+                try {
+                  const r = await fs.importar(destino);
+                  if (r.length) {
+                    avisar(`Copiados ${r.length} archivo(s)`);
+                    void cargar(destino);
+                  }
+                } catch (err) {
+                  avisarError(err);
+                }
+              }}
+            >
+              <Upload className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-1">

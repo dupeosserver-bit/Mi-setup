@@ -117,6 +117,16 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
     nota: "En el navegador y el celular queda un bloc de código para practicar; tus archivos solo se abren desde la app de PC.",
   },
+  host_local: {
+    pasos: [
+      "En la app de Windows toca «Crear servidor»: elige Paper (plugins), Fabric o Forge (mods), Vanilla u «Otro juego». Mi Setup baja el servidor y el Java correcto.",
+      "Enciende y mira la consola en vivo; escribe comandos abajo (op TuNombre, gamemode…). Apagar guarda el mundo.",
+      "Mods/Plugins: búscalos en Modrinth (o CurseForge si pusiste su clave) e instálalos con un toque.",
+      "Compartir: playit.gg te da una dirección para que tus amigos entren sin abrir puertos del módem. En tu casa entran con la IP local.",
+      "Pasar a mi VPS: comprime el servidor (o solo el mundo) y lo sube a un servidor de tu Pterodactyl.",
+    ],
+    nota: "Los servidores viven en Documentos → MiSetup Servidores. Sus archivos se editan en Programación → Código.",
+  },
   ejercicios: {
     pasos: [
       "Elige nivel (fácil, medio o difícil) y un ejercicio. Lee lo que pide y escribe tu solución.",

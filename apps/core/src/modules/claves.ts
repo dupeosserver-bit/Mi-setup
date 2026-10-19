@@ -46,6 +46,7 @@ export const CLAVES: readonly DefClave[] = [
   { nombre: "KICK_CLIENT_SECRET", etiqueta: "Client Secret", grupo: "Kick", secreto: true, ayuda: "Mismo lugar." },
   { nombre: "TMDB_API_KEY", etiqueta: "Clave de TMDB", grupo: "Películas y series", secreto: true, ayuda: "Gratis: themoviedb.org → crea tu cuenta → Ajustes → API → Solicitar clave (tipo Developer). Copia la \"Clave de la API\"." },
   { nombre: "GEMINI_API_KEY", etiqueta: "Clave de Gemini", grupo: "IA creativa (Nano Banana)", secreto: true, ayuda: "aistudio.google.com → Get API key → Create API key. Sirve para crear y editar imágenes." },
+  { nombre: "CURSEFORGE_API_KEY", etiqueta: "Clave de CurseForge", grupo: "Host local (mods)", secreto: true, ayuda: "console.curseforge.com → API keys (gratis, la aprueban en unos días). Sin ella, los mods se buscan en Modrinth." },
   { nombre: "MERCADOLIBRE_CLIENT_ID", etiqueta: "App ID", grupo: "Mercado Libre", secreto: false, ayuda: "developers.mercadolibre.com.mx → Mis aplicaciones → Crear aplicación (gratis). Copia el App ID." },
   { nombre: "MERCADOLIBRE_CLIENT_SECRET", etiqueta: "Clave secreta", grupo: "Mercado Libre", secreto: true, ayuda: "Misma aplicación → Clave secreta." },
   { nombre: "SPOTIFY_CLIENT_ID", etiqueta: "Client ID", grupo: "Spotify", secreto: false, ayuda: "developer.spotify.com → Dashboard → Create app. Redirect URI: https://TU-DOMINIO/api/musica/spotify/callback" },

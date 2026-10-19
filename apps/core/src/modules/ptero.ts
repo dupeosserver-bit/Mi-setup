@@ -234,6 +234,23 @@ export function pteroRoutes(deps: ModuleDeps) {
         return { ok: true };
       });
 
+      // Pasar un servidor de Host local al VPS: URL firmada de subida y descomprimir.
+      app.get("/api/ptero/servidores/:id/subida", escribir, async (request) => {
+        const { id } = idServidor.parse(request.params);
+        const r = await ptero.peticion<{ attributes: { url: string } }>(`/api/client/servers/${id}/files/upload`);
+        await auditar(request, "ptero_subida", id);
+        return { url: r.attributes.url };
+      });
+
+      app.post("/api/ptero/servidores/:id/descomprimir", escribir, async (request) => {
+        const { id } = idServidor.parse(request.params);
+        const { archivo, borrar } = z.object({ archivo: z.string().regex(/^[w .()-]{1,120}.zip$/), borrar: z.boolean().default(true) }).parse(request.body);
+        await ptero.peticion(`/api/client/servers/${id}/files/decompress`, { metodo: "POST", cuerpo: { root: "/", file: archivo } });
+        if (borrar) await ptero.peticion(`/api/client/servers/${id}/files/delete`, { metodo: "POST", cuerpo: { root: "/", files: [archivo] } }).catch(() => undefined);
+        await auditar(request, "ptero_descomprimir", id, { archivo });
+        return { ok: true };
+      });
+
       // Administración (llave de aplicación): todos los servidores y suspensión.
       app.get("/api/ptero/admin/servidores", { config: { acceso: { modulo: "pterodactyl", nivel: "administrar" } } }, async () => {
         const r = await ptero.peticion<ListaPtero<{ id: number; identifier: string; name: string; suspended: boolean; user: number; node: number }>>(
