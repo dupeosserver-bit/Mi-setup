@@ -378,7 +378,7 @@ Para que funcionen las direcciones `tusitio.mexicanland.net`:
 2. Para un dominio propio, el dueño crea un registro **A** hacia la misma IP y lo escribe en Ajustes.
 3. El certificado HTTPS se pide solo la primera vez que alguien abre el sitio.
 
-El `docker compose up -d --build` recarga el Caddyfile nuevo.
+Caddy **no recarga solo** el Caddyfile: después de actualizar corre `docker compose restart caddy` (o usa el comando completo de actualización de abajo).
 
 ### Versión con letra (0.9.0b)
 
@@ -397,3 +397,66 @@ Para cambiarla, edita `"etapa"` en los `package.json` (y `versionName` en `apps/
 - **Otros:** Vanilla y Velocity (proxy para unir varios servidores; se configura en `velocity.toml`).
 
 Magma no se agregó: su página de descargas ya no responde y sus últimas versiones son de 2022. Mohist y Arclight hacen lo mismo. Spigot tampoco: hay que compilarlo con BuildTools y sus plugins funcionan igual en Paper o Purpur.
+
+
+## Versión 0.10.0b
+
+El número queda **0.10.0** y la letra **b** (beta). Incluye todo lo de la 0.9.0b, que no se había subido.
+
+### Arreglos
+
+- **Fotos en el celular:** tu foto de perfil, el logo y el fondo ya se ven en la app de Android (antes buscaban el archivo dentro del propio celular).
+- **Control remoto:** en el celular ahora abre RustDesk (`rustdesk://connection/new/ID`). Si no abre, instala RustDesk en el celular.
+- **Sitios que no abrían:** el Caddyfile nuevo no se recargaba. El comando de actualización ahora reinicia Caddy, y cada sitio publicado tiene la tarjeta **«¿Abre desde internet?»** que revisa publicación, DNS y HTTPS y te dice qué falta.
+- **Pasar a mi VPS** rechazaba el nombre del archivo; corregido.
+
+### Cloudflare (subdominios y dominios)
+
+1. En Cloudflare: perfil → API Tokens → Create Token → plantilla «Edit zone DNS» → tu dominio.
+2. Pégalo en Ajustes → Servicios y claves → Cloudflare (`CLOUDFLARE_API_TOKEN`).
+3. En el sitio → «¿Abre desde internet?» → **Crear el registro «\*»** (o el de tu dominio propio). Usa la nube gris.
+
+### Mis finanzas
+
+- El concepto se escribe a mano («Préstamo Coppel»…) con sugerencias de lo que ya usaste.
+- **Tarjetas:** solo apodo y últimos 4 dígitos. «Pagar» anota el gasto con esa tarjeta, muestra un aviso antes y exige confirmar. Mi Setup **no cobra dinero real**.
+- **Tarjetas de prueba:** usan los números públicos de pruebas de Stripe (no sirven para compras reales). Son para probar tus propias páginas.
+
+### Respaldos
+
+«Crear respaldo» (solo cuenta maestra): una carpeta, todo Pterodactyl, la base de Mi Setup, el VPS completo o un servidor de juego. Se guardan en `/opt/mi-setup/respaldos-manuales` y corren en segundo plano. Se pueden descargar y borrar. Necesita más de 2 GB libres.
+
+### Servidores en mi PC desde el celular
+
+La app de Windows sube la lista de tus servidores cada 20 segundos. En el celular los ves y cambias nombre, RAM, puerto y opciones; los cambios se aplican cuando tu PC tiene Mi Setup abierto. Encender y apagar es solo en la PC. Nuevos tipos: Purpur, Folia, Quilt, NeoForge, Mohist, Arclight y Velocity (reinstala el EXE para tenerlos). Magma y Spigot no se incluyen.
+
+### Fondo transparente
+
+Ajustes → «Fondo transparente»: transparencia de los paneles y cuánto se oscurece la imagen.
+
+### Notas
+
+Estilo Discord (`**negrita**`, `__subrayado__`, `||spoiler||`, `-# pequeño`…), fotos, archivos, dibujo a mano y color de la nota.
+
+### Estudio creativo
+
+- **Editor de fotos:** capas, texto, formas, pincel, filtros y recorte; guarda proyectos y exporta PNG, JPG o WebP.
+- **Editor de video:** línea de tiempo con cortes, velocidad, volumen, textos y música; exporta en tiempo real en MP4 si el navegador lo permite, o WebM.
+
+### Clips de stream y TikTok
+
+Streams → «Clips y TikTok»: trae tu transmisión por enlace (Twitch, Kick, YouTube) o sube un video; la IA propone momentos por picos de audio con título y hashtags; se cortan con ffmpeg (vertical 9:16, cuadrado u original). Para publicar en TikTok pon `TIKTOK_CLIENT_KEY` y `TIKTOK_CLIENT_SECRET` (developers.tiktok.com; URL de retorno `https://TU-DOMINIO/api/redes/oauth/tiktok/callback`). Mientras TikTok no apruebe tu app solo se publican videos privados. Reconecta Twitch para el permiso `clips:edit`. Las fuentes se borran solas a los 2 días. Usa solo tus propios streams. Si yt-dlp falla, reconstruye: `docker compose build --no-cache core`.
+
+### Bots de Discord
+
+Menú → «Bots de Discord (creador)». En discord.com/developers crea la aplicación, activa *Server Members Intent* y *Message Content Intent*, copia el token y pégalo en «Nuevo bot». Módulos: bienvenida, moderación, niveles, economía, tickets, roles con botones, comandos propios, registros y mensajes programados. Para venderlo: cliente, fecha de vencimiento (el bot se apaga solo) y un **enlace** con el que su dueño lo configura, enciende, apaga y reinicia sin ver tu cuenta ni el token.
+
+### Tienda de hosting (Sitios)
+
+Plantilla «Tienda de hosting»: planes editables, botón «Contratar», instrucciones de pago en Ajustes del sitio, y en Mensajes y pedidos el botón **«Crear cliente y cobro»**. No cobra ni crea servidores solo: tú confirmas el pago y creas el servidor en Pterodactyl.
+
+### Actualizar el VPS
+
+```bash
+tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans && docker compose --env-file /opt/mi-setup/.env restart caddy
+```

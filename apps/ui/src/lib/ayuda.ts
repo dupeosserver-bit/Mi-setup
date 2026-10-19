@@ -19,7 +19,10 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
       "En 'Presupuestos' pones un límite por categoría y la barra te avisa cuando te acercas.",
       "En 'Suscripciones' anotas Netflix, Spotify, el VPS…: te avisa antes de que te cobren.",
       "'Importar' sube tu archivo .xlsx o .csv y lo convierte en movimientos; 'Exportar' te da un Excel cuando quieras.",
+      "En el concepto escribe lo que quieras (ej. «Préstamo Coppel»): lo que ya usaste te sale como sugerencia.",
+      "En 'Tarjetas' guardas tus tarjetas (solo apodo y últimos 4 dígitos) y «Pagar» anota el gasto con esa tarjeta, después de avisarte lo que va a pasar. Ahí también creas tarjetas de prueba para probar tus páginas.",
     ],
+    nota: "Mi Setup no cobra dinero real: la billetera solo registra tus gastos y nunca guarda el número completo de una tarjeta.",
   },
   portapapeles: {
     pasos: ["Copia algo en la PC y toca 'Enviar lo que copié': aparece al momento en tu celular, y al revés.", "Toca un elemento para copiarlo; se guardan los últimos 50."],
@@ -136,7 +139,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
       "Publicar: los visitantes ven lo nuevo solo al tocar Publicar. Cada publicación queda en el historial por si quieres regresar.",
       "Mensajes y pedidos, estadísticas y cuentas del área privada están en sus pestañas; en Ajustes: dominio propio, SEO, app instalable, quién puede editar y exportar en ZIP.",
     ],
-    nota: "Para que funcionen los subdominios, en Cloudflare agrega una vez un registro A llamado * hacia la IP de tu VPS (nube gris). Ver USO.md.",
+    nota: "Subdominios: pon tu token de Cloudflare en Ajustes → Servicios y claves y, en la tarjeta «¿Abre desde internet?» del sitio, crea el registro DNS por ti. Plantilla «Tienda de hosting»: vende planes y cada pedido se vuelve cliente con cobro.",
   },
   editor_fotos: {
     pasos: [
@@ -185,7 +188,12 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
   },
   notas: {
-    pasos: ["Toca 'Nueva nota', escribe y se guarda sola.", "Fija las importantes para que salgan arriba y usa la búsqueda para encontrarlas.", "Se sincronizan al momento entre PC y celular."],
+    pasos: [
+      "Toca 'Nueva nota', escribe y se guarda sola. Fija las importantes y usa la búsqueda.",
+      "Escribe con estilo de Discord: **negrita**, *cursiva*, __subrayado__, ~~tachado~~, ||spoiler|| (se esconde hasta tocarlo), # título, > cita, -# letra pequeña.",
+      "Arriba del texto: foto (o pégala o arrástrala), archivo, dibujo a mano y el color de la nota.",
+      "Se sincronizan al momento entre PC y celular.",
+    ],
   },
   equipos: {
     pasos: [
@@ -260,7 +268,12 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     pasos: ["Guarda ideas y mejoras para MexicanLand con su estado (pendiente, en proceso, hecho)."],
   },
   respaldos: {
-    pasos: ["Muestra los respaldos de la base que hace el script del VPS y si están al día.", "Puedes descargar cualquiera."],
+    pasos: [
+      "Arriba, «Crear respaldo» (solo cuenta maestra): elige una carpeta del VPS, todo Pterodactyl, la base de Mi Setup, el VPS completo o un servidor de juego.",
+      "Los respaldos del VPS siguen en segundo plano aunque cierres la app; los ves aparecer abajo con su tamaño y puedes descargarlos o borrarlos.",
+      "También ves la base de datos que respalda el script cada día y puedes descargar tus datos personales.",
+    ],
+    nota: "Un respaldo en el mismo VPS no te salva si el VPS se pierde: descarga los importantes a tu PC.",
   },
   boveda: {
     pasos: [
@@ -304,7 +317,10 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     pasos: [
       "Pon los datos de cada plataforma en Ajustes → Servicios y claves y toca Conectar.",
       "Cambia el título y el juego de tu transmisión desde aquí (YouTube solo título).",
+      "En «Clips y TikTok»: trae tu stream (enlace de Twitch, Kick o YouTube, o sube un video), deja que la IA busque los mejores momentos con título y hashtags o córtalos a mano, y saca el clip en vertical para TikTok.",
+      "Conecta TikTok en esa misma pestaña para subir el clip desde aquí. Usa solo tus propios streams.",
     ],
+    nota: "Mientras TikTok no apruebe tu app, solo deja publicar videos privados («Solo yo»).",
   },
   x: {
     pasos: ["Conecta tu cuenta de X (claves en Ajustes → Servicios y claves).", "Antes de publicar o leer menciones se muestra el costo estimado y debes aceptarlo."],
