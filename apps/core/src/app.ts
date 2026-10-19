@@ -27,6 +27,7 @@ import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
 import { comprasRoutes } from "./modules/compras.js";
 import { ejerciciosRoutes } from "./modules/ejercicios.js";
 import { hostLocalRoutes } from "./modules/hostlocal.js";
+import { crearDetectorSitios, sitiosModule } from "./modules/sitios/index.js";
 import { imagenesRoutes } from "./modules/imagenes.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { vpnRoutes } from "./modules/vpn.js";
@@ -86,7 +87,10 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   const { config, db, logger = true } = appDeps;
   const now = appDeps.now ?? (() => new Date());
 
+  // Sitios publicados (nombre.DOMINIO o dominio propio): se atienden en /__sitio/… (módulo sitios).
+  const detectorSitios = crearDetectorSitios(config);
   const app = Fastify({
+    rewriteUrl: (req) => (detectorSitios.esSitio(req.headers.host) ? `/__sitio${req.url ?? "/"}` : (req.url ?? "/")),
     logger: logger ? { level: config.env.LOG_LEVEL, redact: LOG_REDACT_PATHS } : false,
     // core solo es accesible a través de Caddy (red interna de Docker).
     trustProxy: true,
@@ -117,10 +121,11 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        // Google Fonts: tipografías del creador de sitios.
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         // Portadas de ofertas (CheapShark) vienen de CDNs de cada tienda: se permiten solo imágenes https.
         imgSrc: ["'self'", "data:", "blob:", "https:"],
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         // Chats en vivo (Twitch y Kick) y modelo para quitar fondos (IA creativa).
         connectSrc: ["'self'", "wss://irc-ws.chat.twitch.tv", "wss://ws-us2.pusher.com", "https://staticimgly.com"],
         workerSrc: ["'self'", "blob:"],
@@ -191,6 +196,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(comprasRoutes(deps));
   await app.register(ejerciciosRoutes(deps));
   await app.register(hostLocalRoutes(deps));
+  await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa));
   await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
   jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });

@@ -859,3 +859,140 @@ export const mediaFiles = pgTable(
   },
   (t) => [index("media_usuario").on(t.userId, t.kind)],
 );
+
+// ---------------------------------------------------------------- sitios web (creador)
+
+/** Sitio o app hecho con el creador. El borrador y lo publicado van separados. */
+export const sites = pgTable(
+  "sites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    customDomain: text("custom_domain"),
+    /** Proyecto del editor (páginas, componentes y estilos). */
+    draft: jsonb("draft").notNull().default({}),
+    /** Lo publicado: { páginas: [{ ruta, titulo, html, css, privada }] }. */
+    published: jsonb("published"),
+    /** Título, descripción, ícono, WhatsApp, colores, app instalable… */
+    settings: jsonb("settings").notNull().default({}),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("sites_slug").on(t.slug), uniqueIndex("sites_dominio").on(t.customDomain)],
+);
+
+/** Historial de publicaciones (para regresar a una anterior). */
+export const siteVersions = pgTable(
+  "site_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    draft: jsonb("draft").notNull(),
+    published: jsonb("published").notNull(),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_versions_sitio").on(t.siteId, t.createdAt)],
+);
+
+/** Otras cuentas de Mi Setup que pueden editar un sitio. */
+export const siteEditors = pgTable(
+  "site_editors",
+  {
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.userId] })],
+);
+
+/** Formularios y pedidos que llegan desde el sitio publicado. */
+export const siteEntries = pgTable(
+  "site_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    form: text("form").notNull().default(""),
+    data: jsonb("data").notNull(),
+    read: boolean("read").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_entries_sitio").on(t.siteId, t.createdAt)],
+);
+
+/** Tablas de datos tipo Excel que el sitio muestra solo (productos, precios…). */
+export const siteTables = pgTable(
+  "site_tables",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    columns: jsonb("columns").notNull().default([]),
+    rows: jsonb("rows").notNull().default([]),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("site_tables_nombre").on(t.siteId, t.name)],
+);
+
+/** Cuentas de visitantes del sitio (área privada). */
+export const siteMembers = pgTable(
+  "site_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    name: text("name").notNull().default(""),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("site_members_correo").on(t.siteId, t.email)],
+);
+
+/** Estadísticas privadas: visitas por día y página, y clics en botones. */
+export const siteStats = pgTable(
+  "site_stats",
+  {
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    kind: text("kind").notNull(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.day, t.kind, t.key] })],
+);
+
+/** Imágenes y archivos del sitio (guardados en ARCHIVOS_DIR/sitios). */
+export const siteAssets = pgTable(
+  "site_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    storedName: text("stored_name").notNull(),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_assets_sitio").on(t.siteId)],
+);
