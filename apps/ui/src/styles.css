@@ -173,6 +173,16 @@ select {
 .pagina-notion th, .pagina-notion td { border: 1px solid rgba(127, 127, 127, 0.3); padding: 0.4rem 0.6rem; text-align: left; }
 .pagina-notion th { background: rgba(127, 127, 127, 0.12); font-weight: 600; }
 
+/* Notas con estilo Discord: spoilers (se muestran al tocar), texto pequeño, subrayado e imágenes adjuntas. */
+.pagina-notion .spoiler { background: #202225; color: transparent; border-radius: 0.3rem; padding: 0 0.25rem; cursor: pointer; user-select: none; }
+.pagina-notion .spoiler[data-revelado] { background: rgba(127, 127, 127, 0.22); color: inherit; user-select: auto; }
+.pagina-notion .spoiler img { visibility: hidden; }
+.pagina-notion .spoiler[data-revelado] img { visibility: visible; }
+.pagina-notion .texto-pequeno { font-size: 0.75rem; color: #9ca3af; margin: 0.2rem 0; }
+.pagina-notion u { text-underline-offset: 2px; }
+.pagina-notion img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 0.4rem 0; }
+.pagina-notion del { opacity: 0.7; }
+
 /* Editor de sitios (GrapesJS): panel derecho más ancho para que se lean bloques y estilos. */
 .editor-sitio .gjs-cv-canvas { width: calc(100% - 260px); }
 .editor-sitio .gjs-pn-views-container,

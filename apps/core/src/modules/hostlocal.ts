@@ -5,13 +5,50 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { HttpError, missingConfig } from "../http-error.js";
+import { currentUser } from "../security/rbac.js";
 import type { ModuleDeps } from "./common.js";
+import { getSetting, setSetting } from "./settings.js";
 
 const MINECRAFT = 432;
 const CLASE = { mods: 6, plugins: 5 } as const;
 /** modLoaderType de CurseForge. */
 const CARGADOR = { forge: 1, fabric: 4, quilt: 5, neoforge: 6 } as const;
+
+/** Lo que la app de Windows comparte de sus servidores para verlos y editarlos desde el celular. */
+const servidorSync = z.object({
+  id: z.string().uuid(),
+  nombre: z.string().max(40),
+  tipo: z.string().max(20),
+  version: z.string().max(40),
+  mc: z.string().max(40).optional(),
+  ramMb: z.number().int().min(512).max(65536),
+  puerto: z.number().int().min(1).max(65535),
+  estado: z.enum(["detenido", "iniciando", "encendido", "deteniendo"]),
+  jugadores: z.array(z.string().max(40)).max(100),
+  propiedades: z.record(z.string().max(60), z.string().max(200)).optional(),
+});
+const cambiosSchema = z
+  .object({
+    nombre: z.string().trim().min(1).max(40).optional(),
+    ramMb: z.number().int().min(512).max(65536).optional(),
+    puerto: z.number().int().min(1024).max(65535).optional(),
+    propiedades: z.record(z.string().regex(/^[a-z0-9.-]{1,60}$/), z.string().max(200).refine((v) => !/[\r\n]/.test(v))).optional(),
+  })
+  .refine((c) => Object.keys(c).length > 0, "No hay cambios");
+interface EdicionPendiente {
+  id: string;
+  servidorId: string;
+  cambios: z.infer<typeof cambiosSchema>;
+  creada: string;
+}
+interface EstadoSync {
+  servidores: z.infer<typeof servidorSync>[];
+  actualizado: string | null;
+  pendientes: EdicionPendiente[];
+}
+const claveSync = (userId: string) => `hostlocal:${userId}`;
 
 const filtros = z.object({
   version: z.string().regex(/^[\w.-]{2,20}$/),
@@ -33,6 +70,48 @@ export function hostLocalRoutes(deps: ModuleDeps) {
 
   return async function (app: FastifyInstance): Promise<void> {
     const leer = { config: { acceso: { modulo: "host_local" as const, nivel: "lectura" as const } } };
+
+    const escribir = { config: { acceso: { modulo: "host_local" as const, nivel: "escritura" as const } } };
+    const leerSync = async (userId: string): Promise<EstadoSync> => (await getSetting<EstadoSync>(deps.db, claveSync(userId))) ?? { servidores: [], actualizado: null, pendientes: [] };
+
+    // ---- celular: ver y editar (no encender) los servidores de la PC. La PC los sube y aplica los cambios al abrir Mi Setup.
+    /** La app de Windows sube su lista y recibe las ediciones pendientes del celular. */
+    app.put("/api/hostlocal/sincronizar", escribir, async (request) => {
+      const user = currentUser(request);
+      const { servidores } = z.object({ servidores: z.array(servidorSync).max(60) }).parse(request.body);
+      const actual = await leerSync(user.id);
+      const ids = new Set(servidores.map((x) => x.id));
+      const nuevo: EstadoSync = { servidores, actualizado: deps.now().toISOString(), pendientes: actual.pendientes.filter((e) => ids.has(e.servidorId)) };
+      await setSetting(deps.db, claveSync(user.id), nuevo, deps.now());
+      return { pendientes: nuevo.pendientes };
+    });
+
+    app.get("/api/hostlocal/servidores", leer, async (request) => {
+      const e = await leerSync(currentUser(request).id);
+      return { servidores: e.servidores, actualizado: e.actualizado, pendientes: e.pendientes.map((p) => ({ id: p.id, servidorId: p.servidorId, cambios: p.cambios, creada: p.creada })) };
+    });
+
+    app.post("/api/hostlocal/ediciones", escribir, async (request) => {
+      const user = currentUser(request);
+      const d = z.object({ servidorId: z.string().uuid(), cambios: cambiosSchema }).parse(request.body);
+      const e = await leerSync(user.id);
+      const s = e.servidores.find((x) => x.id === d.servidorId);
+      if (!s) throw new HttpError(404, "Ese servidor todavía no está sincronizado: abre Servidores en mi PC en la app de Windows.");
+      if (d.cambios.puerto && e.servidores.some((x) => x.id !== s.id && x.puerto === d.cambios.puerto)) throw new HttpError(400, `El puerto ${d.cambios.puerto} ya lo usa otro de tus servidores`);
+      if (e.pendientes.length >= 50) throw new HttpError(400, "Hay demasiados cambios esperando a tu PC");
+      const edicion: EdicionPendiente = { id: randomUUID(), servidorId: s.id, cambios: d.cambios, creada: deps.now().toISOString() };
+      await setSetting(deps.db, claveSync(user.id), { ...e, pendientes: [...e.pendientes, edicion] }, deps.now());
+      return { ok: true, id: edicion.id };
+    });
+
+    /** La PC avisa qué ediciones ya aplicó. */
+    app.post("/api/hostlocal/ediciones/aplicadas", escribir, async (request) => {
+      const user = currentUser(request);
+      const { ids } = z.object({ ids: z.array(z.string().uuid()).max(100) }).parse(request.body);
+      const e = await leerSync(user.id);
+      await setSetting(deps.db, claveSync(user.id), { ...e, pendientes: e.pendientes.filter((p) => !ids.includes(p.id)) }, deps.now());
+      return { ok: true };
+    });
 
     app.get("/api/hostlocal/curseforge/buscar", leer, async (request) => {
       const d = filtros.extend({ q: z.string().max(100).default("") }).parse(request.query);

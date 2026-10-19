@@ -19,9 +19,7 @@ import {
   Power,
   Search,
   Send,
-  Settings2,
   Share2,
-  SquareTerminal,
   Trash2,
   Users,
 } from "lucide-react";
@@ -31,7 +29,8 @@ import { ConsolaLocal } from "../components/ConsolaLocal";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
-import { usePuede } from "../lib/consultas";
+import { queryClient, usePuede } from "../lib/consultas";
+import { haceCuanto } from "../lib/formato";
 import { abrirExterno, escritorio, type Addon, type ClaseAddon, type ServidoresLocales, type ServidorLocal, type TipoServidor } from "../lib/plataforma";
 
 const TIPOS: Record<TipoServidor, { nombre: string; detalle: string; grupo: string }> = {
@@ -645,6 +644,141 @@ function Detalle({ srv, s, alCambio, alBorrar }: { srv: ServidoresLocales; s: Se
   );
 }
 
+interface EdicionRemota {
+  id: string;
+  servidorId: string;
+  cambios: { nombre?: string; ramMb?: number; puerto?: number; propiedades?: Record<string, string> };
+  creada: string;
+}
+interface ServidorRemoto {
+  id: string;
+  nombre: string;
+  tipo: string;
+  version: string;
+  mc?: string;
+  ramMb: number;
+  puerto: number;
+  estado: "detenido" | "iniciando" | "encendido" | "deteniendo";
+  jugadores: string[];
+  propiedades?: Record<string, string>;
+}
+
+// ---------------------------------------------------------------- celular: ver y editar (no encender)
+
+function EditarRemoto({ s, pendientes }: { s: ServidorRemoto; pendientes: EdicionRemota[] }) {
+  const [nombre, setNombre] = useState(s.nombre);
+  const [ram, setRam] = useState(s.ramMb);
+  const [puerto, setPuerto] = useState(s.puerto);
+  const [props, setProps] = useState<Record<string, string>>({});
+  const esJuego = s.tipo !== "personalizado" && s.tipo !== "velocity";
+  const valor = (k: string) => props[k] ?? s.propiedades?.[k] ?? "";
+  const cambios: EdicionRemota["cambios"] = {
+    ...(nombre.trim() && nombre.trim() !== s.nombre ? { nombre: nombre.trim() } : {}),
+    ...(ram !== s.ramMb ? { ramMb: ram } : {}),
+    ...(puerto !== s.puerto ? { puerto } : {}),
+    ...(Object.keys(props).length ? { propiedades: props } : {}),
+  };
+  const guardar = useMutation({
+    mutationFn: () => api("/api/hostlocal/ediciones", { cuerpo: { servidorId: s.id, cambios } }),
+    onSuccess: () => {
+      avisar("Cambios enviados. Se aplican cuando tu PC tenga Mi Setup abierto.");
+      setProps({});
+      void queryClient.invalidateQueries({ queryKey: ["host-local", "remoto"] });
+    },
+    onError: avisarError,
+  });
+  const esperando = pendientes.filter((p) => p.servidorId === s.id).length;
+  return (
+    <div className="space-y-4">
+      {esperando ? <p className="rounded-xl bg-amber-500/10 p-2 text-xs">Hay {esperando} cambio(s) esperando a que tu PC abra Mi Setup.</p> : null}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Campo etiqueta="Nombre">
+          <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={40} />
+        </Campo>
+        <Campo etiqueta={`RAM: ${(ram / 1024).toFixed(1)} GB`}>
+          <input type="range" min={1024} max={16384} step={512} value={Math.min(Math.max(ram, 1024), 16384)} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
+        </Campo>
+        <Campo etiqueta="Puerto">
+          <Entrada type="number" value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
+        </Campo>
+      </div>
+      {esJuego ? (
+        s.propiedades && Object.keys(s.propiedades).length ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {PROPIEDADES.map((p) => (
+              <Campo key={p.clave} etiqueta={p.etiqueta}>
+                {p.opciones ? (
+                  <Selector value={valor(p.clave) || p.opciones[0]} onChange={(e) => setProps({ ...props, [p.clave]: e.target.value })}>
+                    {p.opciones.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </Selector>
+                ) : (
+                  <Entrada value={valor(p.clave)} onChange={(e) => setProps({ ...props, [p.clave]: e.target.value })} />
+                )}
+              </Campo>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-tenue">Las opciones del juego (modo, dificultad, PvP…) aparecen cuando tu PC sincroniza este servidor.</p>
+        )
+      ) : null}
+      <Boton variante="primario" cargando={guardar.isPending} disabled={Object.keys(cambios).length === 0} onClick={() => guardar.mutate()}>
+        Enviar cambios a mi PC
+      </Boton>
+    </div>
+  );
+}
+
+function PanelRemoto() {
+  const q = useQuery({
+    queryKey: ["host-local", "remoto"],
+    queryFn: () => api<{ servidores: ServidorRemoto[]; actualizado: string | null; pendientes: EdicionRemota[] }>("/api/hostlocal/servidores"),
+    refetchInterval: 20_000,
+  });
+  const [elegido, setElegido] = useState<string | null>(null);
+  const lista = q.data?.servidores ?? [];
+  const actual = lista.find((x) => x.id === elegido) ?? lista[0] ?? null;
+  return (
+    <div className="space-y-4">
+      <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
+        <p className="font-medium">Tus servidores viven en tu PC</p>
+        <p className="mt-1 text-xs text-tenue">
+          Desde aquí ves cómo van y cambias su configuración; los cambios se aplican cuando tu PC tenga Mi Setup abierto. Para encenderlos o apagarlos usa la app de Windows.
+          {q.data?.actualizado ? ` Última vez que tu PC avisó: ${haceCuanto(q.data.actualizado)}.` : ""}
+        </p>
+      </div>
+      <ErrorCaja error={q.error} />
+      {q.isLoading ? <Cargando /> : null}
+      {q.data && !lista.length ? <Vacio icono={Boxes} texto="Abre «Servidores en mi PC» en la app de Windows una vez para que tus servidores aparezcan aquí." /> : null}
+      {lista.length ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+          <div className="space-y-1">
+            {lista.map((s) => (
+              <button key={s.id} type="button" onClick={() => setElegido(s.id)} className={cx("flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm", actual?.id === s.id ? "bg-tarjeta" : "hover:bg-tarjeta")}>
+                <span className={cx("h-2 w-2 shrink-0 rounded-full", s.estado === "encendido" ? "bg-ok" : s.estado === "detenido" ? "bg-tenue" : "bg-aviso")} />
+                <span className="min-w-0 flex-1 truncate">{s.nombre}</span>
+                <span className="shrink-0 text-[11px] text-tenue">{s.estado === "encendido" ? `${s.jugadores.length} jugando` : "Apagado"}</span>
+              </button>
+            ))}
+          </div>
+          {actual ? (
+            <Tarjeta titulo={actual.nombre} icono={Boxes}>
+              <p className="mb-3 text-xs text-tenue">
+                {TIPOS[actual.tipo as TipoServidor]?.nombre ?? actual.tipo} {textoVersion(actual.version)} · puerto {actual.puerto}
+                {actual.jugadores.length ? ` · jugando: ${actual.jugadores.join(", ")}` : ""}
+              </p>
+              <EditarRemoto key={`${actual.id}-${q.data?.actualizado ?? ""}`} s={actual} pendientes={q.data?.pendientes ?? []} />
+            </Tarjeta>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Panel({ srv }: { srv: ServidoresLocales }) {
   const lista = useQuery({ queryKey: ["host-local", "lista"], queryFn: () => srv.lista() });
   const [elegido, setElegido] = useState<string | null>(null);
@@ -654,6 +788,45 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
     if (lista.data) setServidores(lista.data);
   }, [lista.data]);
   useEffect(() => srv.alEstado((s) => setServidores((l) => l.map((x) => (x.id === s.id ? s : x)))), [srv]);
+  // Sube la lista para verla desde el celular y aplica los cambios que se hicieron desde allá.
+  useEffect(() => {
+    let vivo = true;
+    const sincronizar = async () => {
+      try {
+        const actuales = await srv.lista();
+        const completos = await Promise.all(
+          actuales.map(async (x) => {
+            const propiedades = x.tipo !== "personalizado" && x.tipo !== "velocity" ? await srv.propiedades(x.id).catch(() => ({})) : {};
+            return { id: x.id, nombre: x.nombre, tipo: x.tipo, version: x.version, ...(x.mc ? { mc: x.mc } : {}), ramMb: x.ramMb, puerto: x.puerto, estado: x.estado, jugadores: x.jugadores, propiedades };
+          }),
+        );
+        const { pendientes } = await api<{ pendientes: EdicionRemota[] }>("/api/hostlocal/sincronizar", { metodo: "PUT", cuerpo: { servidores: completos } });
+        if (!vivo || !pendientes.length) return;
+        const hechas: string[] = [];
+        for (const e of pendientes) {
+          try {
+            const { propiedades, ...basicos } = e.cambios;
+            if (Object.keys(basicos).length) await srv.actualizar(e.servidorId, basicos);
+            if (propiedades && Object.keys(propiedades).length) await srv.guardarPropiedades(e.servidorId, propiedades);
+          } catch (err) {
+            avisarError(err);
+          }
+          hechas.push(e.id);
+        }
+        await api("/api/hostlocal/ediciones/aplicadas", { cuerpo: { ids: hechas } });
+        avisar(`Se aplicaron ${hechas.length} cambio(s) hechos desde el celular. Si el servidor está encendido, reinícialo.`);
+        void lista.refetch();
+      } catch {
+        /* sin conexión con Mi Setup: se reintenta */
+      }
+    };
+    void sincronizar();
+    const t = setInterval(() => void sincronizar(), 20_000);
+    return () => {
+      vivo = false;
+      clearInterval(t);
+    };
+  }, [srv]);
   const actual = servidores.find((x) => x.id === elegido) ?? servidores[0] ?? null;
   const cambiar = (s: ServidorLocal) => setServidores((l) => (l.some((x) => x.id === s.id) ? l.map((x) => (x.id === s.id ? s : x)) : [...l, s]));
 
@@ -721,15 +894,7 @@ export default function HostLocal() {
       {srv ? (
         <Panel srv={srv} />
       ) : (
-        <Vacio
-          icono={SquareTerminal}
-          texto="Esto funciona en la app de Windows (los servidores corren en tu PC). Bájala en Ajustes → Descargar apps."
-          accion={
-            <Boton icono={Settings2} onClick={() => (window.location.href = "/ajustes")}>
-              Ir a Ajustes
-            </Boton>
-          }
-        />
+        <PanelRemoto />
       )}
     </div>
   );

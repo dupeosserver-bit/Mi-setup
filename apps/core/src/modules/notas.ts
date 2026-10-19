@@ -10,6 +10,7 @@ import { notes, tasks } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { idParams, sync, type ModuleDeps } from "./common.js";
+import { borrarCarpetaAdjuntos } from "./notas-adjuntos.js";
 
 export const notaSchema = z.object({
   titulo: z.string().trim().max(200).default(""),
@@ -18,6 +19,8 @@ export const notaSchema = z.object({
   /** Página padre (subpáginas). */
   padre: z.string().uuid().nullable().default(null),
   icono: z.string().max(16).nullable().default(null),
+  /** Color de la nota (paleta tipo Samsung Notes). */
+  color: z.enum(["rojo", "naranja", "amarillo", "verde", "azul", "morado", "rosa", "gris"]).nullable().default(null),
 });
 
 const ESTADOS_TAREA = ["pendiente", "haciendo", "hecho"] as const;
@@ -30,6 +33,7 @@ function aDto(n: typeof notes.$inferSelect) {
     fijada: n.pinned,
     padre: n.parentId,
     icono: n.icon,
+    color: n.color,
     creada: n.createdAt.toISOString(),
     actualizada: n.updatedAt.toISOString(),
   };
@@ -45,7 +49,7 @@ export async function crearNota(deps: ModuleDeps, userId: string, datos: z.input
   }
   const [n] = await deps.db
     .insert(notes)
-    .values({ userId, title: d.titulo, content: d.contenido, pinned: d.fijada, parentId: d.padre, icon: d.icono })
+    .values({ userId, title: d.titulo, content: d.contenido, pinned: d.fijada, parentId: d.padre, icon: d.icono, color: d.color })
     .returning();
   if (!n) throw new HttpError(500, "No se pudo guardar la nota");
   sync(deps, userId, "notas");
@@ -80,6 +84,7 @@ export function notasRoutes(deps: ModuleDeps) {
           ...(d.contenido !== undefined ? { content: d.contenido } : {}),
           ...(d.fijada !== undefined ? { pinned: d.fijada } : {}),
           ...(d.icono !== undefined ? { icon: d.icono } : {}),
+          ...(d.color !== undefined ? { color: d.color } : {}),
           ...(d.padre !== undefined && d.padre !== id ? { parentId: d.padre } : {}),
           updatedAt: deps.now(),
         })
@@ -95,7 +100,10 @@ export function notasRoutes(deps: ModuleDeps) {
       const { id } = idParams.parse(request.params);
       // Las subpáginas suben un nivel (no se borran con la página).
       const [borrada] = await db.delete(notes).where(and(eq(notes.id, id), eq(notes.userId, user.id))).returning({ padre: notes.parentId });
-      if (borrada) await db.update(notes).set({ parentId: borrada.padre }).where(and(eq(notes.parentId, id), eq(notes.userId, user.id)));
+      if (borrada) {
+        await db.update(notes).set({ parentId: borrada.padre }).where(and(eq(notes.parentId, id), eq(notes.userId, user.id)));
+        await borrarCarpetaAdjuntos(deps, id).catch(() => undefined);
+      }
       sync(deps, user.id, "notas");
       return { ok: true };
     });

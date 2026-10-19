@@ -4,61 +4,24 @@
  * ícono, plantillas y un tablero de tareas. Guardado automático y sincronizado.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
-  CheckSquare,
-  ChevronRight,
-  FilePlus2,
-  Heading1,
   KanbanSquare,
-  List,
-  Minus,
   NotebookPen,
-  PenLine,
   Pin,
-  PinOff,
   Plus,
   Search,
-  Table,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
-import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
-import { haceCuanto } from "../lib/formato";
-import { alternarCasilla } from "../lib/notas";
+import { EditorNota, type Nota } from "../components/EditorNota";
+import { fondoNota } from "../lib/markdownNotas";
 
-interface Nota {
-  id: string;
-  titulo: string;
-  contenido: string;
-  fijada: boolean;
-  padre: string | null;
-  icono: string | null;
-  actualizada: string;
-}
-
-// ---------------------------------------------------------------- Markdown
-
-marked.setOptions({ gfm: true, breaks: true });
-
-/** Convierte el texto en página (HTML limpio: sin scripts ni eventos). */
-function aHtml(contenido: string): string {
-  let indice = 0;
-  // Cada casilla lleva su número para poder marcarla desde la página.
-  const html = (marked.parse(contenido, { async: false }) as string).replace(/<input([^>]*?)type="checkbox"([^>]*?)>/g, (_m, a: string, b: string) => {
-    const marcada = /checked/.test(a + b);
-    return `<input type="checkbox" data-casilla="${indice++}"${marcada ? " checked" : ""}>`;
-  });
-  return DOMPurify.sanitize(html, { ADD_ATTR: ["data-casilla"], FORBID_TAGS: ["style", "form"], FORBID_ATTR: ["style"] });
-}
 
 const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: string }[] = [
   { nombre: "En blanco", icono: "📝", titulo: "Nueva página", contenido: "" },
@@ -74,226 +37,6 @@ const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: st
   { nombre: "Reunión", icono: "🗓️", titulo: "Reunión", contenido: "**Fecha:** \n**Con:** \n\n## Temas\n- \n\n## Acuerdos\n- [ ] \n" },
   { nombre: "Tabla", icono: "📊", titulo: "Tabla", contenido: "| Nombre | Estado | Notas |\n| --- | --- | --- |\n|  |  |  |\n" },
 ];
-
-const ICONOS = ["📝", "✅", "📔", "💡", "🛒", "📊", "🎮", "💻", "🔐", "💰", "🎂", "📚", "🏠", "⭐"];
-
-// ---------------------------------------------------------------- editor
-
-function Editor({ nota, notas, puedeEditar, alVolver, alAbrir }: { nota: Nota; notas: Nota[]; puedeEditar: boolean; alVolver: () => void; alAbrir: (id: string) => void }) {
-  const [titulo, setTitulo] = useState(nota.titulo);
-  const [contenido, setContenido] = useState(nota.contenido);
-  const [modo, setModo] = useState<"pagina" | "editar">(nota.contenido ? "pagina" : "editar");
-  const [estado, setEstado] = useState<"guardado" | "pendiente" | "guardando">("guardado");
-  const [iconos, setIconos] = useState(false);
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const area = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    setTitulo(nota.titulo);
-    setContenido(nota.contenido);
-    setEstado("guardado");
-    setModo(nota.contenido ? "pagina" : "editar");
-    // Solo al cambiar de nota; los cambios remotos de la misma nota no pisan lo que se escribe.
-  }, [nota.id]);
-
-  const guardar = (cambios: Partial<Nota>, inmediato = false) => {
-    setEstado("pendiente");
-    if (temporizador.current) clearTimeout(temporizador.current);
-    temporizador.current = setTimeout(
-      async () => {
-        setEstado("guardando");
-        try {
-          await api(`/api/notas/${nota.id}`, { metodo: "PATCH", cuerpo: cambios });
-          setEstado("guardado");
-          void queryClient.invalidateQueries({ queryKey: ["notas"] });
-        } catch (err) {
-          avisarError(err);
-          setEstado("pendiente");
-        }
-      },
-      inmediato ? 0 : 700,
-    );
-  };
-
-  const cambiarContenido = (c: string, inmediato = false) => {
-    setContenido(c);
-    guardar({ contenido: c }, inmediato);
-  };
-
-  /** Inserta formato donde está el cursor. */
-  const insertar = (antes: string, despues = "", enLinea = false) => {
-    const t = area.current;
-    if (!t) return cambiarContenido(contenido + antes + despues);
-    const [i, f] = [t.selectionStart, t.selectionEnd];
-    const prefijo = enLinea && i > 0 && contenido[i - 1] !== "\n" ? "\n" : "";
-    cambiarContenido(contenido.slice(0, i) + prefijo + antes + contenido.slice(i, f) + despues + contenido.slice(f));
-    requestAnimationFrame(() => {
-      t.focus();
-      const pos = i + prefijo.length + antes.length + (f - i);
-      t.setSelectionRange(pos, pos);
-    });
-  };
-
-  const html = useMemo(() => aHtml(contenido), [contenido]);
-  const hijas = notas.filter((n) => n.padre === nota.id);
-  const ruta: Nota[] = [];
-  let p = notas.find((n) => n.id === nota.padre);
-  while (p && ruta.length < 10) {
-    ruta.unshift(p);
-    const padreId: string | null = p.padre;
-    p = notas.find((n) => n.id === padreId);
-  }
-
-  const subpagina = useMutation({
-    mutationFn: () => api<Nota>("/api/notas", { cuerpo: { titulo: "Nueva subpágina", padre: nota.id, icono: "📄" } }),
-    onSuccess: (n) => {
-      void queryClient.invalidateQueries({ queryKey: ["notas"] });
-      alAbrir(n.id);
-    },
-    onError: avisarError,
-  });
-  const cambiarIcono = (i: string) => {
-    setIconos(false);
-    void api(`/api/notas/${nota.id}`, { metodo: "PATCH", cuerpo: { icono: i } }).then(() => queryClient.invalidateQueries({ queryKey: ["notas"] }));
-  };
-
-  return (
-    <div className="flex h-full min-w-0 flex-col rounded-tarjeta border border-borde bg-superficie">
-      <div className="flex flex-wrap items-center gap-1 border-b border-borde p-2">
-        <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className="md:hidden" aria-label="Volver" />
-        <span className="min-w-0 flex-1 truncate text-xs text-tenue">
-          {estado === "guardado" ? `Guardado · ${haceCuanto(nota.actualizada)}` : estado === "guardando" ? "Guardando…" : "Sin guardar"}
-        </span>
-        <Boton tamano="sm" variante={modo === "pagina" ? "primario" : "fantasma"} icono={BookOpen} onClick={() => setModo("pagina")}>
-          Página
-        </Boton>
-        {puedeEditar ? (
-          <>
-            <Boton tamano="sm" variante={modo === "editar" ? "primario" : "fantasma"} icono={PenLine} onClick={() => setModo("editar")}>
-              Escribir
-            </Boton>
-            <Boton tamano="icono" variante="fantasma" icono={FilePlus2} aria-label="Nueva subpágina" title="Nueva subpágina" onClick={() => subpagina.mutate()} />
-            <Boton
-              tamano="icono"
-              variante="fantasma"
-              icono={nota.fijada ? PinOff : Pin}
-              aria-label={nota.fijada ? "Desfijar" : "Fijar"}
-              onClick={() => void api(`/api/notas/${nota.id}`, { metodo: "PATCH", cuerpo: { fijada: !nota.fijada } }).then(() => queryClient.invalidateQueries({ queryKey: ["notas"] }))}
-            />
-            <Boton
-              tamano="icono"
-              variante="fantasma"
-              icono={Trash2}
-              aria-label="Borrar"
-              onClick={async () => {
-                const extra = hijas.length ? ` Sus ${hijas.length} subpágina(s) suben un nivel.` : "";
-                if (!(await confirmar({ titulo: "Borrar página", mensaje: `¿Borrar "${nota.titulo || "sin título"}"?${extra}`, boton: "Borrar" }))) return;
-                await api(`/api/notas/${nota.id}`, { metodo: "DELETE" }).catch(avisarError);
-                await queryClient.invalidateQueries({ queryKey: ["notas"] });
-                alVolver();
-              }}
-            />
-          </>
-        ) : null}
-      </div>
-
-      {ruta.length ? (
-        <div className="flex flex-wrap items-center gap-1 px-4 pt-3 text-xs text-tenue">
-          {ruta.map((r) => (
-            <span key={r.id} className="flex items-center gap-1">
-              <button type="button" className="hover:underline" onClick={() => alAbrir(r.id)}>
-                {r.icono ?? "📄"} {r.titulo || "Sin título"}
-              </button>
-              <ChevronRight className="h-3 w-3" />
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex items-center gap-2 px-4 pt-3">
-        <button type="button" disabled={!puedeEditar} onClick={() => setIconos((v) => !v)} className="text-2xl" aria-label="Cambiar ícono">
-          {nota.icono ?? "📝"}
-        </button>
-        <input
-          value={titulo}
-          readOnly={!puedeEditar}
-          placeholder="Título"
-          onChange={(e) => {
-            setTitulo(e.target.value);
-            guardar({ titulo: e.target.value });
-          }}
-          className="min-w-0 flex-1 bg-transparent font-titulo text-xl font-semibold outline-none placeholder:text-tenue"
-        />
-      </div>
-      {iconos ? (
-        <div className="flex flex-wrap gap-1 px-4 pt-2">
-          {ICONOS.map((i) => (
-            <button key={i} type="button" className="rounded-lg p-1 text-xl hover:bg-tarjeta" onClick={() => cambiarIcono(i)}>
-              {i}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {modo === "editar" && puedeEditar ? (
-        <>
-          <div className="flex flex-wrap gap-1 px-3 pt-2">
-            <Boton tamano="sm" variante="fantasma" icono={Heading1} onClick={() => insertar("## ", "", true)}>
-              Título
-            </Boton>
-            <Boton tamano="sm" variante="fantasma" icono={List} onClick={() => insertar("- ", "", true)}>
-              Lista
-            </Boton>
-            <Boton tamano="sm" variante="fantasma" icono={CheckSquare} onClick={() => insertar("- [ ] ", "", true)}>
-              Tarea
-            </Boton>
-            <Boton tamano="sm" variante="fantasma" onClick={() => insertar("**", "**")}>
-              <b>N</b>
-            </Boton>
-            <Boton tamano="sm" variante="fantasma" icono={Table} onClick={() => insertar("| Columna | Columna |\n| --- | --- |\n|  |  |\n", "", true)}>
-              Tabla
-            </Boton>
-            <Boton tamano="sm" variante="fantasma" icono={Minus} onClick={() => insertar("\n---\n", "", true)}>
-              Línea
-            </Boton>
-          </div>
-          <textarea
-            ref={area}
-            value={contenido}
-            placeholder="Escribe aquí… usa los botones de arriba para títulos, listas y tareas."
-            onChange={(e) => cambiarContenido(e.target.value)}
-            className="min-h-[50vh] flex-1 resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none placeholder:text-tenue"
-          />
-        </>
-      ) : (
-        <div
-          className="pagina-notion min-h-[50vh] min-w-0 flex-1 overflow-x-auto px-4 py-3"
-          // HTML limpiado con DOMPurify (sin scripts ni eventos).
-          dangerouslySetInnerHTML={{ __html: html || "<p>Página vacía. Toca «Escribir» para empezar.</p>" }}
-          onClick={(e) => {
-            const n = (e.target as HTMLElement).getAttribute("data-casilla");
-            if (n === null || !puedeEditar) return;
-            e.preventDefault();
-            cambiarContenido(alternarCasilla(contenido, Number(n)), true);
-          }}
-        />
-      )}
-
-      {hijas.length ? (
-        <div className="border-t border-borde px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-tenue">Subpáginas</p>
-          <div className="flex flex-wrap gap-2">
-            {hijas.map((h) => (
-              <button key={h.id} type="button" onClick={() => alAbrir(h.id)} className="rounded-xl border border-borde px-3 py-1.5 text-sm hover:bg-tarjeta">
-                {h.icono ?? "📄"} {h.titulo || "Sin título"}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------- tablero
 
@@ -463,7 +206,7 @@ export default function Notas() {
                 key={n.id}
                 type="button"
                 onClick={() => setParams({ id: n.id })}
-                style={{ marginLeft: nivel * 14, width: `calc(100% - ${nivel * 14}px)` }}
+                style={{ marginLeft: nivel * 14, width: `calc(100% - ${nivel * 14}px)`, backgroundColor: fondoNota(n.color) }}
                 className={cx("block rounded-xl border p-2.5 text-left", n.id === seleccion ? "border-acento/60 bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}
               >
                 <p className="flex items-center gap-1.5 truncate text-sm font-medium">
@@ -477,7 +220,7 @@ export default function Notas() {
           </div>
           <div className={cx("min-w-0", !actual && "hidden md:block")}>
             {actual ? (
-              <Editor nota={actual} notas={data ?? []} puedeEditar={puedeEditar} alVolver={() => setParams({})} alAbrir={(id) => setParams({ id })} />
+              <EditorNota nota={actual} notas={data ?? []} puedeEditar={puedeEditar} alVolver={() => setParams({})} alAbrir={(id) => setParams({ id })} />
             ) : (
               <Vacio icono={NotebookPen} texto="Elige una página o crea una nueva." />
             )}

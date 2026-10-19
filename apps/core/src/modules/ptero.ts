@@ -244,7 +244,7 @@ export function pteroRoutes(deps: ModuleDeps) {
 
       app.post("/api/ptero/servidores/:id/descomprimir", escribir, async (request) => {
         const { id } = idServidor.parse(request.params);
-        const { archivo, borrar } = z.object({ archivo: z.string().regex(/^[w .()-]{1,120}.zip$/), borrar: z.boolean().default(true) }).parse(request.body);
+        const { archivo, borrar } = z.object({ archivo: z.string().regex(/^[\w .()-]{1,120}\.zip$/), borrar: z.boolean().default(true) }).parse(request.body);
         await ptero.peticion(`/api/client/servers/${id}/files/decompress`, { metodo: "POST", cuerpo: { root: "/", file: archivo } });
         if (borrar) await ptero.peticion(`/api/client/servers/${id}/files/delete`, { metodo: "POST", cuerpo: { root: "/", files: [archivo] } }).catch(() => undefined);
         await auditar(request, "ptero_descomprimir", id, { archivo });

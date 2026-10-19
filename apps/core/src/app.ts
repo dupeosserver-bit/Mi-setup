@@ -43,10 +43,12 @@ import { redesModule } from "./modules/redes/index.js";
 import type { ClienteIa } from "./modules/ia/servicio.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
+import { notasAdjuntosRoutes } from "./modules/notas-adjuntos.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
 import { negocioRoutes, recordarCobros } from "./modules/negocio.js";
 import { pteroRoutes } from "./modules/ptero.js";
 import { respaldosRoutes } from "./modules/respaldos.js";
+import { respaldosVpsRoutes } from "./modules/respaldos-vps.js";
 import { revisarVencimientos, vencimientosRoutes } from "./modules/vencimientos.js";
 import { vpsModule } from "./modules/vps/index.js";
 import { createNtfyNotifier, type Notifier } from "./notify/notifier.js";
@@ -187,6 +189,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(clavesRoutes(deps));
   await app.register(rolesRoutes(deps));
   await app.register(notasRoutes(deps));
+  await app.register(notasAdjuntosRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
   await app.register(descargasRoutes(deps));
@@ -208,6 +211,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   const vps = vpsModule(deps);
   jobs.push(...vps.jobs);
   await app.register(vps.routes);
+  await app.register(respaldosVpsRoutes(deps, vps.servidores));
 
   const ptero = pteroRoutes(deps);
   await app.register(ptero.routes);
