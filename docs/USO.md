@@ -334,3 +334,13 @@ La imagen de Docker ahora incluye **ffmpeg** (convertidor) y un volumen nuevo pa
 
 - **Terminal de tu PC** (solo app de Windows): en VPS → Terminal se abre **PowerShell** por defecto y la tarjeta *Esta PC* abre PowerShell 7 (si lo tienes), PowerShell o CMD. Las pestañas siguen vivas aunque cambies de pantalla; la X las cierra. Los comandos guardados (`/nombre`) también funcionan ahí; lo que escribes en tu PC no se guarda en el historial del servidor.
 - **VPN**: `deploy/host-install.sh` ahora instala WireGuard completo (ver sección VPN).
+
+## Versiones 0.6 y 0.7
+
+- **Novedades en un solo lugar**: clima, noticias, compras, ofertas, juegos gratis, Steam, vigilar precios, cripto, inversiones y cambio de monedas son pestañas de Novedades (ya no salen sueltas en el menú; sus enlaces viejos siguen funcionando).
+- **Compras**: busca un producto y ábrelo en Mercado Libre, Amazon, Walmart, Liverpool, Coppel, Cyberpuerta, AliExpress o eBay. Con una app gratis de Mercado Libre (`MERCADOLIBRE_CLIENT_ID` y `MERCADOLIBRE_CLIENT_SECRET`, de developers.mercadolibre.com.mx) los productos salen dentro de Mi Setup con botón **Vigilar precio**.
+- **Nano Banana** (IA creativa → Crear imágenes): crea imágenes desde texto o edita/combina hasta 3 fotos. Necesita `GEMINI_API_KEY` (aistudio.google.com → Get API key). Google puede cobrar por imagen según tu plan.
+- **Películas**: tráiler dentro de la app, opciones **gratis con anuncios** en "dónde ver", la tarjeta **Ver gratis y legal** (Pluto TV, Tubi, ViX, Canela, Plex, YouTube) y **Ver ahora** si ya la subiste a Mis videos.
+- **Programación → Código** (app de Windows): editor tipo VS Code con tus carpetas, plantillas (plugin de Paper/Spigot, mod de Fabric, datapack, web, Python, Node), comprimir/descomprimir y **Compilar** en su terminal. Para plugins y mods instala Java 21 (Microsoft) y Gradle con un botón, una sola vez (se guardan dentro de Mi Setup, ~300 MB). Solo toca carpetas que tú elijas y borrar manda a la Papelera.
+- **Programación → Ejercicios**: 30 retos (10 fáciles, 10 medios, 10 difíciles) en JavaScript, Python y HTML/CSS. Se califican solos, tienen pistas y "Pedir ayuda a la IA". Tu avance se guarda en tu cuenta. Python se descarga la primera vez (unos segundos).
+- **vpsm**: si mueves `mexicanland-vault.sh` de carpeta, al abrirlo una vez (`/root/Sh/mexicanland-vault.sh`) arregla solo los lanzadores `vpsm` y `vpsm-cron`.

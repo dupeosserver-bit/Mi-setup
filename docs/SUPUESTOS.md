@@ -211,3 +211,18 @@ Decisiones tomadas sin preguntar, con su motivo y cómo cambiarlas.
 | 163 | Quitar fondo con `@imgly/background-removal` en el navegador (el modelo se baja de staticimgly.com la primera vez); la foto no sale del equipo. | Privacidad, sin costo de API. | `pages/IaCreativa.tsx`, CSP `connectSrc`. |
 | 164 | Convertidor de audio/video en el servidor con ffmpeg (incluido en la imagen Docker), con límites de tamaño y tiempo; imágenes y datos se convierten en el equipo. | Los navegadores no convierten video. | `deploy/Dockerfile`, `/api/convertidor/media`. |
 | 165 | Pasar la cuenta maestra exige que la otra cuenta tenga 2FA y escribir su correo. Tu cuenta queda como usuario normal **sin permisos** hasta que la nueva maestra te los dé. | Emergencias, con un solo dueño a la vez. | `modules/cuentas.ts`. |
+
+## Versiones 0.6 y 0.7
+
+| # | Decisión | Motivo | Cómo cambiarla |
+|---|---|---|---|
+| 166 | Noticias, cripto, inversiones y monedas quedan como pestañas de Novedades (`enMenu: false`); si alguien no tiene permiso de Novedades pero sí de esas, siguen saliendo sueltas. | "Que estén dentro de Novedades". | `ui/src/modulos.tsx`, `components/Layout.tsx`. |
+| 167 | Compras: solo Mercado Libre tiene API pública (con app gratis, token de cliente cacheado); las demás tiendas se abren con la búsqueda. Sin scraping. | Amazon/Walmart no ofrecen API abierta y raspar sus páginas rompe sus reglas. | `modules/compras.ts`. |
+| 168 | Imágenes con Nano Banana (Gemini `gemini-2.5-flash-image`, cambiable con `GEMINI_IMAGE_MODEL`). Claude y Llama no generan imágenes. No se guardan en el servidor. | Pedido del usuario. | `modules/imagenes.ts`. |
+| 169 | "Ver películas en vivo" solo con fuentes legales: tráiler de YouTube (youtube-nocookie en la CSP), servicios gratis con anuncios y tus videos. | No se integran sitios piratas. | `modules/entretenimiento.ts`, `pages/Peliculas.tsx`. |
+| 170 | Editor Monaco empaquetado (sin CDN) y cargado solo en Código y Ejercicios. | Funciona sin internet y respeta la CSP. | `lib/monaco.ts`. |
+| 171 | Archivos de la PC solo dentro de carpetas elegidas con la ventana nativa (`carpetas-codigo.json` en los datos de la app); borrar va a la Papelera; nada fuera de esas carpetas. | La UI viene del servidor: limitar el daño si alguien lo tomara. | `desktop/src/archivos-locales.ts`. |
+| 172 | Zip con el `tar.exe` de Windows (ruta fija en System32). Java 21 de Microsoft (su zip abre con ese tar) y Gradle 8.12, en la carpeta de la app. | Sin instalar nada aparte. | `desktop/src/archivos-locales.ts`. |
+| 173 | Plantillas: Paper 1.21.4 (paper-api) y Fabric 1.21.4 (Loom 1.9, Fabric API 0.119.2). Ambas se compilaron de verdad al probar. Forge/NeoForge: usar su MDK oficial y abrirlo en Código. | Versiones probadas. | `desktop/src/plantillas.ts`. |
+| 174 | Ejercicios corren en la página aislada `/vista-previa` (marco sin acceso a la app); Python con Pyodide 0.27.2 desde jsDelivr; límite de 10 s (90 s Python) para cortar ciclos infinitos. | Seguridad y sin servidor. | `lib/corredor.ts`. |
+| 175 | El avance de ejercicios se guarda por cuenta en settings (`ejercicios:<id>`). | Ver el avance en PC y celular. | `modules/ejercicios.ts`. |
