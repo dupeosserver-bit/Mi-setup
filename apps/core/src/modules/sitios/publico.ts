@@ -38,6 +38,8 @@ export interface AjustesSitio {
   servidores?: { id: string; nombre: string; direccion?: string }[];
   /** Avisar al celular del dueño cuando llega un formulario o pedido. */
   avisos?: boolean;
+  /** Instrucciones de pago que ve el cliente al enviar su pedido. */
+  pago?: string;
 }
 
 type FilaSitio = typeof sites.$inferSelect;
@@ -61,7 +63,7 @@ export function armarPagina(sitio: Pick<FilaSitio, "name" | "settings">, pagina:
   const imagen = urlArchivo(a.imagenCompartir);
   const icono = urlArchivo(a.icono);
   const fuentes = (a.fuentes ?? []).filter((f) => /^[\w -]{2,40}$/.test(f));
-  const cfg = { whatsapp: (a.whatsapp ?? "").replace(/\D/g, ""), color: a.color ?? "", moneda: a.moneda ?? "MXN", app: Boolean(a.app) };
+  const cfg = { whatsapp: (a.whatsapp ?? "").replace(/\D/g, ""), color: a.color ?? "", moneda: a.moneda ?? "MXN", app: Boolean(a.app), pago: (a.pago ?? "").slice(0, 700) };
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(titulo)}</title>${descripcion ? `<meta name="description" content="${esc(descripcion)}">` : ""}
 <meta property="og:title" content="${esc(titulo)}"><meta property="og:type" content="website"><meta property="og:url" content="${esc(origen + pagina.ruta)}">${descripcion ? `<meta property="og:description" content="${esc(descripcion)}">` : ""}${imagen ? `<meta property="og:image" content="${esc(imagen.startsWith("/") ? origen + imagen : imagen)}"><meta name="twitter:card" content="summary_large_image">` : ""}

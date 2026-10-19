@@ -56,6 +56,7 @@ interface Ajustes {
   nombreCorto?: string;
   servidores?: { id: string; nombre: string; direccion?: string }[];
   avisos?: boolean;
+  pago?: string;
 }
 interface Sitio {
   id: string;
@@ -103,7 +104,7 @@ function Crear({ alCrear, alCerrar }: { alCrear: (s: Sitio) => void; alCerrar: (
         const r = await api<{ html: string; css: string }>("/api/sitios/ia", { cuerpo: { descripcion: descripcionIa } });
         base = { id: "ia", nombre: "IA", descripcion: "", emoji: "", ...r };
       }
-      return api<Sitio>("/api/sitios", { cuerpo: { nombre, slug, ...(base ? { plantilla: { html: base.html, css: base.css } } : {}) } });
+      return api<Sitio>("/api/sitios", { cuerpo: { nombre, slug, ...(base ? { plantilla: { html: base.html, css: base.css, ...(base.tablas ? { tablas: base.tablas } : {}) } } : {}) } });
     },
     onSuccess: alCrear,
     onError: avisarError,
@@ -343,7 +344,64 @@ interface Entrada {
   leida: boolean;
   creado: string;
 }
+/** De un pedido a un cliente con cobro recurrente (Clientes y cobros): queda con fecha de pago y recordatorios. */
+function CobroDePedido({ sitio, entrada, alCerrar }: { sitio: Sitio; entrada: Entrada; alCerrar: () => void }) {
+  const items = entrada.datos.items ?? [];
+  const sumar = (m: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + m);
+    return d.toISOString().slice(0, 10);
+  };
+  const [f, setF] = useState({ concepto: items.map((i) => `${i.cantidad > 1 ? `${i.cantidad} × ` : ""}${i.nombre}`).join(", ").slice(0, 190) || "Servicio", monto: String(entrada.datos.total ?? 0), frecuencia: "mensual", proximoCobro: sumar(1) });
+  const crear = useMutation({
+    mutationFn: () => api(`/api/sitios/${sitio.id}/entradas/${entrada.id}/cobro`, { cuerpo: { ...f, monto: Number(f.monto) } }),
+    onSuccess: () => {
+      avisar("Listo: el cliente y su cobro ya están en «Clientes y cobros»");
+      void queryClient.invalidateQueries({ queryKey: ["sitios", sitio.id, "entradas"] });
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <Modal abierto titulo="Crear cliente y cobro" alCerrar={alCerrar}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          crear.mutate();
+        }}
+      >
+        <p className="rounded-xl bg-fondo p-2 text-xs text-tenue">Crea al cliente con los datos del pedido y un cobro que te recuerda cuándo pagar (lo ves en Clientes y cobros y en el calendario). Cuando pague, márcalo allá.</p>
+        <Campo etiqueta="Concepto">
+          <Entrada value={f.concepto} onChange={(e) => setF({ ...f, concepto: e.target.value })} maxLength={200} required />
+        </Campo>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Campo etiqueta="Monto">
+            <Entrada type="number" min={0} step="0.01" value={f.monto} onChange={(e) => setF({ ...f, monto: e.target.value })} required />
+          </Campo>
+          <Campo etiqueta="Se cobra">
+            <Selector value={f.frecuencia} onChange={(e) => setF({ ...f, frecuencia: e.target.value })}>
+              <option value="mensual">Cada mes</option>
+              <option value="trimestral">Cada 3 meses</option>
+              <option value="anual">Cada año</option>
+              <option value="unico">Una sola vez</option>
+            </Selector>
+          </Campo>
+          <Campo etiqueta="Próximo cobro">
+            <Entrada type="date" value={f.proximoCobro} onChange={(e) => setF({ ...f, proximoCobro: e.target.value })} required />
+          </Campo>
+        </div>
+        <Boton type="submit" variante="primario" cargando={crear.isPending} disabled={!(Number(f.monto) > 0) || !f.concepto.trim()}>
+          Crear cliente y cobro
+        </Boton>
+      </form>
+    </Modal>
+  );
+}
+
 function Mensajes({ sitio }: { sitio: Sitio }) {
+  const puedeCobrar = usePuede("clientes", "escritura");
+  const [cobrando, setCobrando] = useState<Entrada | null>(null);
   const q = useQuery({ queryKey: ["sitios", sitio.id, "entradas"], queryFn: () => api<Entrada[]>(`/api/sitios/${sitio.id}/entradas`), refetchInterval: 30_000 });
   const [filtro, setFiltro] = useState<"todos" | "formulario" | "pedido">("todos");
   const accion = async (fn: () => Promise<unknown>) => {
@@ -369,6 +427,17 @@ function Mensajes({ sitio }: { sitio: Sitio }) {
           }
         >
           <p className="mb-2 text-xs text-tenue">{fecha(e.creado)}</p>
+          {e.tipo === "pedido" && puedeCobrar ? (
+            <div className="mb-2">
+              {e.datos["cobro"] ? (
+                <Insignia tono="ok">Cobro creado en Clientes y cobros</Insignia>
+              ) : (
+                <Boton tamano="sm" variante="primario" onClick={() => setCobrando(e)}>
+                  Crear cliente y cobro
+                </Boton>
+              )}
+            </div>
+          ) : null}
           {e.tipo === "pedido" ? (
             <div className="space-y-1 text-sm">
               {e.datos.items?.map((i, n) => (
@@ -395,6 +464,7 @@ function Mensajes({ sitio }: { sitio: Sitio }) {
           )}
         </Tarjeta>
       ))}
+      {cobrando ? <CobroDePedido sitio={sitio} entrada={cobrando} alCerrar={() => setCobrando(null)} /> : null}
     </div>
   );
 }
@@ -775,6 +845,11 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
               <option value="USD">Dólares (USD)</option>
               <option value="EUR">Euros (EUR)</option>
             </Selector>
+          </Campo>
+        </div>
+        <div className="mt-3">
+          <Campo etiqueta="Cómo pagan tus clientes (se les muestra al enviar su pedido)" ayuda="Ej. Transferencia a la CLABE 0123…, o paga en OXXO a nombre de…, o tu enlace de PayPal.">
+            <AreaTexto rows={3} maxLength={700} value={a.pago ?? ""} onChange={(e) => setA({ ...a, pago: e.target.value })} placeholder="Instrucciones de pago" />
           </Campo>
         </div>
         <div className="mt-3">

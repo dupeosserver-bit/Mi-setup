@@ -158,7 +158,16 @@ export const RUNTIME = `(function () {
         var whats = MS.whatsapp ? window.open("about:blank", "_blank") : null;
         enviar("/_ms/pedido", { items: carrito, cliente: c }).then(function () {
           if (whats) whats.location.href = "https://wa.me/" + MS.whatsapp + "?text=" + encodeURIComponent(mensaje);
-          carrito = []; guardarCarrito(); fondo.remove(); aviso("¡Pedido enviado!");
+          carrito = []; guardarCarrito();
+          if (MS.pago) {
+            caja.innerHTML = "";
+            var ok = document.createElement("div"); ok.style.cssText = "white-space:pre-wrap";
+            var t = document.createElement("h3"); t.textContent = "¡Pedido recibido!";
+            var p = document.createElement("p"); p.textContent = MS.pago;
+            var b = document.createElement("button"); b.textContent = "Listo"; b.style.cssText = "width:100%;padding:12px;border:0;border-radius:12px;background:" + (MS.color || "#16a34a") + ";color:#fff;font-weight:700;margin-top:10px";
+            b.onclick = function () { fondo.remove(); };
+            ok.appendChild(t); ok.appendChild(p); ok.appendChild(b); caja.appendChild(ok);
+          } else { fondo.remove(); aviso("¡Pedido enviado!"); }
         }).catch(function (err) { if (whats) whats.close(); aviso(err.message); });
       };
       caja.appendChild(form);

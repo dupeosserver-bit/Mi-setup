@@ -11,8 +11,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { strToU8, zipSync } from "fflate";
 import { z } from "zod";
 import { hashSecret } from "../../auth/password.js";
-import { aiUsage, siteAssets, siteEditors, siteEntries, siteMembers, sites, siteStats, siteTables, siteVersions, users } from "../../db/schema.js";
+import { aiUsage, charges, clients, siteAssets, siteEditors, siteEntries, siteMembers, sites, siteStats, siteTables, siteVersions, users } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
+import { can } from "@mi-setup/shared";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "../common.js";
 import { carpetaArchivos } from "../herramientas.js";
@@ -38,6 +39,8 @@ const ajustesSchema = z.object({
   fuentes: z.array(z.string().regex(/^[\w -]{2,40}$/)).max(5).optional(),
   servidores: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9-]{8,36}$/), nombre: z.string().max(60), direccion: z.string().max(100).optional() })).max(10).optional(),
   avisos: z.boolean().optional(),
+  /** Cómo se paga (transferencia, OXXO, PayPal…): se muestra al cliente al enviar su pedido. */
+  pago: z.string().max(700).optional(),
 });
 
 const paginaSchema = z.object({
@@ -124,7 +127,7 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
 
     app.post("/api/sitios", escribir, async (request) => {
       const user = currentUser(request);
-      const d = z.object({ nombre: z.string().trim().min(1).max(80), slug: z.string().trim().toLowerCase(), plantilla: z.object({ html: z.string().max(500_000), css: z.string().max(200_000) }).optional() }).parse(request.body);
+      const d = z.object({ nombre: z.string().trim().min(1).max(80), slug: z.string().trim().toLowerCase(), plantilla: z.object({ html: z.string().max(500_000), css: z.string().max(200_000), tablas: z.array(z.object({ nombre: z.string().regex(/^[a-z0-9_-]{1,40}$/), columnas: z.array(columnaSchema).min(1).max(20), filas: z.array(z.record(z.union([z.string().max(2000), z.number()]))).max(200) })).max(5).optional() }).optional() }).parse(request.body);
       if (!SLUG_VALIDO.test(d.slug) || SLUGS_RESERVADOS.has(d.slug)) throw new HttpError(400, "Esa dirección no se puede usar (minúsculas, números y guiones; sin nombres reservados)");
       const [existe] = await db.select({ id: sites.id }).from(sites).where(eq(sites.slug, d.slug));
       if (existe) throw new HttpError(409, "Esa dirección ya la usa otro sitio");
@@ -133,6 +136,8 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
         .values({ ownerId: user.id, name: d.nombre, slug: d.slug, draft: d.plantilla ? { plantilla: d.plantilla } : {}, settings: { titulo: d.nombre, moneda: "MXN", avisos: true } })
         .returning();
       if (!s) throw new HttpError(500, "No se pudo crear");
+      // Las plantillas pueden traer sus tablas de datos (por ejemplo los planes de hosting).
+      for (const t of d.plantilla?.tablas ?? []) await db.insert(siteTables).values({ siteId: s.id, name: t.nombre, columns: t.columnas, rows: t.filas });
       return vistaSitio(s);
     });
 
@@ -286,6 +291,38 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       await db.update(siteEntries).set({ read: leida }).where(and(eq(siteEntries.id, entrada), eq(siteEntries.siteId, s.id)));
       return { ok: true };
     });
+    /** De un pedido a un cliente con cobro recurrente (Clientes y cobros): así tu hosting queda con fecha de pago y recordatorios. */
+    app.post("/api/sitios/:id/entradas/:entrada/cobro", escribir, async (request) => {
+      const user = currentUser(request);
+      const s = await sitioDe(request);
+      if (!can(user, "clientes", "escritura")) throw new HttpError(403, "Necesitas permiso en «Clientes y cobros» para crear el cobro", "sin_permiso");
+      const { entrada } = z.object({ entrada: z.string().uuid() }).parse(request.params);
+      const d = z
+        .object({
+          concepto: z.string().trim().min(1).max(200),
+          monto: z.number().positive().max(1_000_000_000),
+          frecuencia: z.enum(["mensual", "trimestral", "anual", "unico"]),
+          proximoCobro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+        .parse(request.body);
+      const [e] = await db.select().from(siteEntries).where(and(eq(siteEntries.id, entrada), eq(siteEntries.siteId, s.id)));
+      if (!e || e.kind !== "pedido") throw new HttpError(404, "Pedido no encontrado");
+      const datos = e.data as { cliente?: Record<string, string>; cobro?: string };
+      if (datos.cobro) throw new HttpError(409, "Este pedido ya tiene su cobro creado");
+      const c = datos.cliente ?? {};
+      const [cliente] = await db
+        .insert(clients)
+        .values({ name: (c["nombre"] ?? "Cliente del sitio").slice(0, 120), contact: [c["telefono"], c["correo"] ?? c["email"]].filter(Boolean).join(" · ").slice(0, 200), notes: `Pedido en el sitio ${s.name}` })
+        .returning({ id: clients.id });
+      const [cobro] = await db
+        .insert(charges)
+        .values({ clientId: cliente!.id, concept: d.concepto, amount: d.monto.toFixed(2), currency: ((s.settings as { moneda?: string }).moneda ?? "MXN").slice(0, 3), frequency: d.frecuencia, nextDue: new Date(`${d.proximoCobro}T12:00:00Z`), status: "activo" })
+        .returning({ id: charges.id });
+      await db.update(siteEntries).set({ data: { ...datos, cobro: cobro!.id, clienteId: cliente!.id }, read: true }).where(eq(siteEntries.id, e.id));
+      await deps.audit.record({ actorType: "usuario", actorUserId: user.id, action: "cobro_desde_pedido", module: "sitios", target: s.name, outcome: "ok", ...clientInfo(request) });
+      return { ok: true, clienteId: cliente!.id, cobroId: cobro!.id };
+    });
+
     app.delete("/api/sitios/:id/entradas/:entrada", escribir, async (request) => {
       const s = await sitioDe(request);
       const { entrada } = z.object({ entrada: z.string().uuid() }).parse(request.params);

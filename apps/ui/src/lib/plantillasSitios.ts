@@ -10,6 +10,8 @@ export interface PlantillaSitio {
   emoji: string;
   html: string;
   css: string;
+  /** Tablas de datos que se crean junto con el sitio (por ejemplo los planes de hosting). */
+  tablas?: { nombre: string; columnas: { nombre: string; tipo: "texto" | "numero" | "imagen" | "enlace" }[]; filas: Record<string, string | number>[] }[];
 }
 
 const BASE = `body{font-family:'Poppins',system-ui,sans-serif;margin:0;color:#1f2937;line-height:1.5}
@@ -120,6 +122,48 @@ body{background:linear-gradient(160deg,#f472b6,#8b5cf6);min-height:100vh;display
 body{font-family:'Playfair Display',Georgia,serif;background:#fffaf5}.heroe{background:linear-gradient(180deg,#fde7f3,#fffaf5);padding:90px 0}.centro{text-align:center}.pre{letter-spacing:.2em;text-transform:uppercase;color:#be185d}.heroe h1{font-size:3rem;color:#831843}
 .contador{font-size:1.8rem;font-weight:700;color:#be185d;margin-top:16px}.dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px}.primario{background:#be185d;color:#fff}
 .formulario{display:flex;flex-direction:column;gap:10px;background:#fff;padding:22px;border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.06)}.formulario input,.formulario select{padding:12px;border:1px solid #f3d0e0;border-radius:12px;font:inherit}`,
+  },
+  {
+    id: "hosting",
+    nombre: "Tienda de hosting",
+    descripcion: "Planes de servidores (Minecraft, bots, VPS) con «Contratar», instrucciones de pago, preguntas frecuentes y contacto. Los pedidos se vuelven clientes con cobro.",
+    emoji: "🖥️",
+    html: `<header class="cabecera"><div class="contenedor fila"><strong class="marca">⚡ MexicanHost</strong><nav><a href="#planes">Planes</a><a href="#incluye">Incluye</a><a href="#preguntas">Preguntas</a><a href="#contacto">Contacto</a></nav></div></header>
+<section class="heroe"><div class="contenedor"><h1>Hosting para tus servidores de juegos y bots</h1><p>Servidores de Minecraft y bots de Discord encendidos 24/7, con panel fácil y respaldos diarios.</p><a class="boton primario" href="#planes">Ver planes</a></div></section>
+<section id="planes"><div class="contenedor"><h2>Elige tu plan</h2><p class="nota">Toca «Contratar» y te mandamos las instrucciones de pago. Los planes se editan en la pestaña Datos.</p>
+<div class="planes" data-ms-tabla="planes"><div class="plan" data-ms-plantilla data-ms-producto><h3 data-campo="nombre">Plan</h3><p class="precio"><span data-campo="precio" data-dinero>$0</span><small> / mes</small></p><ul><li data-campo="ram">RAM</li><li data-campo="cpu">CPU</li><li data-campo="disco">Disco</li></ul><p class="nota" data-campo="descripcion"></p><button class="boton primario" data-ms-agregar>Contratar</button></div></div></div></section>
+<section id="incluye" class="suave"><div class="contenedor"><h2>En todos los planes</h2><div class="rejilla"><div class="dato"><h3>🛡️ Protección DDoS</h3><p>Tu servidor protegido de ataques.</p></div><div class="dato"><h3>🎛️ Panel fácil</h3><p>Enciende, apaga y configura desde el navegador.</p></div><div class="dato"><h3>💾 Respaldos</h3><p>Copias de tu mundo y tus archivos.</p></div><div class="dato"><h3>💬 Soporte</h3><p>Te atendemos por WhatsApp y Discord.</p></div></div></div></section>
+<section id="preguntas"><div class="contenedor"><h2>Preguntas frecuentes</h2><details><summary>¿Cómo pago?</summary><p>Al contratar te mostramos cómo pagar (transferencia, depósito o la forma que prefieras).</p></details><details><summary>¿Cuándo se activa mi servidor?</summary><p>En cuanto confirmamos tu pago, normalmente el mismo día.</p></details><details><summary>¿Puedo cambiar de plan?</summary><p>Sí, cuando quieras: escríbenos y lo ajustamos.</p></details></div></section>
+<section id="contacto" class="suave"><div class="contenedor dos"><div><h2>¿Dudas?</h2><p>Escríbenos y te ayudamos a elegir el plan ideal.</p></div><form name="contacto" class="formulario"><h3>Escríbenos</h3><input name="nombre" placeholder="Tu nombre" required><input name="correo" type="email" placeholder="Tu correo"><textarea name="mensaje" placeholder="¿Qué necesitas?"></textarea><button class="boton primario">Enviar</button></form></div></section>
+<footer class="pie"><div class="contenedor">© MexicanHost · Todos los derechos reservados</div></footer>`,
+    css: `${BASE}
+.cabecera{background:#0f172a;color:#fff;padding:14px 0}.fila{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.marca{font-size:1.2rem}.cabecera nav a{margin-left:16px;text-decoration:none;opacity:.85}
+.heroe{background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;text-align:center;padding:90px 0}.heroe h1{font-size:2.6rem}.heroe p{font-size:1.1rem;opacity:.85;max-width:620px;margin:0 auto 24px}
+.primario{background:#6366f1;color:#fff}.nota{color:#6b7280}
+.planes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;margin-top:18px}.plan{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:24px;text-align:center;box-shadow:0 8px 28px rgba(15,23,42,.07)}.plan h3{font-size:1.3rem}.precio{font-size:2rem;font-weight:700;color:#4f46e5;margin:6px 0 14px}.precio small{font-size:.9rem;color:#6b7280;font-weight:400}.plan ul{list-style:none;padding:0;margin:0 0 14px}.plan li{padding:6px 0;border-bottom:1px solid #f1f5f9}
+.suave{background:#f8fafc}.dato{background:#fff;border-radius:16px;padding:18px;box-shadow:0 4px 18px rgba(15,23,42,.05)}
+details{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:12px 16px;margin:10px 0}summary{cursor:pointer;font-weight:600}
+.dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px}.formulario{display:flex;flex-direction:column;gap:10px;background:#fff;padding:20px;border-radius:18px;box-shadow:0 6px 24px rgba(15,23,42,.07)}.formulario input,.formulario textarea{padding:12px;border:1px solid #d1d5db;border-radius:12px;font:inherit}
+.pie{background:#0f172a;color:#cbd5e1;text-align:center;padding:22px 0}`,
+    tablas: [
+      {
+        nombre: "planes",
+        columnas: [
+          { nombre: "nombre", tipo: "texto" },
+          { nombre: "precio", tipo: "numero" },
+          { nombre: "ram", tipo: "texto" },
+          { nombre: "cpu", tipo: "texto" },
+          { nombre: "disco", tipo: "texto" },
+          { nombre: "descripcion", tipo: "texto" },
+        ],
+        filas: [
+          { nombre: "Básico", precio: 99, ram: "2 GB de RAM", cpu: "1 núcleo", disco: "10 GB NVMe", descripcion: "Ideal para amigos (hasta 10 jugadores)." },
+          { nombre: "Pro", precio: 199, ram: "4 GB de RAM", cpu: "2 núcleos", disco: "20 GB NVMe", descripcion: "Mods y plugins sin problema." },
+          { nombre: "Élite", precio: 349, ram: "8 GB de RAM", cpu: "4 núcleos", disco: "40 GB NVMe", descripcion: "Para comunidades grandes y modpacks." },
+          { nombre: "Bot de Discord", precio: 59, ram: "512 MB de RAM", cpu: "Compartido", disco: "2 GB", descripcion: "Tu bot encendido 24/7." },
+        ],
+      },
+    ],
   },
   {
     id: "blanco",
