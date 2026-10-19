@@ -219,6 +219,12 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
     if (primera && !primera.get("name")) primera.set("name", "Inicio");
 
     editor.on("load", () => {
+      // Categorías de bloques en español.
+      const nombres: Record<string, string> = { Basic: "Básicos", Forms: "Formularios", Extra: "Extra", basic: "Básicos", forms: "Formularios" };
+      editor.BlockManager.getCategories().forEach((c: { get(k: string): unknown; set(k: string, v: unknown): void }) => {
+        const n = nombres[String(c.get("label") ?? c.get("id"))];
+        if (n) c.set("label", n);
+      });
       setListo(true);
       refrescarPaginas();
     });
