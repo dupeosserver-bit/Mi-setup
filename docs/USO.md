@@ -349,7 +349,7 @@ La imagen de Docker ahora incluye **ffmpeg** (convertidor) y un volumen nuevo pa
 
 ### Servidores en mi PC (Host local)
 
-Funciona en la app de Windows. Menú → Host local → Servidores en mi PC → **Nuevo servidor**: eliges Paper, Fabric, Forge, Vanilla o un comando propio, la versión, la RAM y el puerto, y aceptas la EULA de Minecraft. Java se descarga solo.
+Funciona en la app de Windows. Menú → Host local → Servidores en mi PC → **Nuevo servidor**: eliges Paper, Purpur, Folia, Fabric, Quilt, Forge, NeoForge, Mohist, Arclight, Vanilla, Velocity o un comando propio, la versión, la RAM y el puerto, y aceptas la EULA de Minecraft. Java se descarga solo.
 
 - **Consola:** iniciar, detener y mandar comandos.
 - **Mods / plugins:** busca en Modrinth. Para CurseForge pon `CURSEFORGE_API_KEY` en el `.env` del VPS.
@@ -379,3 +379,21 @@ Para que funcionen las direcciones `tusitio.mexicanland.net`:
 3. El certificado HTTPS se pide solo la primera vez que alguien abre el sitio.
 
 El `docker compose up -d --build` recarga el Caddyfile nuevo.
+
+### Versión con letra (0.9.0b)
+
+Desde ahora la versión lleva una letra al final:
+
+- **b** = beta: la que estamos probando.
+- **a** = la que ya sale al público.
+
+Para cambiarla, edita `"etapa"` en los `package.json` (y `versionName` en `apps/mobile/android/app/build.gradle`). El número (`"version"`) sigue igual porque el instalador de Windows lo necesita así. El celular avisa de actualización también cuando pasa de `0.9.0b` a `0.9.0a`.
+
+### Más programas en «Servidores en mi PC»
+
+- **Plugins:** Paper, Purpur, Folia.
+- **Mods:** Fabric, Quilt, Forge, NeoForge.
+- **Mods y plugins juntos:** Mohist, Arclight. La pestaña «Mods y plugins» tiene las dos listas.
+- **Otros:** Vanilla y Velocity (proxy para unir varios servidores; se configura en `velocity.toml`).
+
+Magma no se agregó: su página de descargas ya no responde y sus últimas versiones son de 2022. Mohist y Arclight hacen lo mismo. Spigot tampoco: hay que compilarlo con BuildTools y sus plugins funcionan igual en Paper o Purpur.

@@ -26,7 +26,8 @@ export interface PuenteEscritorio {
   readonly servidoresLocales?: ServidoresLocales;
 }
 
-export type TipoServidor = "paper" | "fabric" | "forge" | "vanilla" | "personalizado";
+export type TipoServidor = "paper" | "purpur" | "folia" | "fabric" | "quilt" | "forge" | "neoforge" | "mohist" | "arclight" | "vanilla" | "velocity" | "personalizado";
+export type ClaseAddon = "plugins" | "mods";
 export interface ServidorLocal {
   id: string;
   nombre: string;
@@ -37,6 +38,11 @@ export interface ServidorLocal {
   puerto: number;
   java: number;
   comando?: string;
+  /** Versión de Minecraft (vacía en Velocity). Apps viejas no la mandan. */
+  mc?: string;
+  /** Qué lleva: mods, plugins o ambos (Mohist/Arclight). */
+  clases?: ClaseAddon[];
+  cargadorMods?: string;
   creado: string;
   estado: "detenido" | "iniciando" | "encendido" | "deteniendo";
   jugadores: string[];
@@ -65,11 +71,11 @@ export interface ServidoresLocales {
   propiedades(id: string): Promise<Record<string, string>>;
   guardarPropiedades(id: string, cambios: Record<string, string>): Promise<Record<string, string>>;
   borrar(id: string): Promise<boolean>;
-  addons(id: string): Promise<{ nombre: string; tamano: number }[]>;
-  modrinthBuscar(id: string, q: string): Promise<Addon[]>;
-  modrinthInstalar(id: string, proyecto: string): Promise<string>;
-  instalarDesdeUrl(id: string, url: string, nombre: string): Promise<string>;
-  quitarAddon(id: string, nombre: string): Promise<boolean>;
+  addons(id: string, clase?: ClaseAddon): Promise<{ nombre: string; tamano: number }[]>;
+  modrinthBuscar(id: string, q: string, clase?: ClaseAddon): Promise<Addon[]>;
+  modrinthInstalar(id: string, proyecto: string, clase?: ClaseAddon): Promise<string>;
+  instalarDesdeUrl(id: string, url: string, nombre: string, clase?: ClaseAddon): Promise<string>;
+  quitarAddon(id: string, nombre: string, clase?: ClaseAddon): Promise<boolean>;
   playit(): Promise<string>;
   empaquetar(id: string, soloMundo: boolean): Promise<{ zip: string; tamano: number }>;
   subirZip(zip: string, url: string): Promise<{ archivo: string }>;

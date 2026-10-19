@@ -33,6 +33,16 @@ const SERVIDOR_PREDETERMINADO = "https://setup.mexicanland.net";
 /** Servidor elegido en Archivo → Cambiar servidor (para usar la app con otra instalación de Mi Setup). */
 const ARCHIVO_SERVIDOR = join(app.getPath("userData"), "servidor.json");
 
+/** "0.9.0b": la versión con su letra de etapa (b = beta, a = pública) del package.json. */
+function versionConEtapa(): string {
+  try {
+    const { etapa } = JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8")) as { etapa?: string };
+    return `${app.getVersion()}${etapa ?? ""}`;
+  } catch {
+    return app.getVersion();
+  }
+}
+
 function leerServidor(): string | null {
   try {
     const { url } = JSON.parse(readFileSync(ARCHIVO_SERVIDOR, "utf8")) as { url?: string };
@@ -270,7 +280,7 @@ function construirMenu(): void {
     {
       label: "Ayuda",
       submenu: [
-        { label: `Mi Setup ${app.getVersion()}`, enabled: false },
+        { label: `Mi Setup ${versionConEtapa()}`, enabled: false },
         { label: "Abrir en el navegador", click: () => void shell.openExternal(URL_APP) },
       ],
     },
@@ -301,7 +311,7 @@ function registrarIpc(): void {
   registrarArchivosLocales(deLaApp, () => ventana);
   servidoresLocales = registrarServidoresLocales(deLaApp, () => ventana);
   ipcMain.on("version", (e) => {
-    e.returnValue = app.getVersion();
+    e.returnValue = versionConEtapa();
   });
   ipcMain.handle("metricas", (e) => (deLaApp(e) ? leerMetricas() : null));
   ipcMain.handle("sistema", (e) => (deLaApp(e) ? leerSistema() : null));

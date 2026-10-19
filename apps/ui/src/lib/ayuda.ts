@@ -119,7 +119,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   host_local: {
     pasos: [
-      "En la app de Windows toca «Crear servidor»: elige Paper (plugins), Fabric o Forge (mods), Vanilla u «Otro juego». Mi Setup baja el servidor y el Java correcto.",
+      "En la app de Windows toca «Crear servidor»: elige Paper, Purpur o Folia (plugins); Fabric, Quilt, Forge o NeoForge (mods); Mohist o Arclight (mods y plugins juntos); Vanilla, Velocity (proxy) u «Otro juego». Mi Setup baja el servidor y el Java correcto.",
       "Enciende y mira la consola en vivo; escribe comandos abajo (op TuNombre, gamemode…). Apagar guarda el mundo.",
       "Mods/Plugins: búscalos en Modrinth (o CurseForge si pusiste su clave) e instálalos con un toque.",
       "Compartir: playit.gg te da una dirección para que tus amigos entren sin abrir puertos del módem. En tu casa entran con la IP local.",

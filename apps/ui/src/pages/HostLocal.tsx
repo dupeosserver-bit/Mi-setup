@@ -32,15 +32,28 @@ import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { usePuede } from "../lib/consultas";
-import { abrirExterno, escritorio, type Addon, type ServidoresLocales, type ServidorLocal, type TipoServidor } from "../lib/plataforma";
+import { abrirExterno, escritorio, type Addon, type ClaseAddon, type ServidoresLocales, type ServidorLocal, type TipoServidor } from "../lib/plataforma";
 
-const TIPOS: Record<TipoServidor, { nombre: string; detalle: string }> = {
-  paper: { nombre: "Paper (plugins)", detalle: "El más usado: rápido y con plugins (EssentialsX, WorldEdit, LuckPerms…)." },
-  fabric: { nombre: "Fabric (mods)", detalle: "Mods ligeros y modernos (Sodium, Lithium, Create Fabric…)." },
-  forge: { nombre: "Forge (mods)", detalle: "Mods clásicos y modpacks grandes." },
-  vanilla: { nombre: "Vanilla (oficial)", detalle: "Minecraft tal cual, sin mods ni plugins." },
-  personalizado: { nombre: "Otro juego", detalle: "Cualquier servidor (Terraria, Valheim, etc.): eliges su carpeta y el comando que lo enciende." },
+const TIPOS: Record<TipoServidor, { nombre: string; detalle: string; grupo: string }> = {
+  paper: { grupo: "Plugins", nombre: "Paper", detalle: "El más usado: rápido y con plugins (EssentialsX, WorldEdit, LuckPerms…)." },
+  purpur: { grupo: "Plugins", nombre: "Purpur", detalle: "Paper con más opciones para personalizar el juego. Usa los mismos plugins." },
+  folia: { grupo: "Plugins", nombre: "Folia", detalle: "De los creadores de Paper, para muchos jugadores (usa varios núcleos). Solo plugins hechos para Folia." },
+  fabric: { grupo: "Mods", nombre: "Fabric", detalle: "Mods ligeros y modernos (Sodium, Lithium, Create Fabric…)." },
+  quilt: { grupo: "Mods", nombre: "Quilt", detalle: "Parecido a Fabric y compatible con casi todos sus mods." },
+  forge: { grupo: "Mods", nombre: "Forge", detalle: "Mods clásicos y modpacks grandes." },
+  neoforge: { grupo: "Mods", nombre: "NeoForge", detalle: "La continuación de Forge: la mayoría de mods nuevos (1.20.2 en adelante) salen para NeoForge." },
+  mohist: { grupo: "Mods y plugins", nombre: "Mohist", detalle: "Forge/NeoForge con plugins de Bukkit/Spigot al mismo tiempo." },
+  arclight: { grupo: "Mods y plugins", nombre: "Arclight", detalle: "Mods (Forge, NeoForge o Fabric) y plugins juntos. Elige la versión con el cargador que quieras." },
+  vanilla: { grupo: "Otros", nombre: "Vanilla (oficial)", detalle: "Minecraft tal cual, sin mods ni plugins." },
+  velocity: { grupo: "Otros", nombre: "Velocity (proxy)", detalle: "Une varios servidores en uno (lobby, survival, minijuegos). Se configura en velocity.toml." },
+  personalizado: { grupo: "Otros", nombre: "Otro juego", detalle: "Cualquier servidor (Terraria, Valheim, etc.): eliges su carpeta y el comando que lo enciende." },
 };
+const GRUPOS = ["Plugins", "Mods", "Mods y plugins", "Otros"];
+const CARGADOR: Record<string, string> = { forge: "Forge", neoforge: "NeoForge", fabric: "Fabric" };
+/** "1.21.1-neoforge" → "1.21.1 (NeoForge)". */
+const textoVersion = (v: string) => v.replace(/-(forge|neoforge|fabric)$/, (_, c: string) => ` (${CARGADOR[c]})`);
+const clasesDe = (s: ServidorLocal): ClaseAddon[] => s.clases ?? (s.tipo === "paper" ? ["plugins"] : s.tipo === "fabric" || s.tipo === "forge" ? ["mods"] : []);
+const mcDe = (s: ServidorLocal) => s.mc ?? s.version;
 const ESTADO = { detenido: { texto: "Apagado", tono: "neutro" }, iniciando: { texto: "Encendiendo…", tono: "aviso" }, encendido: { texto: "Encendido", tono: "ok" }, deteniendo: { texto: "Apagando…", tono: "aviso" } } as const;
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, "g");
 const sinAnsi = (t: string) => t.replace(ANSI, "");
@@ -72,15 +85,22 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
     onError: avisarError,
   });
   const esMc = tipo !== "personalizado";
+  const pideEula = esMc && tipo !== "velocity";
   return (
     <Modal abierto titulo="Crear servidor" alCerrar={alCerrar}>
       <div className="space-y-3">
         <Campo etiqueta="Tipo">
           <Selector value={tipo} onChange={(e) => setTipo(e.target.value as TipoServidor)}>
-            {(Object.keys(TIPOS) as TipoServidor[]).map((t) => (
-              <option key={t} value={t}>
-                {TIPOS[t].nombre}
-              </option>
+            {GRUPOS.map((g) => (
+              <optgroup key={g} label={g}>
+                {(Object.keys(TIPOS) as TipoServidor[])
+                  .filter((t) => TIPOS[t].grupo === g)
+                  .map((t) => (
+                    <option key={t} value={t}>
+                      {TIPOS[t].nombre}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </Selector>
         </Campo>
@@ -89,14 +109,14 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
           <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={40} />
         </Campo>
         {esMc ? (
-          <Campo etiqueta="Versión de Minecraft">
+          <Campo etiqueta={tipo === "velocity" ? "Versión de Velocity" : "Versión de Minecraft"}>
             {versiones.isLoading ? (
               <Cargando texto="Buscando versiones…" />
             ) : (
               <Selector value={version} onChange={(e) => setVersion(e.target.value)}>
                 {(versiones.data ?? []).map((v) => (
                   <option key={v} value={v}>
-                    {v}
+                    {textoVersion(v)}
                   </option>
                 ))}
               </Selector>
@@ -114,7 +134,7 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
         <Campo etiqueta="Puerto">
           <Entrada type="number" min={1024} max={65535} value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
         </Campo>
-        {esMc ? (
+        {pideEula ? (
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" checked={eula} onChange={(e) => setEula(e.target.checked)} className="mt-1" />
             <span>
@@ -126,7 +146,7 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
             </span>
           </label>
         ) : null}
-        <Boton variante="primario" className="w-full" cargando={crear.isPending} disabled={!nombre.trim() || (esMc ? !eula || !version : !comando.trim())} onClick={() => crear.mutate()}>
+        <Boton variante="primario" className="w-full" cargando={crear.isPending} disabled={!nombre.trim() || (esMc ? (pideEula && !eula) || !version : !comando.trim())} onClick={() => crear.mutate()}>
           {crear.isPending ? (progreso ?? "Preparando…") : esMc ? "Crear y descargar" : "Elegir carpeta y crear"}
         </Boton>
         {esMc ? <p className="text-xs text-tenue">La primera vez baja Java (unos 200 MB) y el servidor. Queda en Documentos\MiSetup Servidores.</p> : null}
@@ -239,7 +259,7 @@ function Ajustes({ srv, s, alCambio }: { srv: ServidoresLocales; s: ServidorLoca
   const [nombre, setNombre] = useState(s.nombre);
   const [ram, setRam] = useState(s.ramMb);
   const [puerto, setPuerto] = useState(s.puerto);
-  const props = useQuery({ queryKey: ["host-local", "props", s.id], queryFn: () => srv.propiedades(s.id), enabled: s.tipo !== "personalizado" });
+  const props = useQuery({ queryKey: ["host-local", "props", s.id], queryFn: () => srv.propiedades(s.id), enabled: s.tipo !== "personalizado" && s.tipo !== "velocity" });
   const [cambios, setCambios] = useState<Record<string, string>>({});
   const guardar = useMutation({
     mutationFn: async () => {
@@ -269,7 +289,8 @@ function Ajustes({ srv, s, alCambio }: { srv: ServidoresLocales; s: ServidorLoca
           <Entrada type="number" value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
         </Campo>
       </div>
-      {s.tipo !== "personalizado" ? (
+      {s.tipo === "velocity" ? <p className="text-sm text-tenue">Velocity se configura en velocity.toml (pestaña Archivos): ahí pones tus servidores (lobby, survival…).</p> : null}
+      {s.tipo !== "personalizado" && s.tipo !== "velocity" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PROPIEDADES.map((p) => (
             <Campo key={p.clave} etiqueta={p.etiqueta}>
@@ -301,20 +322,26 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
   const [texto, setTexto] = useState("");
   const [buscado, setBuscado] = useState("");
   const [progreso] = useProgreso(srv);
-  const tipoCf = s.tipo === "paper" || s.tipo === "fabric" || s.tipo === "forge" ? s.tipo : null;
-  const instalados = useQuery({ queryKey: ["host-local", "addons", s.id], queryFn: () => srv.addons(s.id) });
+  const disponibles = clasesDe(s);
+  const [clase, setClase] = useState<ClaseAddon>(disponibles[0] ?? "mods");
+  const mc = mcDe(s);
+  // CurseForge: plugins de Bukkit, o mods del cargador del servidor (Folia y Velocity no están ahí).
+  const cargador = s.cargadorMods ?? (["fabric", "quilt", "forge", "neoforge"].includes(s.tipo) ? s.tipo : null);
+  const tipoCf = clase === "plugins" ? (["folia", "velocity"].includes(s.tipo) ? null : "paper") : cargador;
+  const instalados = useQuery({ queryKey: ["host-local", "addons", s.id, clase], queryFn: () => srv.addons(s.id, clase) });
   const resultados = useQuery({
-    queryKey: ["host-local", "buscar", s.id, fuente, buscado],
+    queryKey: ["host-local", "buscar", s.id, clase, fuente, buscado],
     queryFn: () =>
       fuente === "modrinth"
-        ? srv.modrinthBuscar(s.id, buscado)
-        : api<Addon[]>(`/api/hostlocal/curseforge/buscar?tipo=${tipoCf}&version=${encodeURIComponent(s.version)}&q=${encodeURIComponent(buscado)}`),
+        ? srv.modrinthBuscar(s.id, buscado, clase)
+        : api<Addon[]>(`/api/hostlocal/curseforge/buscar?tipo=${tipoCf}&version=${encodeURIComponent(mc)}&q=${encodeURIComponent(buscado)}`),
+    enabled: fuente === "modrinth" || !!tipoCf,
   });
   const instalar = useMutation({
     mutationFn: async (a: Addon) => {
-      if (fuente === "modrinth") return srv.modrinthInstalar(s.id, a.id);
-      const f = await api<{ url: string; nombre: string }>(`/api/hostlocal/curseforge/archivo?tipo=${tipoCf}&version=${encodeURIComponent(s.version)}&modId=${a.id}`);
-      return srv.instalarDesdeUrl(s.id, f.url, f.nombre);
+      if (fuente === "modrinth") return srv.modrinthInstalar(s.id, a.id, clase);
+      const f = await api<{ url: string; nombre: string }>(`/api/hostlocal/curseforge/archivo?tipo=${tipoCf}&version=${encodeURIComponent(mc)}&modId=${a.id}`);
+      return srv.instalarDesdeUrl(s.id, f.url, f.nombre, clase);
     },
     onSuccess: (nombre) => {
       avisar(`Instalado: ${nombre}. Reinicia el servidor para usarlo.`);
@@ -322,9 +349,16 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
     },
     onError: avisarError,
   });
-  const palabra = s.tipo === "paper" ? "plugins" : "mods";
+  const palabra = clase;
   return (
     <div className="space-y-4">
+      {disponibles.length > 1 ? (
+        <Pestanas
+          valor={clase}
+          alCambiar={(c) => setClase(c as ClaseAddon)}
+          opciones={disponibles.map((c) => ({ id: c, texto: c === "mods" ? "Mods" : "Plugins" }))}
+        />
+      ) : null}
       <Tarjeta titulo={`Tus ${palabra} (${instalados.data?.length ?? 0})`} icono={Package}>
         {!instalados.data?.length ? <p className="text-sm text-tenue">Todavía no tienes {palabra}.</p> : null}
         <ul className="divide-y divide-borde">
@@ -339,7 +373,7 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
                 aria-label={`Quitar ${a.nombre}`}
                 onClick={async () => {
                   if (await confirmar({ titulo: "Quitar", mensaje: `${a.nombre} se va a la Papelera.` })) {
-                    await srv.quitarAddon(s.id, a.nombre).catch(avisarError);
+                    await srv.quitarAddon(s.id, a.nombre, clase).catch(avisarError);
                     void instalados.refetch();
                   }
                 }}
@@ -357,9 +391,9 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
       >
         <Selector className="w-auto" value={fuente} onChange={(e) => setFuente(e.target.value as typeof fuente)}>
           <option value="modrinth">Modrinth</option>
-          <option value="curseforge">CurseForge</option>
+          {tipoCf ? <option value="curseforge">CurseForge</option> : null}
         </Selector>
-        <Entrada className="min-w-0 flex-1" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={`Buscar ${palabra} para ${s.version}…`} />
+        <Entrada className="min-w-0 flex-1" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={mc ? `Buscar ${palabra} para ${mc}…` : `Buscar ${palabra}…`} />
         <Boton type="submit" icono={Search}>
           Buscar
         </Boton>
@@ -386,7 +420,7 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
           </div>
         ))}
       </div>
-      <p className="text-xs text-tenue">Solo salen los compatibles con {TIPOS[s.tipo].nombre} {s.version}. CurseForge necesita su clave (Ajustes → Servicios y claves).</p>
+      <p className="text-xs text-tenue">Solo salen los compatibles con {TIPOS[s.tipo].nombre} {textoVersion(s.version)}. CurseForge necesita su clave (Ajustes → Servicios y claves).</p>
     </div>
   );
 }
@@ -516,7 +550,8 @@ function Detalle({ srv, s, alCambio, alBorrar }: { srv: ServidoresLocales; s: Se
       avisarError(err);
     }
   };
-  const tieneMods = s.tipo === "paper" || s.tipo === "fabric" || s.tipo === "forge";
+  const clasesServidor = clasesDe(s);
+  const tieneMods = clasesServidor.length > 0;
   const minutos = s.desde && s.estado === "encendido" ? Math.floor((Date.now() - s.desde) / 60_000) : null;
   return (
     <div className="space-y-4">
@@ -554,7 +589,7 @@ function Detalle({ srv, s, alCambio, alBorrar }: { srv: ServidoresLocales; s: Se
         opciones={[
           { id: "consola", texto: "Consola" },
           { id: "ajustes", texto: "Ajustes" },
-          ...(tieneMods ? [{ id: "mods" as const, texto: s.tipo === "paper" ? "Plugins" : "Mods" }] : []),
+          ...(tieneMods ? [{ id: "mods" as const, texto: clasesServidor.length > 1 ? "Mods y plugins" : clasesServidor[0] === "plugins" ? "Plugins" : "Mods" }] : []),
           { id: "archivos", texto: "Archivos" },
           ...(s.tipo !== "personalizado" ? [{ id: "compartir" as const, texto: "Compartir" }, { id: "vps" as const, texto: "Pasar a mi VPS" }] : []),
         ]}
@@ -644,7 +679,7 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
               >
                 <span className={cx("h-2 w-2 shrink-0 rounded-full", s.estado === "encendido" ? "bg-ok" : s.estado === "detenido" ? "bg-tenue" : "bg-aviso")} />
                 <span className="min-w-0 flex-1 truncate">{s.nombre}</span>
-                <span className="shrink-0 text-[11px] text-tenue">{s.tipo === "personalizado" ? "Otro" : s.version}</span>
+                <span className="shrink-0 text-[11px] text-tenue">{s.tipo === "personalizado" ? "Otro" : `${TIPOS[s.tipo]?.nombre ?? s.tipo} ${textoVersion(s.version)}`}</span>
               </button>
             ))}
           </div>

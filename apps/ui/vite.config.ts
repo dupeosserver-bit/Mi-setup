@@ -10,7 +10,10 @@ export default defineConfig(({ mode }) => ({
   // App de Android: la UI va empaquetada y habla con el servidor por HTTPS.
   define: {
     // Versión de esta app (el celular la compara con la del servidor para avisar de actualizaciones).
-    __VERSION_APP__: JSON.stringify((JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string }).version),
+    // Lleva la letra de la etapa: "0.9.0b" (beta) o "0.9.0a" (pública).
+    __VERSION_APP__: JSON.stringify(
+      ((p: { version: string; etapa?: string }) => `${p.version}${p.etapa ?? ""}`)(JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string; etapa?: string }),
+    ),
     ...(mode === "movil" ? { "import.meta.env.VITE_API_URL": JSON.stringify(process.env["MI_SETUP_API"] ?? "https://setup.mexicanland.net") } : {}),
   },
   resolve: {

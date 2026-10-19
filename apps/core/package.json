@@ -1,6 +1,7 @@
 {
   "name": "@mi-setup/core",
   "version": "0.9.0",
+  "etapa": "b",
   "private": true,
   "type": "module",
   "description": "Backend de Mi Setup (API, WebSocket, migraciones)",

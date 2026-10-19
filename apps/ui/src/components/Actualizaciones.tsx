@@ -17,15 +17,22 @@ interface InfoActualizacion {
   apk: { nombre: string; url: string; fecha: string } | null;
 }
 
-/** 1 si a > b, -1 si a < b, 0 si son iguales ("0.10.0" > "0.9.3"). */
+/** Etapa al final de la versión: "b" (beta, en pruebas) va antes que "a" (pública) y sin letra cuenta como pública. */
+const ETAPA: Record<string, number> = { b: 0, a: 1, "": 1 };
+
+/** 1 si a > b, -1 si a < b, 0 si son iguales ("0.10.0" > "0.9.3", "0.9.0a" > "0.9.0b"). */
 export function compararVersiones(a: string, b: string): number {
-  const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+  const partes = (v: string) => {
+    const m = /^([\d.]+)([a-z]?)/i.exec(v.trim());
+    return { nums: (m?.[1] ?? v).split(".").map((n) => Number.parseInt(n, 10) || 0), etapa: ETAPA[(m?.[2] ?? "").toLowerCase()] ?? 1 };
+  };
+  const pa = partes(a);
+  const pb = partes(b);
+  for (let i = 0; i < Math.max(pa.nums.length, pb.nums.length); i++) {
+    const d = (pa.nums[i] ?? 0) - (pb.nums[i] ?? 0);
     if (d !== 0) return d > 0 ? 1 : -1;
   }
-  return 0;
+  return Math.sign(pa.etapa - pb.etapa);
 }
 
 function useActualizacion() {

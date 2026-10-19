@@ -1,6 +1,7 @@
 /**
- * Host local: servidores de juego en esta PC (Minecraft Paper, Fabric, Forge,
- * Vanilla, o cualquier otro con un comando propio).
+ * Host local: servidores de juego en esta PC (Minecraft Paper, Purpur, Folia,
+ * Fabric, Quilt, Forge, NeoForge, Mohist, Arclight, Vanilla, el proxy Velocity,
+ * o cualquier otro con un comando propio).
  * - Baja el servidor y el Java que pide esa versión (Microsoft OpenJDK).
  * - Consola en vivo, encender/apagar, RAM, puerto y server.properties.
  * - Mods y plugins desde Modrinth (y CurseForge con la clave del servidor).
@@ -16,8 +17,22 @@ import { Readable } from "node:stream";
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { agregarCarpeta, asegurarJava, descargar } from "./archivos-locales";
 
-type Tipo = "paper" | "fabric" | "forge" | "vanilla" | "personalizado";
+type Tipo = "paper" | "purpur" | "folia" | "fabric" | "quilt" | "forge" | "neoforge" | "mohist" | "arclight" | "vanilla" | "velocity" | "personalizado";
 type Estado = "detenido" | "iniciando" | "encendido" | "deteniendo";
+type Clase = "plugins" | "mods";
+const TIPOS: Tipo[] = ["paper", "purpur", "folia", "fabric", "quilt", "forge", "neoforge", "mohist", "arclight", "vanilla", "velocity", "personalizado"];
+/** Cargadores de plugins que entiende cada tipo (Modrinth). */
+const PLUGINS: Partial<Record<Tipo, string[]>> = {
+  paper: ["paper", "spigot", "bukkit"],
+  purpur: ["purpur", "paper", "spigot", "bukkit"],
+  folia: ["folia"],
+  velocity: ["velocity"],
+  mohist: ["paper", "spigot", "bukkit"],
+  arclight: ["paper", "spigot", "bukkit"],
+};
+/** Cargador de mods fijo (en Mohist y Arclight depende de la versión: se guarda al crear). */
+const MODS: Partial<Record<Tipo, string>> = { fabric: "fabric", quilt: "quilt", forge: "forge", neoforge: "neoforge" };
+const SUFIJO_CARGADOR = /-(forge|neoforge|fabric)$/;
 
 interface Servidor {
   id: string;
@@ -30,8 +45,12 @@ interface Servidor {
   java: number;
   /** Solo "personalizado": comando que arranca el servidor. */
   comando?: string;
-  /** Forge: archivo de argumentos que deja el instalador. */
+  /** Forge/NeoForge: archivo de argumentos que deja el instalador. */
   argsForge?: string;
+  /** Jar que se arranca si no es server.jar (Quilt). */
+  jar?: string;
+  /** Mohist/Arclight: cargador de mods (forge, neoforge o fabric). */
+  cargadorMods?: string;
   creado: string;
 }
 
@@ -101,10 +120,69 @@ async function javaDe(version: string): Promise<{ java: number; servidor?: strin
   return { java: Math.max(ficha.javaVersion?.majorVersion ?? 21, 17), ...(ficha.downloads?.server ? { servidor: ficha.downloads.server.url } : {}) };
 }
 
+/** Versión de Minecraft del servidor (Arclight guarda "1.21.1-neoforge"). */
+const mcDe = (s: { tipo: Tipo; version: string }) => (s.tipo === "velocity" ? "" : s.version.replace(SUFIJO_CARGADOR, ""));
+const desde = (minimo: string) => (v: string) => compararVersiones(v, minimo) <= 0;
+
+/** NeoForge numera distinto: 21.1.x es Minecraft 1.21.1 y 26.3.0.x es 26.3. */
+function mcDeNeoForge(v: string): string | null {
+  const p = v.split(".");
+  if (p.length < 3 || /[a-z]/i.test(v)) return null;
+  if (Number(p[0]) >= 26) return p[2] === "0" ? `${p[0]}.${p[1]}` : `${p[0]}.${p[1]}.${p[2]}`;
+  return p[1] === "0" ? `1.${p[0]}` : `1.${p[0]}.${p[1]}`;
+}
+async function neoForgeDe(mc: string): Promise<string | null> {
+  const d = await json<{ versions: string[] }>("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge");
+  return [...d.versions].reverse().find((v) => mcDeNeoForge(v) === mc) ?? null;
+}
+
+interface ReleaseGh {
+  tag_name: string;
+  assets: { name: string; browser_download_url: string }[];
+}
+/** Arclight: un jar por Minecraft y cargador; se prefiere el que no es SNAPSHOT. */
+async function jarsArclight(): Promise<Map<string, string>> {
+  const rel = await json<ReleaseGh[]>("https://api.github.com/repos/IzzelAliz/Arclight/releases?per_page=60");
+  const mapa = new Map<string, { url: string; snapshot: boolean }>();
+  for (const r of rel) {
+    for (const a of r.assets) {
+      const m = /^arclight-(forge|neoforge|fabric)-([\d.]+)-.+\.jar$/.exec(a.name);
+      if (!m) continue;
+      const clave = `${m[2]}-${m[1]}`;
+      const snapshot = /SNAPSHOT/i.test(a.name);
+      const previo = mapa.get(clave);
+      if (!previo || (previo.snapshot && !snapshot)) mapa.set(clave, { url: a.browser_download_url, snapshot });
+    }
+  }
+  return new Map([...mapa].map(([k, v]) => [k, v.url]));
+}
+
+async function versionesFill(proyecto: "paper" | "folia" | "velocity"): Promise<string[]> {
+  const d = await json<{ versions: Record<string, string[]> }>(`https://fill.papermc.io/v3/projects/${proyecto}`);
+  return Object.values(d.versions).flat().filter(esEstable).sort(compararVersiones);
+}
+
 async function versiones(tipo: Tipo): Promise<string[]> {
-  if (tipo === "paper") {
-    const d = await json<{ versions: Record<string, string[]> }>("https://fill.papermc.io/v3/projects/paper");
-    return Object.values(d.versions).flat().filter(esEstable).sort(compararVersiones);
+  if (tipo === "paper" || tipo === "folia" || tipo === "velocity") return versionesFill(tipo);
+  if (tipo === "purpur") {
+    const d = await json<{ versions: string[] }>("https://api.purpurmc.org/v2/purpur");
+    return d.versions.filter((v) => esEstable(v) && desde("1.17")(v)).sort(compararVersiones);
+  }
+  if (tipo === "quilt") {
+    const d = await json<{ version: string; stable: boolean }[]>("https://meta.quiltmc.org/v3/versions/game");
+    return d.filter((v) => v.stable && desde("1.17")(v.version)).map((v) => v.version);
+  }
+  if (tipo === "neoforge") {
+    const d = await json<{ versions: string[] }>("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge");
+    return [...new Set(d.versions.map(mcDeNeoForge).filter((v): v is string => !!v))].sort(compararVersiones);
+  }
+  if (tipo === "mohist") {
+    // Desde 1.18.2: las anteriores piden Java 8, que Microsoft ya no publica.
+    const d = await json<{ name: string }[]>("https://api.mohistmc.com/project/mohist/versions");
+    return d.map((v) => v.name).filter((v) => esEstable(v) && desde("1.18.2")(v)).sort(compararVersiones);
+  }
+  if (tipo === "arclight") {
+    return [...(await jarsArclight()).keys()].filter((k) => desde("1.18")(k.replace(SUFIJO_CARGADOR, ""))).sort((a, b) => compararVersiones(a.replace(SUFIJO_CARGADOR, ""), b.replace(SUFIJO_CARGADOR, "")) || a.localeCompare(b));
   }
   if (tipo === "vanilla") return (await leerManifiesto()).versions.filter((v) => v.type === "release").map((v) => v.id);
   if (tipo === "fabric") {
@@ -157,8 +235,20 @@ function escribirPropiedades(carpeta: string, cambios: Record<string, string>): 
   writeFileSync(ruta, nuevas.filter((l, i, a) => l !== "" || i < a.length - 1).join("\n") + "\n");
 }
 
-const carpetaAddons = (s: Servidor) => (s.tipo === "paper" ? "plugins" : "mods");
-const cargadores = (s: Servidor) => (s.tipo === "paper" ? ["paper", "spigot", "bukkit", "purpur"] : s.tipo === "fabric" ? ["fabric"] : s.tipo === "forge" ? ["forge"] : []);
+/** Qué puede llevar el servidor: plugins, mods o (Mohist/Arclight) las dos cosas. */
+function clases(s: Servidor): Clase[] {
+  const out: Clase[] = [];
+  if (MODS[s.tipo] ?? s.cargadorMods) out.push("mods");
+  if (PLUGINS[s.tipo]) out.push("plugins");
+  return out;
+}
+function claseDe(s: Servidor, pedida: unknown): Clase {
+  const c = clases(s);
+  const elegida = c.find((x) => x === pedida) ?? c[0];
+  if (!elegida) throw new Error("Este servidor no usa mods ni plugins");
+  return elegida;
+}
+const cargadores = (s: Servidor, clase: Clase): string[] => (clase === "plugins" ? (PLUGINS[s.tipo] ?? []) : [MODS[s.tipo] ?? s.cargadorMods ?? ""].filter(Boolean));
 
 function matarArbol(pid: number | undefined): void {
   if (!pid) return;
@@ -180,16 +270,63 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
 
   const vista = (s: Servidor) => {
     const v = vivos.get(s.id);
-    return { ...s, estado: (v?.estado ?? "detenido") as Estado, jugadores: [...(v?.jugadores ?? [])], desde: v?.inicio ?? null, ip: ipLocal() };
+    return { ...s, mc: mcDe(s), clases: clases(s), estado: (v?.estado ?? "detenido") as Estado, jugadores: [...(v?.jugadores ?? [])], desde: v?.inicio ?? null, ip: ipLocal() };
   };
 
   async function instalar(s: Servidor, java: string): Promise<Partial<Servidor>> {
     const destino = join(s.carpeta, "server.jar");
-    if (s.tipo === "paper") {
-      const b = await json<{ downloads: Record<string, { url: string }> }>(`https://fill.papermc.io/v3/projects/paper/versions/${encodeURIComponent(s.version)}/builds/latest`);
+    const v = encodeURIComponent(s.version);
+    /** Instalador de Forge/NeoForge: deja libraries/.../win_args.txt para arrancar. */
+    const conInstalador = async (nombre: string, urlInstalador: string, args: string): Promise<Partial<Servidor>> => {
+      const inst = join(s.carpeta, "instalador.jar");
+      await descargar(urlInstalador, inst, (p) => progreso(`Bajando ${nombre}… ${p}%`));
+      progreso(`Instalando ${nombre} (puede tardar un par de minutos)…`);
+      await new Promise<void>((ok, mal) => {
+        const p = spawn(java, ["-jar", "instalador.jar", "--installServer"], { cwd: s.carpeta, windowsHide: true });
+        p.stdout.on("data", (d: Buffer) => progreso(`${nombre}: ${d.toString().trim().split("\n").pop()?.slice(0, 90) ?? ""}`));
+        p.on("exit", (c) => (c === 0 ? ok() : mal(new Error(`El instalador de ${nombre} falló`))));
+        p.on("error", mal);
+      });
+      await rm(inst, { force: true });
+      await rm(join(s.carpeta, "instalador.jar.log"), { force: true });
+      if (!existsSync(join(s.carpeta, args))) throw new Error(`${nombre} no dejó su archivo de arranque`);
+      return { argsForge: args };
+    };
+    if (s.tipo === "paper" || s.tipo === "folia" || s.tipo === "velocity") {
+      const b = await json<{ downloads: Record<string, { url: string }> }>(`https://fill.papermc.io/v3/projects/${s.tipo}/versions/${v}/builds/latest`);
       const url = b.downloads["server:default"]?.url;
-      if (!url) throw new Error("Paper no tiene descarga para esa versión");
-      await descargar(url, destino, (p) => progreso(`Bajando Paper ${s.version}… ${p}%`));
+      if (!url) throw new Error("No hay descarga para esa versión");
+      await descargar(url, destino, (p) => progreso(`Bajando ${s.tipo} ${s.version}… ${p}%`));
+    } else if (s.tipo === "purpur") {
+      await descargar(`https://api.purpurmc.org/v2/purpur/${v}/latest/download`, destino, (p) => progreso(`Bajando Purpur ${s.version}… ${p}%`));
+    } else if (s.tipo === "mohist") {
+      await descargar(`https://api.mohistmc.com/project/mohist/${v}/builds/latest/download`, destino, (p) => progreso(`Bajando Mohist ${s.version}… ${p}%`));
+      return { cargadorMods: compararVersiones(s.version, "1.20.1") < 0 ? "neoforge" : "forge" };
+    } else if (s.tipo === "arclight") {
+      const url = (await jarsArclight()).get(s.version);
+      if (!url) throw new Error("Arclight no tiene esa versión");
+      await descargar(url, destino, (p) => progreso(`Bajando Arclight… ${p}%`));
+      return { cargadorMods: SUFIJO_CARGADOR.exec(s.version)?.[1] ?? "forge" };
+    } else if (s.tipo === "neoforge") {
+      const nv = await neoForgeDe(s.version);
+      if (!nv) throw new Error("NeoForge no tiene versión para ese Minecraft");
+      return conInstalador(`NeoForge ${nv}`, `https://maven.neoforged.net/releases/net/neoforged/neoforge/${nv}/neoforge-${nv}-installer.jar`, `libraries/net/neoforged/neoforge/${nv}/win_args.txt`);
+    } else if (s.tipo === "quilt") {
+      const inst = (await json<{ version: string; url: string }[]>("https://meta.quiltmc.org/v3/versions/installer"))[0];
+      if (!inst) throw new Error("No encontré el instalador de Quilt");
+      const archivo = join(s.carpeta, "instalador.jar");
+      await descargar(inst.url, archivo, (p) => progreso(`Bajando Quilt… ${p}%`));
+      // Ruta relativa: el instalador de Quilt corta la ruta en los espacios ("MiSetup Servidores").
+      progreso("Instalando Quilt…");
+      await new Promise<void>((ok, mal) => {
+        const p = spawn(java, ["-jar", "instalador.jar", "install", "server", s.version, "--download-server", "--install-dir=."], { cwd: s.carpeta, windowsHide: true });
+        p.stdout.on("data", (d: Buffer) => progreso(`Quilt: ${d.toString().trim().split("\n").pop()?.slice(0, 90) ?? ""}`));
+        p.on("exit", (c) => (c === 0 ? ok() : mal(new Error("El instalador de Quilt falló (¿Quilt ya soporta esa versión?)"))));
+        p.on("error", mal);
+      });
+      await rm(archivo, { force: true });
+      if (!existsSync(join(s.carpeta, "quilt-server-launch.jar"))) throw new Error("Quilt no dejó su archivo de arranque");
+      return { jar: "quilt-server-launch.jar" };
     } else if (s.tipo === "vanilla") {
       const { servidor } = await javaDe(s.version);
       if (!servidor) throw new Error("Esa versión no tiene servidor oficial");
@@ -204,19 +341,7 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
       const fv = promos[`${s.version}-recommended`] ?? promos[`${s.version}-latest`];
       if (!fv) throw new Error("Forge no tiene versión para ese Minecraft");
       const completo = `${s.version}-${fv}`;
-      const inst = join(s.carpeta, "forge-installer.jar");
-      await descargar(`https://maven.minecraftforge.net/net/minecraftforge/forge/${completo}/forge-${completo}-installer.jar`, inst, (p) => progreso(`Bajando Forge ${fv}… ${p}%`));
-      progreso("Instalando Forge (puede tardar un par de minutos)…");
-      await new Promise<void>((ok, mal) => {
-        const p = spawn(java, ["-jar", "forge-installer.jar", "--installServer"], { cwd: s.carpeta, windowsHide: true });
-        p.stdout.on("data", (d: Buffer) => progreso(`Forge: ${d.toString().trim().split("\n").pop()?.slice(0, 90) ?? ""}`));
-        p.on("exit", (c) => (c === 0 ? ok() : mal(new Error("El instalador de Forge falló"))));
-        p.on("error", mal);
-      });
-      await rm(inst, { force: true });
-      const args = `libraries/net/minecraftforge/forge/${completo}/win_args.txt`;
-      if (!existsSync(join(s.carpeta, args))) throw new Error("Forge no dejó su archivo de arranque");
-      return { argsForge: args };
+      return conInstalador(`Forge ${fv}`, `https://maven.minecraftforge.net/net/minecraftforge/forge/${completo}/forge-${completo}-installer.jar`, `libraries/net/minecraftforge/forge/${completo}/win_args.txt`);
     }
     return {};
   }
@@ -228,7 +353,7 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     const d = datos as { nombre?: unknown; tipo?: unknown; version?: unknown; ramMb?: unknown; puerto?: unknown; eula?: unknown; comando?: unknown };
     const nombre = typeof d.nombre === "string" ? d.nombre.trim().replace(/[\\/:*?"<>|]/g, "").slice(0, 40) : "";
     if (!nombre) throw new Error("Ponle nombre al servidor");
-    const tipo = (["paper", "fabric", "forge", "vanilla", "personalizado"] as Tipo[]).find((t) => t === d.tipo);
+    const tipo = TIPOS.find((t) => t === d.tipo);
     if (!tipo) throw new Error("Tipo inválido");
     const ramMb = Math.min(Math.max(Number(d.ramMb) || 2048, 512), 65536);
     const puerto = Math.min(Math.max(Number(d.puerto) || 25565, 1024), 65535);
@@ -259,7 +384,7 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
       return vista(s);
     }
 
-    if (d.eula !== true) throw new Error("Para crear un servidor de Minecraft tienes que aceptar la EULA de Mojang");
+    if (d.eula !== true && tipo !== "velocity") throw new Error("Para crear un servidor de Minecraft tienes que aceptar la EULA de Mojang");
     const version = typeof d.version === "string" && /^[\w.-]{2,20}$/.test(d.version) ? d.version : "";
     if (!version) throw new Error("Elige la versión");
     const carpeta = join(BASE_SERVIDORES(), nombre);
@@ -267,12 +392,15 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     await mkdir(carpeta, { recursive: true });
     try {
       progreso("Revisando qué Java necesita esa versión…");
-      const { java: mayor } = await javaDe(version);
+      // Velocity 4 se compiló con Java 25; la 3 corre con 21.
+      const { java: mayor } = tipo === "velocity" ? { java: Number(version.split(".")[0]) >= 4 ? 25 : 21 } : await javaDe(mcDe({ tipo, version }));
       const java = await asegurarJava(mayor, progreso);
       const s: Servidor = { ...base, carpeta, version, java: mayor };
       Object.assign(s, await instalar(s, java));
-      await writeFile(join(carpeta, "eula.txt"), `# Aceptada por el usuario en Mi Setup el ${new Date().toISOString()}\neula=true\n`);
-      escribirPropiedades(carpeta, { "server-port": String(puerto), motd: `${nombre} · MexicanLand`, "max-players": "10" });
+      if (tipo !== "velocity") {
+        await writeFile(join(carpeta, "eula.txt"), `# Aceptada por el usuario en Mi Setup el ${new Date().toISOString()}\neula=true\n`);
+        escribirPropiedades(carpeta, { "server-port": String(puerto), motd: `${nombre} · MexicanLand`, "max-players": "10" });
+      }
       agregarCarpeta(carpeta);
       guardar([...leer(), s]);
       progreso("Listo");
@@ -292,10 +420,12 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     } else {
       const java = await asegurarJava(s.java, progreso);
       const memoria = [`-Xms${Math.min(1024, s.ramMb)}M`, `-Xmx${s.ramMb}M`];
-      const args =
-        s.tipo === "forge" && s.argsForge
-          ? [...memoria, `@${s.argsForge}`, "nogui"]
-          : [...memoria, "-jar", "server.jar", "nogui"];
+      // Velocity (proxy) no lee server.properties: el puerto va en la línea de comandos.
+      const args = s.argsForge
+        ? [...memoria, `@${s.argsForge}`, "nogui"]
+        : s.tipo === "velocity"
+          ? [...memoria, "-jar", "server.jar", "--port", String(s.puerto)]
+          : [...memoria, "-jar", s.jar ?? "server.jar", "nogui"];
       proceso = spawn(java, args, { cwd: s.carpeta, windowsHide: true });
     }
     const v: Vivo = { proceso, estado: "iniciando", log: "", jugadores: new Set(), inicio: Date.now() };
@@ -373,7 +503,7 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
       const p = Math.min(Math.max(Number(c.puerto) || s.puerto, 1024), 65535);
       if (lista.some((x) => x.id !== s.id && x.puerto === p)) throw new Error(`El puerto ${p} ya lo usa otro de tus servidores`);
       s.puerto = p;
-      if (s.tipo !== "personalizado") escribirPropiedades(s.carpeta, { "server-port": String(p) });
+      if (s.tipo !== "personalizado" && s.tipo !== "velocity") escribirPropiedades(s.carpeta, { "server-port": String(p) });
     }
     guardar(lista);
     return vista(s);
@@ -402,18 +532,20 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
   });
 
   // -------------------------------------------------------------- mods y plugins
-  manejar("srv:addons", async (id) => {
+  manejar("srv:addons", async (id, clase) => {
     const s = obtener(id);
-    const dir = join(s.carpeta, carpetaAddons(s));
+    const dir = join(s.carpeta, claseDe(s, clase));
     if (!existsSync(dir)) return [];
     const nombres = (await readdir(dir)).filter((n) => /\.(jar|zip)$/i.test(n));
     return Promise.all(nombres.map(async (n) => ({ nombre: n, tamano: (await stat(join(dir, n))).size })));
   });
 
-  manejar("srv:modrinthBuscar", async (id, q) => {
+  manejar("srv:modrinthBuscar", async (id, q, clase) => {
     const s = obtener(id);
-    const tipoProyecto = s.tipo === "paper" ? "plugin" : "mod";
-    const facets = [[`project_type:${tipoProyecto}`], cargadores(s).map((c) => `categories:${c}`), [`versions:${s.version}`]];
+    const c = claseDe(s, clase);
+    const tipoProyecto = c === "plugins" ? "plugin" : "mod";
+    const mc = mcDe(s);
+    const facets = [[`project_type:${tipoProyecto}`], cargadores(s, c).map((x) => `categories:${x}`), ...(mc ? [[`versions:${mc}`]] : [])];
     const url = new URL("https://api.modrinth.com/v2/search");
     url.searchParams.set("query", typeof q === "string" ? q.slice(0, 100) : "");
     url.searchParams.set("facets", JSON.stringify(facets));
@@ -423,14 +555,16 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     return d.hits.map((h) => ({ id: h.project_id, titulo: h.title, descripcion: h.description, icono: h.icon_url, descargas: h.downloads, autor: h.author, url: `https://modrinth.com/${tipoProyecto}/${h.slug}` }));
   });
 
-  manejar("srv:modrinthInstalar", async (id, proyecto) => {
+  manejar("srv:modrinthInstalar", async (id, proyecto, clase) => {
     const s = obtener(id);
+    const c = claseDe(s, clase);
     if (typeof proyecto !== "string" || !/^[\w-]{4,40}$/.test(proyecto)) throw new Error("Proyecto inválido");
-    const url = `https://api.modrinth.com/v2/project/${proyecto}/version?loaders=${encodeURIComponent(JSON.stringify(cargadores(s)))}&game_versions=${encodeURIComponent(JSON.stringify([s.version]))}`;
+    const mc = mcDe(s);
+    const url = `https://api.modrinth.com/v2/project/${proyecto}/version?loaders=${encodeURIComponent(JSON.stringify(cargadores(s, c)))}${mc ? `&game_versions=${encodeURIComponent(JSON.stringify([mc]))}` : ""}`;
     const vers = await json<{ files: { url: string; filename: string; primary: boolean }[] }[]>(url);
     const archivo = vers[0]?.files.find((f) => f.primary) ?? vers[0]?.files[0];
-    if (!archivo) throw new Error(`No hay versión para ${s.version}`);
-    const dir = join(s.carpeta, carpetaAddons(s));
+    if (!archivo) throw new Error(`No hay versión para ${mc || s.version}`);
+    const dir = join(s.carpeta, c);
     await mkdir(dir, { recursive: true });
     const nombre = archivo.filename.replace(/[\\/:*?"<>|]/g, "_");
     await descargar(archivo.url, join(dir, nombre), (p) => progreso(`Bajando ${nombre}… ${p}%`));
@@ -439,21 +573,21 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
   });
 
   // CurseForge: la app consulta la API desde tu servidor (con su clave) y aquí solo se baja el archivo.
-  manejar("srv:instalarDesdeUrl", async (id, url, nombreArchivo) => {
+  manejar("srv:instalarDesdeUrl", async (id, url, nombreArchivo, clase) => {
     const s = obtener(id);
     if (typeof url !== "string" || !/^https:\/\/(edge|mediafilez)\.forgecdn\.net\//.test(url)) throw new Error("Descarga no permitida");
     if (typeof nombreArchivo !== "string" || !/^[\w .+()[\]-]{1,120}\.(jar|zip)$/i.test(nombreArchivo)) throw new Error("Nombre de archivo inválido");
-    const dir = join(s.carpeta, carpetaAddons(s));
+    const dir = join(s.carpeta, claseDe(s, clase));
     await mkdir(dir, { recursive: true });
     await descargar(url, join(dir, nombreArchivo), (p) => progreso(`Bajando ${nombreArchivo}… ${p}%`));
     progreso("Listo");
     return nombreArchivo;
   });
 
-  manejar("srv:quitarAddon", async (id, nombre) => {
+  manejar("srv:quitarAddon", async (id, nombre, clase) => {
     const s = obtener(id);
     if (typeof nombre !== "string" || /[\\/]/.test(nombre)) throw new Error("Nombre inválido");
-    await shell.trashItem(join(s.carpeta, carpetaAddons(s), nombre));
+    await shell.trashItem(join(s.carpeta, claseDe(s, clase), nombre));
     return true;
   });
 

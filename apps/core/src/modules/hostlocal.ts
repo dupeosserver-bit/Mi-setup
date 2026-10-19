@@ -10,11 +10,12 @@ import type { ModuleDeps } from "./common.js";
 
 const MINECRAFT = 432;
 const CLASE = { mods: 6, plugins: 5 } as const;
-const CARGADOR = { forge: 1, fabric: 4 } as const;
+/** modLoaderType de CurseForge. */
+const CARGADOR = { forge: 1, fabric: 4, quilt: 5, neoforge: 6 } as const;
 
 const filtros = z.object({
   version: z.string().regex(/^[\w.-]{2,20}$/),
-  tipo: z.enum(["paper", "fabric", "forge"]),
+  tipo: z.enum(["paper", "fabric", "forge", "neoforge", "quilt"]),
 });
 
 export function hostLocalRoutes(deps: ModuleDeps) {
@@ -27,7 +28,7 @@ export function hostLocalRoutes(deps: ModuleDeps) {
     if (!r.ok) throw new HttpError(502, `CurseForge respondió ${r.status}`);
     return (await r.json()) as T;
   }
-  const parametrosTipo = (tipo: "paper" | "fabric" | "forge"): Record<string, string> =>
+  const parametrosTipo = (tipo: z.infer<typeof filtros>["tipo"]): Record<string, string> =>
     tipo === "paper" ? { classId: String(CLASE.plugins) } : { classId: String(CLASE.mods), modLoaderType: String(CARGADOR[tipo]) };
 
   return async function (app: FastifyInstance): Promise<void> {
