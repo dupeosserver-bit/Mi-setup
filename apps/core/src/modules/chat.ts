@@ -1,9 +1,14 @@
 /**
  * Chat privado: canales entre dispositivos (celular ↔ PC) para mensajes,
- * enlaces y recordatorios. El modelo admite varios usuarios por canal (chat de
+ * enlaces, recordatorios, código, fotos, archivos, notas de voz y notas
+ * compartidas. El modelo admite varios usuarios por canal (chat de
  * equipo a futuro). Cada cuenta tiene su canal personal "Mis dispositivos".
  */
 import { temas } from "@mi-setup/shared";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -12,17 +17,35 @@ import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { idParams, type ModuleDeps } from "./common.js";
 import { crearRecordatorio } from "./recordatorios.js";
+import { carpetaArchivos, disposicion } from "./herramientas.js";
+import { AUDIO_SEGURO, tipoPorBytes } from "./notas-adjuntos.js";
+
+const MAX_ARCHIVO_CHAT = 25 * 1024 * 1024;
+const IMAGEN_CHAT = /^image\/(png|jpeg|webp|gif)$/;
+
+export function firmarArchivoChat(secreto: string, mensajeId: string): string {
+  return createHmac("sha256", secreto).update(`chat-archivo:${mensajeId}`).digest("base64url").slice(0, 24);
+}
 
 const URL_SOLA = /^https?:\/\/\S+$/i;
 
 const mensajeSchema = z.object({
-  texto: z.string().trim().min(1).max(4000),
+  // El código puede ser largo; el texto normal hasta 4000.
+  texto: z.string().trim().min(1).max(20000),
   dispositivoId: z.string().uuid().optional(),
   recordatorio: z.object({ fecha: z.coerce.date() }).optional(),
+  /** Bloque de código (se ve con letra de código y botón de copiar). */
+  codigo: z.object({ lenguaje: z.string().trim().max(30).default("") }).optional(),
+  /** Nota compartida con su enlace de solo lectura. */
+  nota: z.object({ enlace: z.string().url().max(300), titulo: z.string().max(200), extracto: z.string().max(400).default("") }).optional(),
 });
 
+let secretoChat = "desarrollo-sin-secreto";
+
 function aDto(m: typeof chatMessages.$inferSelect, autor: string | null) {
+  const archivo = typeof (m.meta as { archivo?: unknown }).archivo === "string";
   return {
+    archivoUrl: archivo ? `/api/chat/archivo/${m.id}/${firmarArchivoChat(secretoChat, m.id)}` : null,
     id: m.id,
     canalId: m.channelId,
     usuarioId: m.userId,
@@ -68,27 +91,37 @@ export async function enviarMensaje(
 ) {
   if (!(await esMiembro(deps, canalId, userId))) throw new HttpError(403, "No perteneces a este canal");
   const d = mensajeSchema.parse(datos);
+  if (!d.codigo && d.texto.length > 4000) throw new HttpError(400, "El mensaje es muy largo (máximo 4000 letras)");
   let deviceId: string | null = null;
   if (d.dispositivoId) {
     const [dev] = await deps.db.select({ userId: devices.userId }).from(devices).where(eq(devices.id, d.dispositivoId));
     if (dev?.userId === userId) deviceId = d.dispositivoId;
   }
-  let kind = URL_SOLA.test(d.texto) ? "enlace" : "texto";
-  let meta: Record<string, unknown> = {};
+  let kind = d.codigo ? "codigo" : d.nota ? "nota" : URL_SOLA.test(d.texto) ? "enlace" : "texto";
+  let meta: Record<string, unknown> = d.codigo ? { lenguaje: d.codigo.lenguaje } : d.nota ? { ...d.nota } : {};
+  if (d.nota && !d.nota.enlace.startsWith(`https://${deps.config.env.APP_HOST}/n/`)) throw new HttpError(400, "Ese enlace no es de una nota de Mi Setup");
   if (d.recordatorio) {
     const r = await crearRecordatorio(deps, userId, { titulo: d.texto.slice(0, 200), fecha: d.recordatorio.fecha });
     kind = "recordatorio";
     meta = { recordatorioId: r.id, fecha: r.fecha };
   }
+  return publicar(deps, { canalId, userId, deviceId, kind, body: d.texto, meta, aviso: kind === "codigo" ? "Te mandó código" : d.texto });
+}
+
+/** Guarda el mensaje, lo manda en tiempo real y avisa a los demás. */
+async function publicar(
+  deps: ModuleDeps,
+  m0: { canalId: string; userId: string; deviceId: string | null; kind: string; body: string; meta: Record<string, unknown>; aviso: string },
+) {
   const [m] = await deps.db
     .insert(chatMessages)
-    .values({ channelId: canalId, userId, deviceId, kind, body: d.texto, meta })
+    .values({ channelId: m0.canalId, userId: m0.userId, deviceId: m0.deviceId, kind: m0.kind, body: m0.body, meta: m0.meta })
     .returning();
   if (!m) throw new HttpError(500, "No se pudo enviar el mensaje");
-  const [autor] = await deps.db.select({ nombre: users.displayName }).from(users).where(eq(users.id, userId));
+  const [autor] = await deps.db.select({ nombre: users.displayName }).from(users).where(eq(users.id, m0.userId));
   const dto = aDto(m, autor?.nombre ?? null);
-  deps.hub.publicar(temas.chat(canalId), { mensaje: dto });
-  await avisarMiembros(deps, canalId, userId, autor?.nombre ?? "Alguien", d.texto).catch(() => undefined);
+  deps.hub.publicar(temas.chat(m0.canalId), { mensaje: dto });
+  await avisarMiembros(deps, m0.canalId, m0.userId, autor?.nombre ?? "Alguien", m0.aviso).catch(() => undefined);
   return dto;
 }
 
@@ -118,6 +151,8 @@ async function avisarMiembros(deps: ModuleDeps, canalId: string, autorId: string
 
 export function chatRoutes(deps: ModuleDeps) {
   const { db } = deps;
+  secretoChat = deps.config.env.JWT_SECRET ?? deps.config.env.SERVER_ENC_KEY ?? "desarrollo-sin-secreto";
+  const carpetaCanal = (canalId: string) => join(carpetaArchivos(deps), "chat", canalId);
   deps.hub.registrarTema("chat:", async (user, tema) => esMiembro(deps, tema.slice("chat:".length), user.id));
 
   return async function (app: FastifyInstance): Promise<void> {
@@ -243,6 +278,80 @@ export function chatRoutes(deps: ModuleDeps) {
     app.post("/api/chat/canales/:id/mensajes", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
       const { id } = idParams.parse(request.params);
       return enviarMensaje(deps, currentUser(request).id, id, request.body as z.input<typeof mensajeSchema>);
+    });
+
+    /** Foto, archivo o nota de voz (campo «archivo»; antes, opcionales «texto» y «duracion»). */
+    app.post("/api/chat/canales/:id/archivo", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      if (!(await esMiembro(deps, id, user.id))) throw new HttpError(403, "No perteneces a este canal");
+      let texto = "";
+      let duracion: number | null = null;
+      let voz = false;
+      let guardado: { id: string; nombre: string; mime: string; tamano: number } | null = null;
+      for await (const parte of request.parts({ limits: { fileSize: MAX_ARCHIVO_CHAT, files: 1 } })) {
+        if (parte.type === "field") {
+          if (parte.fieldname === "texto") texto = String(parte.value).slice(0, 1000);
+          if (parte.fieldname === "duracion") duracion = Math.min(3600, Math.max(0, Number(parte.value) || 0));
+          if (parte.fieldname === "voz") voz = String(parte.value) === "1";
+          continue;
+        }
+        const buf = await parte.toBuffer();
+        if (parte.file.truncated) throw new HttpError(413, "El archivo pasa de 25 MB");
+        if (!buf.length) throw new HttpError(400, "El archivo está vacío");
+        const archivoId = randomUUID();
+        await mkdir(carpetaCanal(id), { recursive: true });
+        await writeFile(join(carpetaCanal(id), `${archivoId}.bin`), buf);
+        const nombre = basename(parte.filename || "archivo").replace(/[^\w.() áéíóúñÁÉÍÓÚÑ-]/g, "_").slice(0, 120) || "archivo";
+        guardado = { id: archivoId, nombre, mime: tipoPorBytes(buf, parte.mimetype), tamano: buf.length };
+      }
+      if (!guardado) throw new HttpError(400, "Falta el archivo");
+      const kind = voz && AUDIO_SEGURO.test(guardado.mime.split(";")[0]!) ? "voz" : IMAGEN_CHAT.test(guardado.mime) ? "foto" : "archivo";
+      const aviso = kind === "voz" ? "🎤 Nota de voz" : kind === "foto" ? "📷 Foto" : `📎 ${guardado.nombre}`;
+      return publicar(deps, {
+        canalId: id,
+        userId: user.id,
+        deviceId: null,
+        kind,
+        body: texto || (kind === "archivo" ? guardado.nombre : ""),
+        meta: { archivo: guardado.id, nombre: guardado.nombre, mime: guardado.mime, tamano: guardado.tamano, ...(duracion !== null ? { duracion } : {}) },
+        aviso: texto ? `${aviso}: ${texto}` : aviso,
+      });
+    });
+
+    /** Ver o bajar el archivo de un mensaje (dirección firmada: sirve para <img> y <audio>). */
+    app.get("/api/chat/archivo/:id/:firma", { config: { acceso: { publico: true } } }, async (request, reply) => {
+      const { id, firma } = z.object({ id: z.string().uuid(), firma: z.string().max(40) }).parse(request.params);
+      const esperada = Buffer.from(firmarArchivoChat(secretoChat, id));
+      const recibida = Buffer.from(firma);
+      if (esperada.length !== recibida.length || !timingSafeEqual(esperada, recibida)) throw new HttpError(404, "No encontrado");
+      const [m] = await db.select().from(chatMessages).where(eq(chatMessages.id, id));
+      const meta = (m?.meta ?? {}) as { archivo?: string; nombre?: string; mime?: string };
+      if (!m || typeof meta.archivo !== "string") throw new HttpError(404, "No encontrado");
+      const ruta = join(carpetaCanal(m.channelId), `${basename(meta.archivo)}.bin`);
+      const s = await stat(ruta).catch(() => null);
+      if (!s?.isFile()) throw new HttpError(404, "El archivo ya no está");
+      const mime = (meta.mime ?? "").split(";")[0]!;
+      const enLinea = IMAGEN_CHAT.test(mime) || AUDIO_SEGURO.test(mime);
+      return reply
+        .header("content-type", enLinea ? mime : "application/octet-stream")
+        .header("content-length", String(s.size))
+        .header("content-disposition", disposicion(meta.nombre ?? "archivo", enLinea ? "inline" : "attachment"))
+        .header("x-content-type-options", "nosniff")
+        .header("cache-control", "private, max-age=3600")
+        .send(createReadStream(ruta));
+    });
+
+    /** Borrar un mensaje propio (y su archivo). */
+    app.delete("/api/chat/mensajes/:id", { config: { acceso: { modulo: "chat", nivel: "escritura" } } }, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const [m] = await db.delete(chatMessages).where(and(eq(chatMessages.id, id), eq(chatMessages.userId, user.id))).returning();
+      if (!m) throw new HttpError(404, "Ese mensaje no existe o no es tuyo");
+      const archivo = (m.meta as { archivo?: unknown }).archivo;
+      if (typeof archivo === "string") await rm(join(carpetaCanal(m.channelId), `${basename(archivo)}.bin`), { force: true });
+      deps.hub.publicar(temas.chat(m.channelId), { borrado: m.id });
+      return { ok: true };
     });
   };
 }

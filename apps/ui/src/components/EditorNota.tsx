@@ -35,16 +35,27 @@ import {
   Underline,
   Undo2,
   Columns2,
+  AudioLines,
+  Copy,
+  Download,
+  Link2,
+  Mic,
+  Send,
+  Share2,
+  Square,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, api } from "../lib/api";
+import { compartirConApps, guardarEnDispositivo } from "../lib/compartir";
+import { extensionDe, fmtDuracion, grabarAudio, type Grabacion } from "../lib/grabadora";
+import { dictar } from "../lib/voz";
 import { confirmar } from "../lib/confirmar";
-import { queryClient } from "../lib/consultas";
+import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
 import { alternarCasilla } from "../lib/notas";
 import { COLORES_NOTA, aHtml, fmtTamano, fondoNota, quitarAdjunto, type ColorNota } from "../lib/markdownNotas";
 import { abrirExterno } from "../lib/plataforma";
-import { Boton, Modal, avisar, avisarError, cx } from "./ui";
+import { Boton, Entrada, Modal, Selector, avisar, avisarError, cx } from "./ui";
 
 export interface Nota {
   id: string;
@@ -206,6 +217,107 @@ function Dibujo({ alGuardar, alCerrar }: { alGuardar: (png: Blob) => Promise<voi
 
 type Modo = "pagina" | "editar" | "vivo";
 
+
+/** Compartir la nota: por el chat de Mi Setup, con otras apps (con sus fotos) o con un enlace. */
+function CompartirNota({ nota, titulo, contenido, adjuntos, alCerrar }: { nota: Nota; titulo: string; contenido: string; adjuntos: Adjunto[]; alCerrar: () => void }) {
+  const puedeChat = usePuede("chat", "escritura");
+  const enlace = useQuery({ queryKey: ["notas", nota.id, "compartir"], queryFn: () => api<{ activo: boolean; url?: string; vence?: string | null }>(`/api/notas/${nota.id}/compartir`) });
+  const canales = useQuery({ queryKey: ["chat", "canales"], queryFn: () => api<{ id: string; nombre: string; tipo: string }[]>("/api/chat/canales"), enabled: puedeChat });
+  const [canal, setCanal] = useState("");
+  const [dias, setDias] = useState("30");
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["notas", nota.id, "compartir"] });
+  const crearEnlace = async (): Promise<string> => {
+    const r = await api<{ url: string }>(`/api/notas/${nota.id}/compartir`, { cuerpo: { dias: dias ? Number(dias) : null } });
+    refrescar();
+    return r.url;
+  };
+  const textoPlano = contenido.replace(/!?\[[^\]]*\]\(\/api\/notas\/adjuntos\/[^)]+\)\n?/g, "").trim();
+  const extracto = textoPlano.replace(/[#*_>|~`-]/g, "").replace(/\s+/g, " ").slice(0, 300);
+  const porChat = useMutation({
+    mutationFn: async () => {
+      const url = enlace.data?.activo && enlace.data.url ? enlace.data.url : await crearEnlace();
+      const destino = canal || canales.data?.[0]?.id;
+      if (!destino) throw new Error("No tienes chats todavía");
+      await api(`/api/chat/canales/${destino}/mensajes`, { cuerpo: { texto: titulo || "Nota", nota: { enlace: url, titulo: titulo || "Nota", extracto } } });
+    },
+    onSuccess: () => {
+      avisar("Nota enviada al chat");
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  const conApps = useMutation({
+    mutationFn: () =>
+      compartirConApps({
+        titulo: titulo || "Nota",
+        texto: `${titulo ? `# ${titulo}\n\n` : ""}${textoPlano}`,
+        archivos: adjuntos.filter((a) => a.imagen).map((a) => ({ url: api_base(a.url), nombre: a.nombre })),
+      }),
+    onSuccess: (r) => avisar(r === "copiado" ? "Texto copiado (las fotos no se pudieron adjuntar aquí)" : "Listo"),
+    onError: avisarError,
+  });
+  const quitar = useMutation({ mutationFn: () => api(`/api/notas/${nota.id}/compartir`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
+  const nuevo = useMutation({ mutationFn: crearEnlace, onError: avisarError });
+  return (
+    <Modal abierto titulo="Compartir nota" alCerrar={alCerrar}>
+      <div className="space-y-4 text-sm">
+        {puedeChat ? (
+          <section className="space-y-2">
+            <p className="font-medium">Por el chat de Mi Setup</p>
+            <div className="flex gap-2">
+              <Selector value={canal || canales.data?.[0]?.id || ""} onChange={(e) => setCanal(e.target.value)}>
+                {(canales.data ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </Selector>
+              <Boton variante="primario" icono={Send} cargando={porChat.isPending} onClick={() => porChat.mutate()}>
+                Enviar
+              </Boton>
+            </div>
+            <p className="text-xs text-tenue">Se manda con un enlace para verla (con fotos) aunque no sea tu cuenta.</p>
+          </section>
+        ) : null}
+        <section className="space-y-2">
+          <p className="font-medium">Con otras apps</p>
+          <Boton icono={Share2} cargando={conApps.isPending} onClick={() => conApps.mutate()}>
+            Compartir texto y fotos
+          </Boton>
+          <p className="text-xs text-tenue">Para Claude, Gemini, ChatGPT, WhatsApp o correo: las fotos van como imágenes para que la IA las vea.</p>
+        </section>
+        <section className="space-y-2">
+          <p className="font-medium">Enlace para verla sin cuenta</p>
+          {enlace.data?.activo && enlace.data.url ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Entrada readOnly value={enlace.data.url} onFocus={(e) => e.target.select()} />
+                <Boton tamano="icono" icono={Copy} aria-label="Copiar enlace" onClick={() => void navigator.clipboard.writeText(enlace.data!.url!).then(() => avisar("Enlace copiado"))} />
+              </div>
+              <p className="text-xs text-tenue">{enlace.data.vence ? `Vence ${new Date(enlace.data.vence).toLocaleDateString("es-MX")}` : "No vence"}. Quien lo tenga puede leer la nota (no editarla).</p>
+              <Boton tamano="sm" variante="peligro" cargando={quitar.isPending} onClick={() => quitar.mutate()}>
+                Dejar de compartir
+              </Boton>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Selector value={dias} onChange={(e) => setDias(e.target.value)} className="w-40">
+                <option value="1">1 día</option>
+                <option value="7">7 días</option>
+                <option value="30">30 días</option>
+                <option value="">Sin vencer</option>
+              </Selector>
+              <Boton icono={Link2} cargando={nuevo.isPending} onClick={() => nuevo.mutate()}>
+                Crear enlace
+              </Boton>
+            </div>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
 export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { nota: Nota; notas: Nota[]; puedeEditar: boolean; alVolver: () => void; alAbrir: (id: string) => void }) {
   const [titulo, setTitulo] = useState(nota.titulo);
   const [contenido, setContenido] = useState(nota.contenido);
@@ -215,6 +327,11 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
   const [colores, setColores] = useState(false);
   const [dibujando, setDibujando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [compartiendo, setCompartiendo] = useState(false);
+  const [grabando, setGrabando] = useState<Grabacion | null>(null);
+  const [segundos, setSegundos] = useState(0);
+  const [dictando, setDictando] = useState<(() => void) | null>(null);
+  const [parcial, setParcial] = useState("");
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const entradaImagen = useRef<HTMLInputElement>(null);
@@ -284,6 +401,70 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
       setSubiendo(false);
     }
   };
+
+  // Mientras se graba, el contador de segundos.
+  useEffect(() => {
+    if (!grabando) return;
+    const t = setInterval(() => setSegundos(grabando.segundos()), 500);
+    return () => clearInterval(t);
+  }, [grabando]);
+
+  const notaDeVoz = async () => {
+    if (grabando) {
+      const g = grabando;
+      setGrabando(null);
+      const { audio, duracion, tipo } = await g.detener();
+      setSubiendo(true);
+      try {
+        const datos = new FormData();
+        datos.append("archivo", audio, `nota-de-voz-${Date.now()}.${extensionDe(tipo)}`);
+        const a = await api<Adjunto>(`/api/notas/${nota.id}/adjuntos`, { formulario: datos });
+        void adjuntos.refetch();
+        insertar(`[🎤 Nota de voz (${fmtDuracion(duracion)})](${a.url})`, "", true);
+        if (modo === "pagina") setModo("vivo");
+      } catch (err) {
+        avisarError(err);
+      } finally {
+        setSubiendo(false);
+      }
+      return;
+    }
+    try {
+      setSegundos(0);
+      setGrabando(await grabarAudio());
+    } catch (err) {
+      avisarError(err);
+    }
+  };
+
+  /** Dictado: lo que dices se va escribiendo donde está el cursor. */
+  const alternarDictado = async () => {
+    if (dictando) {
+      dictando();
+      setDictando(null);
+      setParcial("");
+      return;
+    }
+    try {
+      const parar = await dictar(
+        (texto, final) => {
+          if (!final) return setParcial(texto);
+          setParcial("");
+          const frase = texto.trim();
+          if (frase) insertar(`${frase} `, "", false);
+        },
+        (e) => {
+          avisarError(e);
+          setDictando(null);
+          setParcial("");
+        },
+      );
+      setDictando(() => parar);
+    } catch (err) {
+      avisarError(err);
+    }
+  };
+  useEffect(() => () => dictando?.(), [dictando]);
 
   const html = useMemo(() => aHtml(contenido), [contenido]);
   const hijas = notas.filter((n) => n.padre === nota.id);
@@ -396,6 +577,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
         <span className="min-w-0 flex-1 truncate text-xs text-tenue">
           {subiendo ? "Subiendo archivo…" : estado === "guardado" ? `Guardado · ${haceCuanto(nota.actualizada)}` : estado === "guardando" ? "Guardando…" : "Sin guardar"}
         </span>
+        <Boton tamano="icono" variante="fantasma" icono={Share2} aria-label="Compartir" title="Compartir" onClick={() => setCompartiendo(true)} />
         <Boton tamano="sm" variante={modo === "pagina" ? "primario" : "fantasma"} icono={BookOpen} onClick={() => setModo("pagina")}>
           Página
         </Boton>
@@ -492,6 +674,22 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
             <Boton tamano="icono" variante="fantasma" icono={ImagePlus} aria-label="Foto o imagen" title="Foto o imagen" cargando={subiendo} onClick={() => entradaImagen.current?.click()} />
             <Boton tamano="icono" variante="fantasma" icono={Paperclip} aria-label="Adjuntar archivo" title="Adjuntar archivo" onClick={() => entradaArchivo.current?.click()} />
             <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Dibujar" title="Dibujar" onClick={() => setDibujando(true)} />
+            <Boton
+              tamano="icono"
+              variante={grabando ? "peligro" : "fantasma"}
+              icono={grabando ? Square : Mic}
+              aria-label={grabando ? "Terminar nota de voz" : "Nota de voz"}
+              title={grabando ? "Terminar nota de voz" : "Nota de voz"}
+              onClick={() => void notaDeVoz()}
+            />
+            <Boton
+              tamano="icono"
+              variante={dictando ? "primario" : "fantasma"}
+              icono={AudioLines}
+              aria-label={dictando ? "Dejar de dictar" : "Dictar (lo que digas se escribe)"}
+              title={dictando ? "Dejar de dictar" : "Dictar (lo que digas se escribe)"}
+              onClick={() => void alternarDictado()}
+            />
             <input
               ref={entradaImagen}
               type="file"
@@ -514,6 +712,12 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
               }}
             />
           </div>
+          {grabando || dictando ? (
+            <p className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-fondo px-3 py-1.5 text-xs">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-peligro" />
+              {grabando ? `Grabando nota de voz… ${fmtDuracion(segundos)} (toca el cuadro rojo para terminar)` : parcial ? `Escuchando: ${parcial}` : "Escuchando… habla y se irá escribiendo"}
+            </p>
+          ) : null}
           <div className={cx("flex min-h-0 flex-1 flex-col", modo === "vivo" && "md:grid md:grid-cols-2")}>
             <textarea
               ref={area}
@@ -536,6 +740,19 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
       {adjuntos.data?.length ? (
         <details className="border-t border-borde px-4 py-2 text-xs">
           <summary className="cursor-pointer text-tenue">Adjuntos ({adjuntos.data.length})</summary>
+          <Boton
+            className="mt-2"
+            tamano="sm"
+            variante="secundario"
+            icono={Download}
+            onClick={async () => {
+              let donde = "";
+              for (const a of adjuntos.data ?? []) donde = await guardarEnDispositivo(api_base(a.url), a.nombre).catch(() => donde);
+              avisar(donde ? `Guardados en ${donde}` : "No se pudo guardar");
+            }}
+          >
+            Guardar todos en este dispositivo
+          </Boton>
           <ul className="mt-2 space-y-1">
             {adjuntos.data.map((a) => (
               <li key={a.id} className="flex items-center gap-2">
@@ -544,6 +761,13 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
                   {a.nombre}
                 </button>
                 <span className="text-tenue">{fmtTamano(a.tamano)}</span>
+                <Boton
+                  tamano="icono"
+                  variante="fantasma"
+                  icono={Download}
+                  aria-label={`Guardar ${a.nombre}`}
+                  onClick={() => void guardarEnDispositivo(api_base(a.url), a.nombre).then((d) => avisar(`Guardado en ${d}`), avisarError)}
+                />
                 {puedeEditar ? <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label={`Quitar ${a.nombre}`} onClick={() => void borrarAdjunto(a)} /> : null}
               </li>
             ))}
@@ -564,6 +788,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
         </div>
       ) : null}
 
+      {compartiendo ? <CompartirNota nota={nota} titulo={titulo} contenido={contenido} adjuntos={adjuntos.data ?? []} alCerrar={() => setCompartiendo(false)} /> : null}
       {dibujando ? (
         <Dibujo
           alCerrar={() => setDibujando(false)}

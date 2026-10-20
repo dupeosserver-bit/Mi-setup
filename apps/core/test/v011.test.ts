@@ -207,3 +207,79 @@ describe("respaldos: restaurar y automáticos", () => {
     expect(tocaRespaldo({ ...p, frecuencia: "semanal", dia: 0 }, new Date("2026-03-01T18:00:00Z"))).toBe(true);
   });
 });
+
+function multipartConCampos(campos: Record<string, string>, nombre: string, tipo: string, contenido: Buffer | string) {
+  const limite = "----prueba011c";
+  const partes = Object.entries(campos).map(([k, v]) => Buffer.from(`--${limite}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
+  const cuerpo = Buffer.concat([
+    ...partes,
+    Buffer.from(`--${limite}\r\nContent-Disposition: form-data; name="archivo"; filename="${nombre}"\r\nContent-Type: ${tipo}\r\n\r\n`),
+    Buffer.isBuffer(contenido) ? contenido : Buffer.from(contenido),
+    Buffer.from(`\r\n--${limite}--\r\n`),
+  ]);
+  return { payload: cuerpo, headers: { "content-type": `multipart/form-data; boundary=${limite}` } };
+}
+
+describe("chat: fotos, archivos, voz y código", () => {
+  it("manda una foto, una nota de voz, un archivo y código; solo quien está en el canal", async () => {
+    const { h, otra } = await preparar(undefined, { chat: "escritura", notas: "escritura" });
+    const app = ctx!.app;
+    const canales = (await app.inject({ method: "GET", url: "/api/chat/canales", headers: h })).json<{ id: string; tipo: string }[]>();
+    const canal = canales.find((c) => c.tipo === "personal")!.id;
+    const url = `/api/chat/canales/${canal}/archivo`;
+    const foto = multipartConCampos({ texto: "mira" }, "f.jpg", "image/jpeg", JPG);
+    const f = await app.inject({ method: "POST", url, headers: { ...h, ...foto.headers }, payload: foto.payload });
+    expect(f.statusCode).toBe(200);
+    const fm = f.json<{ tipo: string; texto: string; archivoUrl: string }>();
+    expect(fm).toMatchObject({ tipo: "foto", texto: "mira" });
+    const img = await app.inject({ method: "GET", url: fm.archivoUrl });
+    expect(img.headers["content-type"]).toBe("image/jpeg");
+    const voz = multipartConCampos({ voz: "1", duracion: "4" }, "voz.webm", "audio/webm", Buffer.alloc(200, 2));
+    const v = (await app.inject({ method: "POST", url, headers: { ...h, ...voz.headers }, payload: voz.payload })).json<{ tipo: string; meta: { duracion: number }; archivoUrl: string }>();
+    expect(v).toMatchObject({ tipo: "voz", meta: { duracion: 4 } });
+    expect((await app.inject({ method: "GET", url: v.archivoUrl })).headers["content-type"]).toBe("audio/webm");
+    // Un HTML se manda como archivo y se baja (nunca se abre como página).
+    const html = multipartConCampos({}, "x.html", "text/html", "<script>alert(1)</script>");
+    const a = (await app.inject({ method: "POST", url, headers: { ...h, ...html.headers }, payload: html.payload })).json<{ tipo: string; archivoUrl: string }>();
+    expect(a.tipo).toBe("archivo");
+    const bajada = await app.inject({ method: "GET", url: a.archivoUrl });
+    expect(bajada.headers["content-type"]).toBe("application/octet-stream");
+    expect(String(bajada.headers["content-disposition"])).toContain("attachment");
+    // Firma falsa
+    expect((await app.inject({ method: "GET", url: a.archivoUrl.replace(/[^/]+$/, "xxxxxxxxxxxxxxxxxxxxxxxx") })).statusCode).toBe(404);
+    // Otra cuenta no puede mandar archivos a mi canal
+    expect((await app.inject({ method: "POST", url, headers: { ...otra, ...foto.headers }, payload: foto.payload })).statusCode).toBe(403);
+    // Código largo sí; texto largo no.
+    const largo = "x".repeat(6000);
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: h, payload: { texto: largo, codigo: { lenguaje: "ts" } } })).json<{ tipo: string }>().tipo).toBe("codigo");
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: h, payload: { texto: largo } })).statusCode).toBe(400);
+    // Borrar mi mensaje con archivo
+    expect((await app.inject({ method: "DELETE", url: `/api/chat/mensajes/${(f.json() as { id: string }).id}`, headers: otra })).statusCode).toBe(404);
+    expect((await app.inject({ method: "DELETE", url: `/api/chat/mensajes/${(f.json() as { id: string }).id}`, headers: h })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: fm.archivoUrl })).statusCode).toBe(404);
+  });
+});
+
+describe("notas: compartir con enlace", () => {
+  it("crea el enlace, se ve sin cuenta, otro lo reemplaza y al quitarlo deja de servir", async () => {
+    const { h, otra } = await preparar(undefined, { notas: "escritura", chat: "escritura" });
+    const app = ctx!.app;
+    const nota = (await app.inject({ method: "POST", url: "/api/notas", headers: h, payload: { titulo: "Lista", contenido: "**hola**" } })).json<{ id: string }>();
+    expect((await app.inject({ method: "POST", url: `/api/notas/${nota.id}/compartir`, headers: otra, payload: {} })).statusCode).toBe(404);
+    const c1 = (await app.inject({ method: "POST", url: `/api/notas/${nota.id}/compartir`, headers: h, payload: { dias: 7 } })).json<{ url: string }>();
+    const token1 = c1.url.split("/n/")[1]!;
+    const pub = await app.inject({ method: "GET", url: `/api/notas-publicas/${token1}` });
+    expect(pub.json()).toMatchObject({ titulo: "Lista", contenido: "**hola**" });
+    expect((await app.inject({ method: "GET", url: `/api/notas/${nota.id}/compartir`, headers: h })).json<{ url: string }>().url).toBe(c1.url);
+    const c2 = (await app.inject({ method: "POST", url: `/api/notas/${nota.id}/compartir`, headers: h, payload: {} })).json<{ url: string }>();
+    expect((await app.inject({ method: "GET", url: `/api/notas-publicas/${token1}` })).statusCode).toBe(404);
+    const token2 = c2.url.split("/n/")[1]!;
+    expect((await app.inject({ method: "GET", url: `/api/notas-publicas/${token2}` })).statusCode).toBe(200);
+    // Mandarla por el chat: solo enlaces de notas de este Mi Setup.
+    const canal = (await app.inject({ method: "GET", url: "/api/chat/canales", headers: h })).json<{ id: string; tipo: string }[]>().find((x) => x.tipo === "personal")!.id;
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: h, payload: { texto: "Lista", nota: { enlace: "https://malo.test/n/x", titulo: "x" } } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: h, payload: { texto: "Lista", nota: { enlace: c2.url, titulo: "Lista" } } })).json<{ tipo: string }>().tipo).toBe("nota");
+    await app.inject({ method: "DELETE", url: `/api/notas/${nota.id}/compartir`, headers: h });
+    expect((await app.inject({ method: "GET", url: `/api/notas-publicas/${token2}` })).statusCode).toBe(404);
+  });
+});

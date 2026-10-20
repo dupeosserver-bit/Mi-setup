@@ -72,8 +72,13 @@ motor.use({ extensions: [spoiler, subrayado, pequeno] });
 /** Markdown a HTML sin limpiar (para pruebas); en la pantalla se usa aHtml. */
 export function renderMarkdown(contenido: string): string {
   let indice = 0;
+  // Las notas de voz ([🎤 …](adjunto)) se ven como reproductor.
+  const html = (motor.parse(contenido, { async: false }) as string).replace(
+    /<a href="(\/api\/notas\/adjuntos\/[\w-]+\/[\w-]+)">🎤([^<]*)<\/a>/g,
+    (_m, src: string, texto: string) => `<span class="nota-voz">🎤${texto}<audio controls preload="none" src="${src}"></audio></span>`,
+  );
   // Cada casilla lleva su número para poder marcarla desde la página.
-  return (motor.parse(contenido, { async: false }) as string).replace(/<input([^>]*?)type="checkbox"([^>]*?)>/g, (_m, a: string, b: string) => {
+  return html.replace(/<input([^>]*?)type="checkbox"([^>]*?)>/g, (_m, a: string, b: string) => {
     const marcada = /checked/.test(a + b);
     return `<input type="checkbox" data-casilla="${indice++}"${marcada ? " checked" : ""}>`;
   });
@@ -84,7 +89,7 @@ const completarDirecciones = (html: string): string => html.replace(/(src|href)=
 
 /** Convierte el texto en página (HTML limpio: sin scripts ni eventos). */
 export function aHtml(contenido: string): string {
-  const limpio = DOMPurify.sanitize(renderMarkdown(contenido), { ADD_ATTR: ["data-casilla", "data-spoiler"], FORBID_TAGS: ["style", "form"], FORBID_ATTR: ["style"] });
+  const limpio = DOMPurify.sanitize(renderMarkdown(contenido), { ADD_TAGS: ["audio"], ADD_ATTR: ["data-casilla", "data-spoiler", "controls", "preload"], FORBID_TAGS: ["style", "form"], FORBID_ATTR: ["style"] });
   return completarDirecciones(limpio);
 }
 

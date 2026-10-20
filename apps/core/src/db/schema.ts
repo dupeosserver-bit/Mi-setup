@@ -1230,3 +1230,24 @@ export const financeSplitCharges = pgTable(
   },
   (t) => [uniqueIndex("finance_cargo_unico").on(t.splitId, t.personId, t.dueOn), index("finance_cargos_persona").on(t.personId, t.dueOn)],
 );
+
+// ---------------------------------------------------------------- 0.11: notas compartidas
+
+/** Enlace de solo lectura a una nota (el token se guarda cifrado para volver a copiarlo). */
+export const noteShares = pgTable(
+  "note_shares",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => notes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    tokenCifrado: text("token_cifrado").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("note_shares_token").on(t.tokenHash), uniqueIndex("note_shares_nota").on(t.noteId)],
+);

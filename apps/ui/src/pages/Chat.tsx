@@ -1,14 +1,16 @@
 /** Chat: entre tus dispositivos, privado con otra cuenta y en grupo. */
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bell, Link2, LogOut, MessagesSquare, Plus, Send, Settings2, User, Users } from "lucide-react";
+import { ArrowLeft, Bell, Code2, Copy, FileDown, Link2, LogOut, MessagesSquare, Mic, NotebookPen, Paperclip, Plus, Send, Settings2, Square, Trash2, User, Users, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisarError, cx } from "../components/ui";
-import { api } from "../lib/api";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { api, urlServidor } from "../lib/api";
+import { guardarEnDispositivo } from "../lib/compartir";
+import { extensionDe, fmtDuracion, grabarAudio, type Grabacion } from "../lib/grabadora";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
-import { aInputLocal, fmtFechaHora } from "../lib/formato";
+import { aInputLocal, fmtBytes, fmtFechaHora } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
 import { useTema } from "../lib/tiempo-real";
 
@@ -25,11 +27,81 @@ interface Mensaje {
   usuarioId: string | null;
   autor: string | null;
   dispositivoId: string | null;
-  tipo: "texto" | "enlace" | "recordatorio";
+  tipo: "texto" | "enlace" | "recordatorio" | "codigo" | "foto" | "voz" | "archivo" | "nota";
   texto: string;
-  meta: { fecha?: string };
+  meta: { fecha?: string; lenguaje?: string; nombre?: string; tamano?: number; duracion?: number; enlace?: string; titulo?: string; extracto?: string };
+  archivoUrl: string | null;
   fecha: string;
 }
+
+/** Contenido de cada mensaje según su tipo. */
+function ContenidoMensaje({ m }: { m: Mensaje }) {
+  const url = m.archivoUrl ? urlServidor(m.archivoUrl) : null;
+  if (m.tipo === "foto" && url) {
+    return (
+      <>
+        <button type="button" onClick={() => abrirExterno(url)} className="block">
+          <img src={url} alt={m.meta.nombre ?? "Foto"} className="max-h-72 rounded-xl object-cover" loading="lazy" />
+        </button>
+        {m.texto ? <p className="mt-1 whitespace-pre-wrap break-words">{m.texto}</p> : null}
+      </>
+    );
+  }
+  if (m.tipo === "voz" && url) {
+    return (
+      <div className="flex items-center gap-2">
+        <Mic className="h-4 w-4 shrink-0 opacity-70" />
+        <audio controls preload="none" src={url} className="h-9 max-w-[16rem]" />
+        {m.meta.duracion ? <span className="text-[11px] opacity-70">{fmtDuracion(m.meta.duracion)}</span> : null}
+      </div>
+    );
+  }
+  if (m.tipo === "archivo" && url) {
+    return (
+      <button type="button" onClick={() => void guardarEnDispositivo(url, m.meta.nombre ?? "archivo").then((d) => avisar(`Guardado en ${d}`), avisarError)} className="flex items-center gap-2 text-left">
+        <FileDown className="h-5 w-5 shrink-0" />
+        <span className="min-w-0">
+          <span className="block truncate underline">{m.meta.nombre}</span>
+          {m.meta.tamano ? <span className="text-[11px] opacity-70">{fmtBytes(m.meta.tamano)}</span> : null}
+        </span>
+      </button>
+    );
+  }
+  if (m.tipo === "codigo") {
+    return (
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center justify-between gap-2 text-[11px] opacity-70">
+          <span>{m.meta.lenguaje || "código"}</span>
+          <button type="button" className="inline-flex items-center gap-1 underline" onClick={() => void navigator.clipboard.writeText(m.texto).then(() => avisar("Código copiado"))}>
+            <Copy className="h-3 w-3" /> Copiar
+          </button>
+        </div>
+        <pre className="max-h-80 overflow-auto rounded-lg bg-black/80 p-2 font-mono text-xs text-white">{m.texto}</pre>
+      </div>
+    );
+  }
+  if (m.tipo === "nota" && m.meta.enlace) {
+    return (
+      <button type="button" onClick={() => abrirExterno(m.meta.enlace!)} className="block text-left">
+        <span className="flex items-center gap-1 text-[11px] opacity-70">
+          <NotebookPen className="h-3 w-3" /> Nota compartida
+        </span>
+        <span className="block font-semibold">{m.meta.titulo}</span>
+        {m.meta.extracto ? <span className="line-clamp-3 block text-xs opacity-80">{m.meta.extracto}</span> : null}
+        <span className="text-[11px] underline">Abrir</span>
+      </button>
+    );
+  }
+  if (m.tipo === "enlace") {
+    return (
+      <button type="button" onClick={() => abrirExterno(m.texto)} className="inline-flex items-center gap-1 break-all text-left underline">
+        <Link2 className="h-3.5 w-3.5 shrink-0" /> {m.texto}
+      </button>
+    );
+  }
+  return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
+}
+
 
 function NuevoCanal({ alTerminar }: { alTerminar: (id: string) => void }) {
   const { data: me } = useMe();
@@ -86,6 +158,12 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
   const [texto, setTexto] = useState("");
   const [recordar, setRecordar] = useState(false);
   const [fecha, setFecha] = useState(aInputLocal(new Date(Date.now() + 3_600_000)));
+  const [codigo, setCodigo] = useState(false);
+  const [lenguaje, setLenguaje] = useState("");
+  const [grabando, setGrabando] = useState<Grabacion | null>(null);
+  const [segundos, setSegundos] = useState(0);
+  const [subiendo, setSubiendo] = useState<string | null>(null);
+  const entradaArchivo = useRef<HTMLInputElement>(null);
   const fin = useRef<HTMLDivElement>(null);
   const clave = ["chat", "mensajes", canal.id];
   const { data, isLoading, error } = useQuery({
@@ -93,8 +171,52 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
     queryFn: () => api<Mensaje[]>(`/api/chat/canales/${canal.id}/mensajes`),
   });
 
-  useTema<{ mensaje: Mensaje }>(temas.chat(canal.id), ({ mensaje }) => {
-    queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((m) => m.id === mensaje.id) ? prev : [...(prev ?? []), mensaje]));
+  useTema<{ mensaje?: Mensaje; borrado?: string }>(temas.chat(canal.id), ({ mensaje, borrado }) => {
+    if (borrado) return queryClient.setQueryData<Mensaje[]>(clave, (prev) => prev?.filter((m) => m.id !== borrado));
+    if (mensaje) queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((m) => m.id === mensaje.id) ? prev : [...(prev ?? []), mensaje]));
+  });
+  const agregar = (m: Mensaje) => queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
+
+  useEffect(() => {
+    if (!grabando) return;
+    const t = setInterval(() => setSegundos(grabando.segundos()), 500);
+    return () => clearInterval(t);
+  }, [grabando]);
+
+  const subirArchivo = async (archivo: Blob, nombre: string, extra: Record<string, string> = {}) => {
+    setSubiendo(nombre);
+    try {
+      const datos = new FormData();
+      for (const [k, v] of Object.entries(extra)) datos.append(k, v);
+      datos.append("archivo", archivo, nombre);
+      agregar(await api<Mensaje>(`/api/chat/canales/${canal.id}/archivo`, { formulario: datos }));
+    } catch (err) {
+      avisarError(err);
+    } finally {
+      setSubiendo(null);
+    }
+  };
+
+  const voz = async () => {
+    if (grabando) {
+      const g = grabando;
+      setGrabando(null);
+      const { audio, duracion, tipo } = await g.detener();
+      await subirArchivo(audio, `voz-${Date.now()}.${extensionDe(tipo)}`, { voz: "1", duracion: String(duracion) });
+      return;
+    }
+    try {
+      setSegundos(0);
+      setGrabando(await grabarAudio());
+    } catch (err) {
+      avisarError(err);
+    }
+  };
+
+  const borrarMensaje = useMutation({
+    mutationFn: (id: string) => api(`/api/chat/mensajes/${id}`, { metodo: "DELETE" }),
+    onSuccess: (_r, id) => queryClient.setQueryData<Mensaje[]>(clave, (prev) => prev?.filter((m) => m.id !== id)),
+    onError: avisarError,
   });
 
   useEffect(() => {
@@ -108,13 +230,15 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
         cuerpo: {
           texto,
           dispositivoId: dispositivoActual() ?? undefined,
-          ...(recordar ? { recordatorio: { fecha: new Date(fecha).toISOString() } } : {}),
+          ...(recordar && !codigo ? { recordatorio: { fecha: new Date(fecha).toISOString() } } : {}),
+          ...(codigo ? { codigo: { lenguaje } } : {}),
         },
       }),
     onSuccess: (m) => {
       setTexto("");
       setRecordar(false);
-      queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
+      setCodigo(false);
+      agregar(m);
     },
     onError: avisarError,
   });
@@ -133,15 +257,19 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
           const mio = m.usuarioId === me?.usuario.id;
           return (
             <div key={m.id} className={cx("flex", mio ? "justify-end" : "justify-start")}>
-              <div className={cx("max-w-[80%] rounded-2xl px-3 py-2 text-sm", mio ? "bg-acento text-black" : "bg-tarjeta")}>
+              <div className={cx("group relative min-w-0 max-w-[85%] rounded-2xl px-3 py-2 text-sm", mio ? "bg-acento text-black" : "bg-tarjeta")}>
                 {!mio && m.autor ? <p className="mb-0.5 text-[11px] font-semibold opacity-70">{m.autor}</p> : null}
-                {m.tipo === "enlace" ? (
-                  <button type="button" onClick={() => abrirExterno(m.texto)} className="inline-flex items-center gap-1 break-all text-left underline">
-                    <Link2 className="h-3.5 w-3.5 shrink-0" /> {m.texto}
+                <ContenidoMensaje m={m} />
+                {mio && puedeEscribir ? (
+                  <button
+                    type="button"
+                    aria-label="Borrar mensaje"
+                    className="absolute -left-7 top-1 hidden rounded-full p-1 text-tenue hover:text-peligro group-hover:block"
+                    onClick={() => borrarMensaje.mutate(m.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                )}
+                ) : null}
                 {m.tipo === "recordatorio" && m.meta.fecha ? (
                   <p className="mt-1 inline-flex items-center gap-1 text-[11px] opacity-80">
                     <Bell className="h-3 w-3" /> Recordatorio: {fmtFechaHora(m.meta.fecha)}
@@ -162,6 +290,23 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
             if (texto.trim()) enviar.mutate();
           }}
         >
+          {grabando ? (
+            <div className="flex items-center gap-2 rounded-xl bg-fondo px-3 py-2 text-sm">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-peligro" />
+              Grabando {fmtDuracion(segundos)}
+              <span className="flex-1" />
+              <Boton tamano="sm" variante="fantasma" icono={X} onClick={() => (grabando.cancelar(), setGrabando(null))}>
+                Cancelar
+              </Boton>
+            </div>
+          ) : null}
+          {subiendo ? <p className="text-xs text-tenue">Enviando {subiendo}…</p> : null}
+          {codigo ? (
+            <div className="flex items-center gap-2">
+              <Code2 className="h-4 w-4 text-tenue" />
+              <Entrada value={lenguaje} onChange={(e) => setLenguaje(e.target.value)} placeholder="Lenguaje (js, python…)" className="h-8 max-w-48" maxLength={30} />
+            </div>
+          ) : null}
           {recordar ? (
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-tenue" />
@@ -177,8 +322,38 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
               aria-label="Enviar como recordatorio"
               title="Enviar como recordatorio"
             />
-            <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Mensaje o enlace…" maxLength={4000} />
-            <Boton type="submit" variante="primario" tamano="icono" icono={Send} cargando={enviar.isPending} aria-label="Enviar" />
+            <Boton tamano="icono" variante={codigo ? "primario" : "secundario"} icono={Code2} onClick={() => setCodigo((v) => !v)} aria-label="Mandar código" title="Mandar código" />
+            <Boton tamano="icono" variante="secundario" icono={Paperclip} onClick={() => entradaArchivo.current?.click()} aria-label="Foto o archivo" title="Foto o archivo" />
+            <input
+              ref={entradaArchivo}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const lista = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                void (async () => {
+                  for (const f of lista) await subirArchivo(f, f.name);
+                })();
+              }}
+            />
+            {codigo ? (
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                placeholder="Pega tu código…"
+                maxLength={20000}
+                rows={4}
+                className="min-w-0 flex-1 rounded-xl border border-borde bg-fondo px-3 py-2 font-mono text-xs outline-none"
+              />
+            ) : (
+              <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Mensaje o enlace…" maxLength={4000} />
+            )}
+            {texto.trim() || codigo ? (
+              <Boton type="submit" variante="primario" tamano="icono" icono={Send} cargando={enviar.isPending} aria-label="Enviar" />
+            ) : (
+              <Boton tamano="icono" variante={grabando ? "peligro" : "primario"} icono={grabando ? Square : Mic} onClick={() => void voz()} aria-label={grabando ? "Enviar nota de voz" : "Grabar nota de voz"} />
+            )}
           </div>
         </form>
       ) : null}

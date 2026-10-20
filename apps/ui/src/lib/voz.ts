@@ -6,6 +6,8 @@
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import type { Preferencias } from "@mi-setup/shared";
+import { api } from "./api";
+import { grabarAudio } from "./grabadora";
 import { esMovil } from "./plataforma";
 
 type PrefVoz = Preferencias["voz"];
@@ -104,4 +106,108 @@ export async function escuchar(): Promise<string> {
     rec.onend = () => resolver(texto);
     rec.start();
   });
+}
+
+interface ReconocedorContinuo extends ReconocedorWeb {
+  continuous: boolean;
+  stop(): void;
+}
+
+/**
+ * Dictado que va escribiendo mientras hablas. Llama alTexto con lo que va
+ * entendiendo (parcial) y con cada frase terminada (final). Devuelve cómo parar.
+ * - Celular: reconocimiento del sistema (se reinicia solo en cada pausa).
+ * - Navegador con Web Speech: continuo.
+ * - App de PC: graba trozos de 6 s y los pasa a texto con Gemini en tu servidor.
+ */
+export async function dictar(alTexto: (texto: string, final: boolean) => void, alError: (e: Error) => void): Promise<() => void> {
+  if (esMovil()) {
+    const { available } = await SpeechRecognition.available();
+    if (!available) throw new Error("Este celular no tiene reconocimiento de voz");
+    const permiso = await SpeechRecognition.requestPermissions();
+    if (permiso.speechRecognition !== "granted") throw new Error("Permite el micrófono para dictar");
+    let activo = true;
+    let ultimo = "";
+    const empezar = () => {
+      ultimo = "";
+      // Con resultados parciales responde al momento; lo dicho llega por «partialResults».
+      void SpeechRecognition.start({ language: "es-MX", maxResults: 1, partialResults: true, popup: false }).catch(() => undefined);
+    };
+    const parcial = await SpeechRecognition.addListener("partialResults", (d: { matches?: string[] }) => {
+      ultimo = d.matches?.[0] ?? "";
+      alTexto(ultimo, false);
+    });
+    // En cada pausa el celular deja de escuchar: se guarda la frase y se vuelve a empezar.
+    const estado = await SpeechRecognition.addListener("listeningState", (d: { status: "started" | "stopped" }) => {
+      if (d.status !== "stopped") return;
+      if (ultimo) alTexto(ultimo, true);
+      ultimo = "";
+      if (activo) setTimeout(empezar, 250);
+    });
+    empezar();
+    return () => {
+      activo = false;
+      void SpeechRecognition.stop().catch(() => undefined);
+      void parcial.remove();
+      void estado.remove();
+    };
+  }
+  const Clase = (window as unknown as { SpeechRecognition?: new () => ReconocedorContinuo; webkitSpeechRecognition?: new () => ReconocedorContinuo }).SpeechRecognition ??
+    (window as unknown as { webkitSpeechRecognition?: new () => ReconocedorContinuo }).webkitSpeechRecognition;
+  const esElectron = /Electron/i.test(navigator.userAgent);
+  if (Clase && !esElectron) {
+    const rec = new Clase();
+    rec.lang = "es-MX";
+    rec.continuous = true;
+    rec.interimResults = true;
+    let activo = true;
+    rec.onresult = (e) => {
+      const lista = e.results as unknown as ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
+      const ultimo = lista[lista.length - 1];
+      if (ultimo) alTexto(ultimo[0]?.transcript ?? "", ultimo.isFinal);
+    };
+    rec.onerror = (e) => {
+      if (e.error !== "no-speech") alError(new Error(e.error === "not-allowed" ? "Permite el micrófono para dictar" : "El dictado se detuvo"));
+    };
+    rec.onend = () => {
+      if (activo) rec.start();
+    };
+    rec.start();
+    return () => {
+      activo = false;
+      rec.stop();
+    };
+  }
+  // App de PC: trozos de audio → texto en el servidor.
+  let activo = true;
+  let actual = await grabarAudio();
+  const trozo = async () => {
+    while (activo) {
+      await new Promise((r) => setTimeout(r, 6000));
+      const g = actual;
+      if (activo) actual = await grabarAudio();
+      const { audio, tipo } = await g.detener();
+      const datos = new FormData();
+      datos.append("archivo", audio, `trozo.${tipo.includes("ogg") ? "ogg" : "webm"}`);
+      try {
+        const r = await api<{ texto: string }>("/api/voz/transcribir", { formulario: datos });
+        if (r.texto) alTexto(r.texto, true);
+      } catch (err) {
+        activo = false;
+        actual.cancelar();
+        alError(err instanceof Error ? err : new Error("No se pudo pasar a texto"));
+      }
+    }
+  };
+  void trozo();
+  return () => {
+    activo = false;
+    void actual.detener().then(async ({ audio, tipo, duracion }) => {
+      if (duracion < 1) return;
+      const datos = new FormData();
+      datos.append("archivo", audio, `trozo.${tipo.includes("ogg") ? "ogg" : "webm"}`);
+      const r = await api<{ texto: string }>("/api/voz/transcribir", { formulario: datos }).catch(() => null);
+      if (r?.texto) alTexto(r.texto, true);
+    });
+  };
 }

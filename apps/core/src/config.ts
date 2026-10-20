@@ -52,6 +52,8 @@ export const envBase = z.object({
     CLOUDFLARE_API_TOKEN: optionalString,
     /** App de TikTok (developers.tiktok.com) para publicar clips. */
     TIKTOK_CLIENT_KEY: optionalString,
+    /** Modelo de Gemini para pasar voz a texto (dictado en PC). */
+    GEMINI_TEXT_MODEL: z.string().default("gemini-2.5-flash"),
     TIKTOK_CLIENT_SECRET: optionalString,
     CURSEFORGE_API_KEY: optionalString,
     GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),

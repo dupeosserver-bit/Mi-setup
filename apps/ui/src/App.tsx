@@ -11,6 +11,7 @@ import Inicio from "./pages/Inicio";
 import Login from "./pages/Login";
 
 const BotPublico = lazy(() => import("./pages/BotPublico"));
+const NotaPublica = lazy(() => import("./pages/NotaPublica"));
 
 export function App() {
   const conSesion = useSesion((s) => Boolean(s.refreshToken));
@@ -42,6 +43,15 @@ export function App() {
           element={
             <Suspense fallback={<p className="py-10 text-center text-sm text-tenue">Cargando…</p>}>
               <BotPublico />
+            </Suspense>
+          }
+        />
+        {/* Nota compartida con enlace: se ve sin cuenta. */}
+        <Route
+          path="/n/:token"
+          element={
+            <Suspense fallback={<p className="py-10 text-center text-sm text-tenue">Cargando…</p>}>
+              <NotaPublica />
             </Suspense>
           }
         />

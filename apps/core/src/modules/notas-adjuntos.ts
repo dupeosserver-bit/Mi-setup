@@ -19,6 +19,8 @@ import { carpetaArchivos, disposicion } from "./herramientas.js";
 const MAX_ADJUNTO = 25 * 1024 * 1024;
 /** Solo estos tipos se muestran dentro de la página; todo lo demás se descarga (nunca se ejecuta en el navegador). */
 const IMAGEN_SEGURA = /^image\/(png|jpeg|webp|gif)$/;
+/** Notas de voz: se reproducen dentro de la página (nunca se interpretan como página web). */
+export const AUDIO_SEGURO = /^audio\/(webm|ogg|mpeg|mp4|wav|aac|x-m4a)$/;
 
 export function firmarAdjunto(secreto: string, id: string): string {
   return createHmac("sha256", secreto).update(`nota-adjunto:${id}`).digest("base64url").slice(0, 24);
@@ -52,6 +54,7 @@ export function notasAdjuntosRoutes(deps: ModuleDeps) {
     tipo: a.mime,
     tamano: a.size,
     imagen: IMAGEN_SEGURA.test(a.mime),
+    audio: AUDIO_SEGURO.test(a.mime),
     url: `/api/notas/adjuntos/${a.id}/${firmarAdjunto(secreto(), a.id)}`,
   });
 
@@ -97,7 +100,7 @@ export function notasAdjuntosRoutes(deps: ModuleDeps) {
       const ruta = join(carpeta(a.noteId), basename(a.storedName));
       const s = await stat(ruta).catch(() => null);
       if (!s?.isFile()) throw new HttpError(404, "El archivo ya no está");
-      const imagen = IMAGEN_SEGURA.test(a.mime);
+      const imagen = IMAGEN_SEGURA.test(a.mime) || AUDIO_SEGURO.test(a.mime);
       return reply
         .header("content-type", imagen ? a.mime : "application/octet-stream")
         .header("content-length", String(s.size))
