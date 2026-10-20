@@ -218,7 +218,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(extrasRoutes(deps));
   await app.register(entretenimientoRoutes(deps));
   await app.register(ciberseguridadRoutes(deps));
-  await app.register(comprasRoutes(deps));
+  await app.register(comprasRoutes(deps, iaSimple));
   await app.register(ejerciciosRoutes(deps));
   await app.register(hostLocalRoutes(deps));
   await app.register(cloudflareRoutes(deps));

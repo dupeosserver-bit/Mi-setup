@@ -55,6 +55,12 @@ const SELECTORES_CONOCIDOS = [
   ".ui-pdp-price__second-line .andes-money-amount__fraction", // Mercado Libre
   ".andes-money-amount__fraction", // Mercado Libre
   ".priceText", // Cyberpuerta
+  ".a-product__paragraphDiscountPrice", // Liverpool
+  ".a-product__paragraphRegularPrice", // Liverpool
+  ".pdp-price .price-value", // Coppel
+  "[data-testid='price-wrap'] [itemprop='price']", // Walmart
+  ".vtex-product-price-1-x-sellingPriceValue", // Elektra y tiendas VTEX
+  ".product-price-amount .notranslate", // Costco
   ".product-price", // varias tiendas
   ".price-new",
   ".price",
@@ -82,6 +88,48 @@ function precioJsonLd(valor: unknown, profundidad = 0): string | null {
   return null;
 }
 
+/** Busca un precio dentro de los datos que traen las páginas hechas con Next.js o VTEX (Walmart, Coppel, Elektra…). */
+export function precioEnDatosDePagina(html: string): string | null {
+  const $ = load(html);
+  const buscar = (v: unknown, prof = 0): string | null => {
+    if (prof > 12 || v === null || typeof v !== "object") return null;
+    if (Array.isArray(v)) {
+      for (const x of v.slice(0, 60)) {
+        const p = buscar(x, prof + 1);
+        if (p) return p;
+      }
+      return null;
+    }
+    const o = v as Record<string, unknown>;
+    for (const clave of ["sellingPrice", "finalPrice", "currentPrice", "salePrice", "offerPrice", "price"]) {
+      const x = o[clave];
+      if (typeof x === "number" && x > 0) return String(x);
+      if (typeof x === "string" && /^\$?\s?\d[\d,.]*$/.test(x.trim())) return x;
+      if (x && typeof x === "object") {
+        const p = buscar(x, prof + 1);
+        if (p) return p;
+      }
+    }
+    for (const x of Object.values(o).slice(0, 80)) {
+      const p = buscar(x, prof + 1);
+      if (p) return p;
+    }
+    return null;
+  };
+  const next = $("script#__NEXT_DATA__").first().text();
+  if (next) {
+    try {
+      const p = buscar(JSON.parse(next));
+      if (p) return p;
+    } catch {
+      /* JSON inválido */
+    }
+  }
+  // VTEX guarda el precio como "Price": 1234.5 dentro de __STATE__.
+  const vtex = /"(?:Price|sellingPrice|spotPrice)"\s*:\s*(\d+(?:\.\d+)?)/.exec(html);
+  return vtex && Number(vtex[1]) > 0 ? vtex[1]! : null;
+}
+
 /**
  * Modo automático (sin selector): datos estructurados primero (JSON-LD y
  * meta de precio, los más fiables), después los lugares típicos de tiendas conocidas.
@@ -106,6 +154,8 @@ export function detectarPrecio(html: string): { precio: number; texto: string; m
     const r = el.length ? probar(el.attr("content"), "etiqueta de precio de la página") : null;
     if (r) return r;
   }
+  const deDatos = probar(precioEnDatosDePagina(html) ?? undefined, "datos internos de la página");
+  if (deDatos) return deDatos;
   for (const sel of SELECTORES_CONOCIDOS) {
     const el = $(sel).first();
     const r = el.length ? probar(el.attr("content") ?? el.text(), `selector ${sel}`) : null;
@@ -382,6 +432,101 @@ export function novedadesRoutes(deps: ModuleDeps) {
       });
     });
 
+    // -------- Steam: listas (populares, más jugados, mejor valorados, recomendados por tus géneros)
+    app.get("/api/novedades/steam/listas", leer, async (request) => {
+      const q = z
+        .object({
+          tipo: z.enum(["populares", "mas-jugados", "mejor-valorados", "recomendados"]),
+          generos: z.string().max(200).default(""),
+          pagina: z.coerce.number().int().min(1).max(20).default(1),
+        })
+        .parse(request.query);
+      type Spy = Record<string, { appid: number; name: string; positive: number; negative: number; ccu: number; price?: string; owners?: string }>;
+      const spy = (url: string) => conCache(`steamspy:${url}`, 6 * 60 * 60_000, () => pedirJson<Spy>("SteamSpy", url));
+      let lista: Spy[string][];
+      if (q.tipo === "populares") lista = Object.values(await spy("https://steamspy.com/api.php?request=top100in2weeks"));
+      else if (q.tipo === "mas-jugados") lista = Object.values(await spy("https://steamspy.com/api.php?request=top100in2weeks")).sort((a, b) => b.ccu - a.ccu);
+      else if (q.tipo === "mejor-valorados") {
+        lista = Object.values(await spy("https://steamspy.com/api.php?request=top100forever"))
+          .filter((j) => j.positive + j.negative >= 5000)
+          .sort((a, b) => b.positive / (b.positive + b.negative) - a.positive / (a.positive + a.negative));
+      } else {
+        const generos = q.generos
+          .split(",")
+          .map((g) => g.trim())
+          .filter((g) => /^[\w &+-]{2,30}$/.test(g))
+          .slice(0, 4);
+        if (!generos.length) throw new HttpError(400, "Elige al menos un género que te guste");
+        const juntos = new Map<number, Spy[string] & { coincide: number }>();
+        for (const g of generos) {
+          const r = await spy(`https://steamspy.com/api.php?request=tag&tag=${encodeURIComponent(g)}`);
+          for (const j of Object.values(r)) {
+            if (j.positive + j.negative < 2000) continue;
+            const ya = juntos.get(j.appid);
+            juntos.set(j.appid, { ...j, coincide: (ya?.coincide ?? 0) + 1 });
+          }
+        }
+        // Más géneros en común primero; luego los mejor valorados con más reseñas.
+        const puntaje = (j: Spy[string] & { coincide: number }) => j.coincide * 10 + (j.positive / (j.positive + j.negative)) * Math.log10(j.positive + j.negative);
+        lista = [...juntos.values()].sort((a, b) => puntaje(b) - puntaje(a));
+      }
+      const porPagina = 12;
+      return {
+        total: Math.min(lista.length, 240),
+        pagina: q.pagina,
+        juegos: lista.slice((q.pagina - 1) * porPagina, q.pagina * porPagina).map((j) => ({
+          id: j.appid,
+          nombre: j.name,
+          imagen: `https://cdn.cloudflare.steamstatic.com/steam/apps/${j.appid}/header.jpg`,
+          valoracion: j.positive + j.negative > 0 ? Math.round((j.positive / (j.positive + j.negative)) * 100) : null,
+          resenas: j.positive + j.negative,
+          jugadores: j.ccu,
+          precioUsd: j.price ? Number(j.price) / 100 : null,
+        })),
+      };
+    });
+
+    /** Precio de un juego en varias regiones de Steam (cada uno en su moneda). */
+    app.get("/api/novedades/steam/:appid/regiones", leer, async (request) => {
+      const { appid } = z.object({ appid: z.coerce.number().int().positive().max(99_999_999) }).parse(request.params);
+      const regiones = ["MX", "US", "AR", "BR", "CL", "CO", "ES", "GB", "CA", "TR", "IN", "JP"];
+      return conCache(`steam-regiones:${appid}`, 6 * 60 * 60_000, async () => {
+        const resultados = await Promise.all(
+          regiones.map(async (cc) => {
+            const r = await pedirJson<Record<string, { success: boolean; data?: { price_overview?: { final: number; currency: string; discount_percent: number } } | [] }>>(
+              "Steam",
+              `https://store.steampowered.com/api/appdetails?appids=${appid}&cc=${cc}&filters=price_overview`,
+            ).catch(() => null);
+            const d = r?.[String(appid)]?.data;
+            const p = d && !Array.isArray(d) ? d.price_overview : undefined;
+            return p ? { region: cc, precio: p.final / 100, moneda: p.currency, descuento: p.discount_percent } : { region: cc, precio: null, moneda: null, descuento: 0 };
+          }),
+        );
+        return resultados;
+      });
+    });
+
+    /** Ofertas especiales de Steam en la región que elijas (precios en su moneda). */
+    app.get("/api/novedades/steam/ofertas", leer, async (request) => {
+      const { region } = z.object({ region: z.string().regex(/^[A-Z]{2}$/).default("MX") }).parse(request.query);
+      const r = await conCache(`steam-ofertas:${region}`, 60 * 60_000, () =>
+        pedirJson<{ specials?: { items?: { id: number; name: string; discount_percent: number; original_price: number | null; final_price: number; currency: string; header_image: string }[] } }>(
+          "Steam",
+          `https://store.steampowered.com/api/featuredcategories?cc=${region}&l=spanish`,
+        ),
+      );
+      return (r.specials?.items ?? []).map((j) => ({
+        id: j.id,
+        nombre: j.name,
+        descuento: j.discount_percent,
+        precio: j.final_price / 100,
+        precioNormal: j.original_price ? j.original_price / 100 : null,
+        moneda: j.currency,
+        imagen: j.header_image,
+        url: `https://store.steampowered.com/app/${j.id}`,
+      }));
+    });
+
     app.get("/api/novedades/clima/ubicacion", leer, async (request) => {
       const user = currentUser(request);
       const [fila] = await deps.db.select().from(appSettings).where(eq(appSettings.key, `clima:${user.id}`));
@@ -411,6 +556,29 @@ export function novedadesRoutes(deps: ModuleDeps) {
         ),
       );
     });
+
+    /** Clima a detalle: hora por hora (48 h), ayer para comparar, salida y puesta del sol, UV. */
+    app.get("/api/novedades/clima/detalle", leer, async (request) => {
+      const { lat, lon } = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }).parse(request.query);
+      return conCache(`clima-detalle:${lat.toFixed(2)}:${lon.toFixed(2)}`, 10 * 60_000, () =>
+        pedirJson<unknown>(
+          "Open-Meteo",
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&past_days=1&forecast_days=3` +
+            "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day,uv_index,pressure_msl,visibility" +
+            "&hourly=temperature_2m,precipitation_probability,weather_code,is_day,apparent_temperature,wind_speed_10m" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max",
+        ),
+      );
+    });
+
+    /** Tipos de cambio desde el dólar (para ver los precios de juegos en tu moneda). */
+    app.get("/api/novedades/tasas", leer, async () =>
+      conCache("tasas-usd", 6 * 60 * 60_000, async () => {
+        const r = await pedirJson<{ result: string; rates?: Record<string, number> }>("ExchangeRate-API", "https://open.er-api.com/v6/latest/USD");
+        const quiero = ["USD", "MXN", "EUR", "ARS", "BRL", "COP", "CLP", "PEN", "GBP", "CAD", "TRY", "INR", "JPY"];
+        return { base: "USD", tasas: Object.fromEntries(quiero.map((m) => [m, r.rates?.[m] ?? null]).filter(([, v]) => v !== null)) as Record<string, number> };
+      }),
+    );
 
     // -------- ofertas (CheapShark)
     app.get("/api/novedades/tiendas", leer, async () =>

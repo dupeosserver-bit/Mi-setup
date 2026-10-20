@@ -2,31 +2,48 @@
  * Compras: buscar un producto en varias tiendas desde una sola opción.
  * - Mercado Libre: resultados dentro de la app (su API pide una app gratis:
  *   MERCADOLIBRE_CLIENT_ID / MERCADOLIBRE_CLIENT_SECRET).
- * - Amazon, Walmart, Liverpool, AliExpress…: no tienen API abierta; se abren
- *   sus búsquedas con lo que escribiste.
+ * - Amazon, Walmart, Liverpool, Coppel, Costco, Temu…: no tienen API abierta;
+ *   se abren sus búsquedas con lo que escribiste. Google Shopping junta casi todas.
+ * - Foto de un objeto: la IA dice qué es y qué buscar.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../http-error.js";
+import { currentUser } from "../security/rbac.js";
 import type { ModuleDeps } from "./common.js";
+import type { IaSimple } from "./ia/simple.js";
+import { tipoPorBytes } from "./notas-adjuntos.js";
 
 export const TIENDAS = [
-  { id: "mercadolibre", nombre: "Mercado Libre", url: "https://listado.mercadolibre.com.mx/" },
-  { id: "amazon", nombre: "Amazon", url: "https://www.amazon.com.mx/s?k=" },
-  { id: "walmart", nombre: "Walmart", url: "https://www.walmart.com.mx/search?q=" },
-  { id: "liverpool", nombre: "Liverpool", url: "https://www.liverpool.com.mx/tienda?s=" },
-  { id: "coppel", nombre: "Coppel", url: "https://www.coppel.com/SearchDisplay?searchTerm=" },
-  { id: "cyberpuerta", nombre: "Cyberpuerta", url: "https://www.cyberpuerta.mx/index.php?cl=search&searchparam=" },
-  { id: "aliexpress", nombre: "AliExpress", url: "https://es.aliexpress.com/w/wholesale-" },
-  { id: "ebay", nombre: "eBay", url: "https://www.ebay.com/sch/i.html?_nkw=" },
+  { id: "google", nombre: "Google Shopping (todas)", url: "https://www.google.com/search?tbm=shop&gl=mx&hl=es&q=", grupo: "comparar" },
+  { id: "mercadolibre", nombre: "Mercado Libre", url: "https://listado.mercadolibre.com.mx/", grupo: "tiendas" },
+  { id: "amazon", nombre: "Amazon", url: "https://www.amazon.com.mx/s?k=", grupo: "tiendas" },
+  { id: "walmart", nombre: "Walmart", url: "https://www.walmart.com.mx/search?q=", grupo: "tiendas" },
+  { id: "liverpool", nombre: "Liverpool", url: "https://www.liverpool.com.mx/tienda?s=", grupo: "tiendas" },
+  { id: "coppel", nombre: "Coppel", url: "https://www.coppel.com/SearchDisplay?searchTerm=", grupo: "tiendas" },
+  { id: "elektra", nombre: "Elektra", url: "https://www.elektra.mx/", grupo: "tiendas" },
+  { id: "costco", nombre: "Costco", url: "https://www.costco.com.mx/search?text=", grupo: "tiendas" },
+  { id: "officedepot", nombre: "Office Depot", url: "https://www.officedepot.com.mx/officedepot/en/search/?text=", grupo: "tiendas" },
+  { id: "cyberpuerta", nombre: "Cyberpuerta", url: "https://www.cyberpuerta.mx/index.php?cl=search&searchparam=", grupo: "tecnologia" },
+  { id: "ddtech", nombre: "DDTech", url: "https://ddtech.mx/buscar/", grupo: "tecnologia" },
+  { id: "bestbuy", nombre: "Best Buy (EE. UU.)", url: "https://www.bestbuy.com/site/searchpage.jsp?st=", grupo: "tecnologia" },
+  { id: "aliexpress", nombre: "AliExpress", url: "https://es.aliexpress.com/w/wholesale-", grupo: "importado" },
+  { id: "temu", nombre: "Temu", url: "https://www.temu.com/mx/search_result.html?search_key=", grupo: "importado" },
+  { id: "shein", nombre: "Shein", url: "https://www.shein.com.mx/pdsearch/", grupo: "importado" },
+  { id: "ebay", nombre: "eBay", url: "https://www.ebay.com/sch/i.html?_nkw=", grupo: "importado" },
 ] as const;
 
-/** Enlace de búsqueda de cada tienda (Mercado Libre usa guiones; AliExpress termina en .html). */
+/** Enlace de búsqueda de cada tienda (cada una arma su dirección distinto). */
 export function enlaceTienda(id: (typeof TIENDAS)[number]["id"], q: string): string {
   const t = TIENDAS.find((x) => x.id === id)!;
-  if (id === "mercadolibre") return `${t.url}${encodeURIComponent(q.trim().replace(/\s+/g, "-"))}`;
-  if (id === "aliexpress") return `${t.url}${encodeURIComponent(q.trim().replace(/\s+/g, "-"))}.html`;
-  return `${t.url}${encodeURIComponent(q.trim())}`;
+  const limpio = q.trim();
+  const guiones = encodeURIComponent(limpio.replace(/\s+/g, "-"));
+  if (id === "mercadolibre") return `${t.url}${guiones}`;
+  if (id === "aliexpress") return `${t.url}${guiones}.html`;
+  if (id === "elektra") return `${t.url}${encodeURIComponent(limpio)}?_q=${encodeURIComponent(limpio)}&map=ft`;
+  if (id === "ddtech") return `${t.url}${encodeURIComponent(limpio)}`;
+  if (id === "shein") return `${t.url}${encodeURIComponent(limpio)}/`;
+  return `${t.url}${encodeURIComponent(limpio)}`;
 }
 
 interface ResultadoMl {
@@ -41,7 +58,7 @@ interface ResultadoMl {
   condition?: string;
 }
 
-export function comprasRoutes(deps: ModuleDeps) {
+export function comprasRoutes(deps: ModuleDeps, ia: IaSimple) {
   let token: { valor: string; vence: number } | null = null;
 
   async function tokenMl(): Promise<string | null> {
@@ -64,11 +81,37 @@ export function comprasRoutes(deps: ModuleDeps) {
   return async function (app: FastifyInstance): Promise<void> {
     const leer = { config: { acceso: { modulo: "novedades" as const, nivel: "lectura" as const } } };
 
+    /** Foto de un objeto: la IA dice qué es y con qué palabras buscarlo. */
+    app.post("/api/compras/foto", leer, async (request) => {
+      const user = currentUser(request);
+      const archivo = await request.file({ limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
+      if (!archivo) throw new HttpError(400, "Toma o elige una foto");
+      const buf = await archivo.toBuffer();
+      if (archivo.file.truncated) throw new HttpError(413, "La foto pasa de 10 MB");
+      const tipo = tipoPorBytes(buf, archivo.mimetype);
+      if (!/^image\/(png|jpeg|webp)$/.test(tipo)) throw new HttpError(400, "La foto debe ser JPG, PNG o WebP");
+      return ia.pedirJson(
+        user,
+        {
+          sistema:
+            'Identificas productos en fotos para buscarlos en tiendas de México. Responde SOLO JSON: {"producto":"qué es, corto","consulta":"palabras para buscarlo (marca y modelo si se ven)","alternativas":["otras 2 o 3 búsquedas"],"detalles":"color, tamaño o lo que ayude a elegir"}. Si no se reconoce, consulta con lo más parecido.',
+          texto: "¿Qué es esto y cómo lo busco para comprarlo?",
+          imagenes: [{ tipo, datos: buf.toString("base64") }],
+        },
+        z.object({
+          producto: z.string().max(200).catch(""),
+          consulta: z.string().min(1).max(120),
+          alternativas: z.array(z.string().max(120)).max(5).catch([]),
+          detalles: z.string().max(400).catch(""),
+        }),
+      );
+    });
+
     app.get("/api/compras/buscar", leer, async (request) => {
       const { q, orden } = z
         .object({ q: z.string().trim().min(2).max(120), orden: z.enum(["relevancia", "menor", "mayor"]).default("relevancia") })
         .parse(request.query);
-      const tiendas = TIENDAS.map((t) => ({ id: t.id, nombre: t.nombre, url: enlaceTienda(t.id, q) }));
+      const tiendas = TIENDAS.map((t) => ({ id: t.id, nombre: t.nombre, grupo: t.grupo, url: enlaceTienda(t.id, q) }));
       const acceso = await tokenMl();
       if (!acceso) return { tiendas, mercadoLibre: { configurado: false, resultados: [] } };
       const url = new URL("https://api.mercadolibre.com/sites/MLM/search");

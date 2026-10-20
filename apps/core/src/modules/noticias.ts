@@ -18,13 +18,87 @@ interface Fuente {
 }
 
 const GOOGLE = (q: string) => `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=es-419&gl=MX&ceid=MX:es-419`;
+const SITIO = (dominio: string) => GOOGLE(`site:${dominio} when:2d`);
+const SECCION = (tema: string) => `https://news.google.com/rss/headlines/section/topic/${tema}?hl=es-419&gl=MX&ceid=MX:es-419`;
+const POPULARES_URL = "https://news.google.com/rss?hl=es-419&gl=MX&ceid=MX:es-419";
 
 export const FUENTES_INICIALES: Fuente[] = [
-  { nombre: "México (Google Noticias)", url: "https://news.google.com/rss?hl=es-419&gl=MX&ceid=MX:es-419" },
+  { nombre: "México (Google Noticias)", url: POPULARES_URL },
   { nombre: "Videojuegos", url: GOOGLE("videojuegos") },
   { nombre: "Tecnología", url: GOOGLE("tecnología") },
   { nombre: "Minecraft", url: GOOGLE("Minecraft") },
   { nombre: "BBC Mundo", url: "https://feeds.bbci.co.uk/mundo/rss.xml" },
+  { nombre: "Xataka", url: SITIO("xataka.com.mx") },
+  { nombre: "El Universal", url: SITIO("eluniversal.com.mx") },
+];
+
+/** Temas de «Populares» (lo más visto en Google Noticias México). */
+export const TEMAS_POPULARES = [
+  { id: "inicio", nombre: "Lo más visto", url: POPULARES_URL },
+  { id: "mexico", nombre: "México", url: SECCION("NATION") },
+  { id: "mundo", nombre: "Mundo", url: SECCION("WORLD") },
+  { id: "negocios", nombre: "Dinero", url: SECCION("BUSINESS") },
+  { id: "tecnologia", nombre: "Tecnología", url: SECCION("TECHNOLOGY") },
+  { id: "entretenimiento", nombre: "Entretenimiento", url: SECCION("ENTERTAINMENT") },
+  { id: "deportes", nombre: "Deportes", url: SECCION("SPORTS") },
+  { id: "ciencia", nombre: "Ciencia", url: SECCION("SCIENCE") },
+  { id: "salud", nombre: "Salud", url: SECCION("HEALTH") },
+] as const;
+
+/** Fuentes sugeridas para agregar con un toque. */
+export const CATALOGO_FUENTES: { grupo: string; fuentes: Fuente[] }[] = [
+  {
+    grupo: "México",
+    fuentes: [
+      { nombre: "El Universal", url: SITIO("eluniversal.com.mx") },
+      { nombre: "Milenio", url: SITIO("milenio.com") },
+      { nombre: "El Financiero", url: SITIO("elfinanciero.com.mx") },
+      { nombre: "Expansión", url: SITIO("expansion.mx") },
+      { nombre: "Infobae México", url: SITIO("infobae.com/mexico") },
+      { nombre: "Animal Político", url: SITIO("animalpolitico.com") },
+      { nombre: "El Economista", url: SITIO("eleconomista.com.mx") },
+    ],
+  },
+  {
+    grupo: "Mundo",
+    fuentes: [
+      { nombre: "BBC Mundo", url: "https://feeds.bbci.co.uk/mundo/rss.xml" },
+      { nombre: "CNN en Español", url: SITIO("cnnespanol.cnn.com") },
+      { nombre: "El País", url: SITIO("elpais.com") },
+      { nombre: "DW Español", url: SITIO("dw.com/es") },
+    ],
+  },
+  {
+    grupo: "Tecnología",
+    fuentes: [
+      { nombre: "Xataka", url: SITIO("xataka.com.mx") },
+      { nombre: "Hipertextual", url: SITIO("hipertextual.com") },
+      { nombre: "Genbeta", url: SITIO("genbeta.com") },
+      { nombre: "The Verge", url: SITIO("theverge.com") },
+      { nombre: "Inteligencia artificial", url: GOOGLE("inteligencia artificial") },
+      { nombre: "Ciberseguridad", url: GOOGLE("ciberseguridad hackeo filtración") },
+    ],
+  },
+  {
+    grupo: "Videojuegos",
+    fuentes: [
+      { nombre: "3DJuegos", url: SITIO("3djuegos.com") },
+      { nombre: "Vandal", url: SITIO("vandal.elespanol.com") },
+      { nombre: "LevelUp", url: SITIO("levelup.com") },
+      { nombre: "IGN Latinoamérica", url: SITIO("latam.ign.com") },
+      { nombre: "Minecraft", url: GOOGLE("Minecraft") },
+      { nombre: "Ofertas de juegos", url: GOOGLE("juegos gratis Epic Steam oferta") },
+    ],
+  },
+  {
+    grupo: "Deportes y dinero",
+    fuentes: [
+      { nombre: "ESPN", url: SITIO("espn.com.mx") },
+      { nombre: "Récord", url: SITIO("record.com.mx") },
+      { nombre: "Cripto", url: GOOGLE("bitcoin criptomonedas") },
+      { nombre: "Tipo de cambio", url: GOOGLE("tipo de cambio dólar peso") },
+    ],
+  },
 ];
 
 export interface Noticia {
@@ -73,6 +147,16 @@ export function noticiasRoutes(deps: ModuleDeps) {
 
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/noticias/fuentes", leer, async (request) => fuentesDe(currentUser(request).id));
+
+    app.get("/api/noticias/catalogo", leer, async () => ({ temas: TEMAS_POPULARES.map(({ id, nombre }) => ({ id, nombre })), grupos: CATALOGO_FUENTES }));
+
+    /** Populares: en el orden de Google Noticias (lo más visto primero), no por fecha. */
+    app.get("/api/noticias/populares", leer, async (request) => {
+      const { tema } = z.object({ tema: z.string().max(30).default("inicio") }).parse(request.query);
+      const t = TEMAS_POPULARES.find((x) => x.id === tema) ?? TEMAS_POPULARES[0];
+      const noticias = await conCache(`rss:${t.url}`, 15 * 60_000, async () => interpretarFeed(await descargarTextoSeguro(t.url, { maxBytes: 3_000_000 }), t.nombre));
+      return { tema: t.id, noticias };
+    });
 
     app.put("/api/noticias/fuentes", leer, async (request) => {
       const user = currentUser(request);

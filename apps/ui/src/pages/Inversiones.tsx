@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import { MiniGrafica, Cambio } from "../components/MiniGrafica";
-import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Tarjeta, Vacio, avisarError } from "../components/ui";
+import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { fmtFecha } from "../lib/formato";
@@ -31,6 +31,131 @@ const EJEMPLOS: [string, string][] = [
   ["BTC-USD", "Bitcoin (USD)"],
 ];
 
+interface Accion {
+  simbolo: string;
+  nombre: string;
+  precio: number | null;
+  cambio: number | null;
+  moneda: string | null;
+  capitalizacion: number | null;
+  analistas: { valor: number; texto: string } | null;
+  minimo52: number | null;
+  maximo52: number | null;
+}
+
+const LISTAS_ACCIONES = [
+  { id: "most_actives", texto: "Más negociadas" },
+  { id: "day_gainers", texto: "Suben hoy" },
+  { id: "day_losers", texto: "Bajan hoy" },
+  { id: "undervalued_large_caps", texto: "Grandes y baratas" },
+  { id: "growth_technology_stocks", texto: "Tecnología en crecimiento" },
+  { id: "undervalued_growth_stocks", texto: "Crecimiento a buen precio" },
+] as const;
+
+/** Calificación promedio de analistas: 1 = compra fuerte … 5 = venta fuerte. */
+function Analistas({ a }: { a: Accion["analistas"] }) {
+  if (!a) return <span className="text-xs text-tenue">—</span>;
+  const tono = a.valor <= 2 ? "ok" : a.valor <= 3 ? "neutro" : "peligro";
+  const texto = a.valor <= 1.5 ? "Compra fuerte" : a.valor <= 2.5 ? "Compra" : a.valor <= 3.5 ? "Mantener" : a.valor <= 4.5 ? "Venta" : "Venta fuerte";
+  return (
+    <Insignia tono={tono}>
+      {texto} ({a.valor.toFixed(1)})
+    </Insignia>
+  );
+}
+
+/** Explorar acciones por listas y páginas, con la opinión promedio de los analistas. */
+function ExplorarAcciones({ mios, alAgregar }: { mios: string[]; alAgregar: (s: string) => void }) {
+  const [lista, setLista] = useState<(typeof LISTAS_ACCIONES)[number]["id"]>("most_actives");
+  const [pagina, setPagina] = useState(1);
+  const [orden, setOrden] = useState<"lista" | "analistas">("lista");
+  const q = useQuery({
+    queryKey: ["inversiones", "explorar", lista, pagina],
+    queryFn: () => api<{ total: number; acciones: Accion[] }>(`/api/inversiones/explorar?lista=${lista}&pagina=${pagina}`),
+  });
+  const acciones = [...(q.data?.acciones ?? [])].sort((a, b) => (orden === "analistas" ? (a.analistas?.valor ?? 9) - (b.analistas?.valor ?? 9) : 0));
+  const paginas = Math.max(1, Math.ceil((q.data?.total ?? 0) / 25));
+  return (
+    <Tarjeta titulo="Explorar acciones">
+      <div className="mb-3 flex flex-wrap items-center gap-1">
+        {LISTAS_ACCIONES.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => (setLista(l.id), setPagina(1))}
+            className={cx("whitespace-nowrap rounded-full border px-3 py-1 text-xs", lista === l.id ? "border-acento bg-acento text-black" : "border-borde hover:bg-tarjeta")}
+          >
+            {l.texto}
+          </button>
+        ))}
+        <Selector className="ml-auto h-8 w-auto text-xs" value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)}>
+          <option value="lista">Orden de la lista</option>
+          <option value="analistas">Mejor calificadas por analistas</option>
+        </Selector>
+      </div>
+      {q.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={q.error} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="text-left text-xs text-tenue">
+            <tr>
+              <th className="py-1">Empresa</th>
+              <th className="text-right">Precio</th>
+              <th className="text-right">Hoy</th>
+              <th className="text-right">Rango 52 sem.</th>
+              <th>Analistas</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {acciones.map((a) => (
+              <tr key={a.simbolo} className="border-t border-borde">
+                <td className="py-1.5">
+                  <span className="block truncate">{a.nombre}</span>
+                  <span className="text-xs text-tenue">{a.simbolo}</span>
+                </td>
+                <td className="text-right">{a.precio !== null ? `${a.precio.toLocaleString("es-MX", { maximumFractionDigits: 2 })} ${a.moneda ?? ""}` : "—"}</td>
+                <td className="text-right">
+                  <Cambio valor={a.cambio} />
+                </td>
+                <td className="text-right text-xs text-tenue">{a.minimo52 !== null && a.maximo52 !== null ? `${a.minimo52.toFixed(0)}–${a.maximo52.toFixed(0)}` : "—"}</td>
+                <td>
+                  <Analistas a={a.analistas} />
+                </td>
+                <td className="text-right">
+                  {mios.includes(a.simbolo) ? (
+                    <span className="text-xs text-tenue">En tu lista</span>
+                  ) : (
+                    <Boton tamano="icono" variante="fantasma" icono={Plus} aria-label={`Agregar ${a.simbolo}`} onClick={() => alAgregar(a.simbolo)} />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {paginas > 1 ? (
+        <div className="mt-3 flex items-center justify-center gap-1">
+          <Boton tamano="sm" variante="secundario" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
+            Anterior
+          </Boton>
+          {Array.from({ length: Math.min(5, paginas) }, (_, i) => Math.min(Math.max(1, pagina - 2), Math.max(1, paginas - 4)) + i).map((n) => (
+            <Boton key={n} tamano="sm" variante={n === pagina ? "primario" : "fantasma"} onClick={() => setPagina(n)}>
+              {n}
+            </Boton>
+          ))}
+          <Boton tamano="sm" variante="secundario" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
+            Siguiente
+          </Boton>
+        </div>
+      ) : null}
+      <p className="mt-2 text-xs text-tenue">
+        «Analistas» es el promedio de lo que opinan analistas de bancos y casas de bolsa (Yahoo Finanzas): es una opinión, no una garantía, y no es asesoría financiera. Antes de invertir, infórmate y no metas dinero que necesites.
+      </p>
+    </Tarjeta>
+  );
+}
+
 export default function Inversiones() {
   const [nuevo, setNuevo] = useState("");
   const lista = useQuery({ queryKey: ["inversiones"], queryFn: () => api<Cotizacion[]>("/api/inversiones") });
@@ -56,6 +181,7 @@ export default function Inversiones() {
           </Boton>
         }
       />
+      <ExplorarAcciones mios={simbolos} alAgregar={agregar} />
       <Tarjeta titulo="Agregar acción, ETF o índice">
         <form
           className="flex gap-2"

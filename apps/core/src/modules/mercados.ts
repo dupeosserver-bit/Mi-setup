@@ -112,6 +112,72 @@ export function mercadosRoutes(deps: ModuleDeps) {
       }));
     });
 
+    /** Explorar el mercado por páginas: más grandes, más movidas, las que más suben o bajan y las de tendencia. */
+    app.get("/api/cripto/mercado", acceso("cripto", "lectura"), async (request) => {
+      const q = z
+        .object({
+          moneda: z.enum(["mxn", "usd", "eur"]).default("mxn"),
+          orden: z.enum(["capitalizacion", "volumen", "suben", "bajan", "tendencia"]).default("capitalizacion"),
+          pagina: z.coerce.number().int().min(1).max(40).default(1),
+        })
+        .parse(request.query);
+      type Moneda = {
+        id: string;
+        symbol: string;
+        name: string;
+        image: string;
+        current_price: number;
+        market_cap: number;
+        market_cap_rank: number | null;
+        total_volume: number;
+        price_change_percentage_24h_in_currency: number | null;
+        price_change_percentage_7d_in_currency: number | null;
+        ath_change_percentage: number | null;
+      };
+      const mercado = (orden: string, pagina: number, porPagina: number) =>
+        conCache(`cripto-mercado:${q.moneda}:${orden}:${pagina}:${porPagina}`, 5 * 60_000, () =>
+          pedirJson<Moneda[]>(
+            "CoinGecko",
+            `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${q.moneda}&order=${orden}&per_page=${porPagina}&page=${pagina}&price_change_percentage=24h,7d`,
+          ),
+        );
+      let lista: Moneda[];
+      let total = 250;
+      if (q.orden === "suben" || q.orden === "bajan") {
+        const todas = await mercado("market_cap_desc", 1, 250);
+        lista = [...todas].sort((a, b) => ((b.price_change_percentage_24h_in_currency ?? 0) - (a.price_change_percentage_24h_in_currency ?? 0)) * (q.orden === "suben" ? 1 : -1)).slice((q.pagina - 1) * 25, q.pagina * 25);
+      } else if (q.orden === "tendencia") {
+        const t = await conCache("cripto-tendencia", 10 * 60_000, () => pedirJson<{ coins: { item: { id: string } }[] }>("CoinGecko", "https://api.coingecko.com/api/v3/search/trending"));
+        const ids = t.coins.map((c) => c.item.id).slice(0, 25);
+        total = ids.length;
+        lista = ids.length
+          ? await conCache(`cripto-tend-datos:${q.moneda}:${ids.join(",")}`, 5 * 60_000, () =>
+              pedirJson<Moneda[]>("CoinGecko", `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${q.moneda}&ids=${ids.join(",")}&price_change_percentage=24h,7d`),
+            )
+          : [];
+      } else {
+        lista = await mercado(q.orden === "volumen" ? "volume_desc" : "market_cap_desc", q.pagina, 25);
+        total = 1000;
+      }
+      return {
+        total,
+        pagina: q.pagina,
+        monedas: lista.map((c) => ({
+          id: c.id,
+          simbolo: c.symbol.toUpperCase(),
+          nombre: c.name,
+          imagen: c.image,
+          rango: c.market_cap_rank,
+          precio: c.current_price,
+          capitalizacion: c.market_cap,
+          volumen: c.total_volume,
+          cambio24h: c.price_change_percentage_24h_in_currency,
+          cambio7d: c.price_change_percentage_7d_in_currency,
+          desdeMaximo: c.ath_change_percentage,
+        })),
+      };
+    });
+
     app.get("/api/cripto/buscar", acceso("cripto", "lectura"), async (request) => {
       const { q } = z.object({ q: z.string().trim().min(1).max(50) }).parse(request.query);
       const r = await conCache(`cripto-buscar:${q.toLowerCase()}`, 60 * 60_000, () =>
@@ -135,6 +201,59 @@ export function mercadosRoutes(deps: ModuleDeps) {
       const user = currentUser(request);
       const simbolos = await lista(deps, `inversiones:${user.id}`, INVERSIONES_INICIAL);
       return Promise.all(simbolos.map((s) => cotizacion(s)));
+    });
+
+    /** Explorar acciones por páginas (listas de Yahoo Finanzas): más negociadas, las que más suben o bajan, y las mejor calificadas por analistas. */
+    app.get("/api/inversiones/explorar", acceso("inversiones", "lectura"), async (request) => {
+      const q = z
+        .object({
+          lista: z.enum(["most_actives", "day_gainers", "day_losers", "undervalued_large_caps", "growth_technology_stocks", "undervalued_growth_stocks"]).default("most_actives"),
+          pagina: z.coerce.number().int().min(1).max(40).default(1),
+        })
+        .parse(request.query);
+      const r = await conCache(`yahoo-lista:${q.lista}:${q.pagina}`, 10 * 60_000, () =>
+        pedirJson<{
+          finance?: {
+            result?: {
+              total?: number;
+              quotes?: {
+                symbol: string;
+                shortName?: string;
+                longName?: string;
+                regularMarketPrice?: number;
+                regularMarketChangePercent?: number;
+                currency?: string;
+                marketCap?: number;
+                averageAnalystRating?: string;
+                fiftyTwoWeekLow?: number;
+                fiftyTwoWeekHigh?: number;
+              }[];
+            }[];
+          };
+        }>("Yahoo Finanzas", `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${q.lista}&count=25&start=${(q.pagina - 1) * 25}&lang=es-MX&region=MX`, {
+          headers: { "user-agent": "Mozilla/5.0" },
+        }),
+      );
+      const res = r.finance?.result?.[0];
+      return {
+        total: Math.min(res?.total ?? 0, 1000),
+        pagina: q.pagina,
+        acciones: (res?.quotes ?? []).map((a) => {
+          const calif = a.averageAnalystRating ? Number(a.averageAnalystRating.split(" ")[0]) : null;
+          return {
+            simbolo: a.symbol,
+            nombre: a.longName ?? a.shortName ?? a.symbol,
+            precio: a.regularMarketPrice ?? null,
+            cambio: a.regularMarketChangePercent ?? null,
+            moneda: a.currency ?? null,
+            capitalizacion: a.marketCap ?? null,
+            // 1 = compra fuerte … 5 = venta fuerte (promedio de analistas, no es consejo).
+            analistas: calif !== null && Number.isFinite(calif) ? { valor: calif, texto: a.averageAnalystRating!.split(" - ")[1] ?? "" } : null,
+            minimo52: a.fiftyTwoWeekLow ?? null,
+            maximo52: a.fiftyTwoWeekHigh ?? null,
+          };
+        }),
+      };
     });
 
     app.put("/api/inversiones/lista", acceso("inversiones", "lectura"), async (request) => {

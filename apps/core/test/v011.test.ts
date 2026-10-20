@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { detectarPrecio, precioEnDatosDePagina } from "../src/modules/novedades.js";
 import { armarCorreo, clasificarCorreo, enlacesDe, revisarEnvio } from "../src/modules/correo-google.js";
 import { estadoCobro, fechasPendientes, siguienteFecha } from "../src/modules/finanzas-extra.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
@@ -380,5 +381,15 @@ describe("ciberseguridad: correos", () => {
   it("el correo armado no permite meter encabezados", () => {
     const raw = Buffer.from(armarCorreo("yo@gmail.com", "ana@x.test\r\nBcc: espia@x.test", "Asunto\r\nBcc: otro@x.test", "Hola"), "base64url").toString();
     expect(raw.split("\r\n").filter((l) => l.startsWith("Bcc:"))).toHaveLength(0);
+  });
+});
+
+describe("vigilar precios en más tiendas", () => {
+  it("lee el precio de páginas hechas con Next.js o VTEX", () => {
+    const next = '<html><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"product":{"name":"Pantalla","priceInfo":{"currentPrice":{"price":7499}}}}}}</script></html>';
+    expect(precioEnDatosDePagina(next)).toBe("7499");
+    expect(detectarPrecio(next).precio).toBe(7499);
+    const vtex = '<script>__STATE__ = {"Product:1":{"items":[{"sellers":[{"commertialOffer":{"Price":12999.5,"ListPrice":15999}}]}]}}</script>';
+    expect(detectarPrecio(vtex).precio).toBe(12999.5);
   });
 });

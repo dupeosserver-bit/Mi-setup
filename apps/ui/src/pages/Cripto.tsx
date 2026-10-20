@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { useState } from "react";
 import { MiniGrafica, Cambio } from "../components/MiniGrafica";
-import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Selector, Tarjeta, Vacio, avisarError } from "../components/ui";
+import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Selector, Tarjeta, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 
@@ -24,6 +24,122 @@ interface Resultado {
   simbolo: string;
   imagen: string;
   rango: number | null;
+}
+
+interface MonedaMercado {
+  id: string;
+  simbolo: string;
+  nombre: string;
+  imagen: string;
+  rango: number | null;
+  precio: number;
+  capitalizacion: number;
+  volumen: number;
+  cambio24h: number | null;
+  cambio7d: number | null;
+  desdeMaximo: number | null;
+}
+
+const ORDENES_CRIPTO = [
+  { id: "capitalizacion", texto: "Más grandes" },
+  { id: "volumen", texto: "Más movidas" },
+  { id: "suben", texto: "Suben hoy" },
+  { id: "bajan", texto: "Bajan hoy" },
+  { id: "tendencia", texto: "En tendencia" },
+] as const;
+
+/** Explorar todo el mercado por páginas, con datos para comparar (no son recomendaciones). */
+function ExplorarCripto({ moneda, misIds, alAgregar }: { moneda: "mxn" | "usd" | "eur"; misIds: string[]; alAgregar: (id: string) => void }) {
+  const [orden, setOrden] = useState<(typeof ORDENES_CRIPTO)[number]["id"]>("capitalizacion");
+  const [pagina, setPagina] = useState(1);
+  const q = useQuery({
+    queryKey: ["cripto", "mercado", moneda, orden, pagina],
+    queryFn: () => api<{ total: number; monedas: MonedaMercado[] }>(`/api/cripto/mercado?moneda=${moneda}&orden=${orden}&pagina=${pagina}`),
+  });
+  const fmt = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), maximumFractionDigits: 6 });
+  const fmtCorto = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), notation: "compact" });
+  const paginas = Math.max(1, Math.ceil((q.data?.total ?? 0) / 25));
+  return (
+    <Tarjeta titulo="Explorar el mercado">
+      <div className="mb-3 flex gap-1 overflow-x-auto">
+        {ORDENES_CRIPTO.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => (setOrden(o.id), setPagina(1))}
+            className={cx("whitespace-nowrap rounded-full border px-3 py-1 text-xs", orden === o.id ? "border-acento bg-acento text-black" : "border-borde hover:bg-tarjeta")}
+          >
+            {o.texto}
+          </button>
+        ))}
+      </div>
+      {q.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={q.error} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="text-left text-xs text-tenue">
+            <tr>
+              <th className="py-1">#</th>
+              <th>Moneda</th>
+              <th className="text-right">Precio</th>
+              <th className="text-right">24 h</th>
+              <th className="text-right">7 días</th>
+              <th className="text-right">Capitalización</th>
+              <th className="text-right" title="Qué tan lejos está de su precio más alto">Desde su máximo</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {q.data?.monedas.map((m) => (
+              <tr key={m.id} className="border-t border-borde">
+                <td className="py-1.5 text-xs text-tenue">{m.rango ?? "—"}</td>
+                <td>
+                  <span className="flex items-center gap-2">
+                    <img src={m.imagen} alt="" className="h-5 w-5 rounded-full" loading="lazy" />
+                    <span className="truncate">{m.nombre}</span> <span className="text-xs text-tenue">{m.simbolo}</span>
+                  </span>
+                </td>
+                <td className="text-right">{fmt.format(m.precio)}</td>
+                <td className="text-right">
+                  <Cambio valor={m.cambio24h} />
+                </td>
+                <td className="text-right">
+                  <Cambio valor={m.cambio7d} />
+                </td>
+                <td className="text-right text-xs">{fmtCorto.format(m.capitalizacion)}</td>
+                <td className="text-right text-xs">{m.desdeMaximo !== null ? `${Math.round(m.desdeMaximo)} %` : "—"}</td>
+                <td className="text-right">
+                  {misIds.includes(m.id) ? (
+                    <span className="text-xs text-tenue">En tu lista</span>
+                  ) : (
+                    <Boton tamano="icono" variante="fantasma" icono={Plus} aria-label={`Agregar ${m.nombre}`} onClick={() => alAgregar(m.id)} />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {paginas > 1 ? (
+        <div className="mt-3 flex items-center justify-center gap-1">
+          <Boton tamano="sm" variante="secundario" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
+            Anterior
+          </Boton>
+          {Array.from({ length: Math.min(5, paginas) }, (_, i) => Math.min(Math.max(1, pagina - 2), Math.max(1, paginas - 4)) + i).map((n) => (
+            <Boton key={n} tamano="sm" variante={n === pagina ? "primario" : "fantasma"} onClick={() => setPagina(n)}>
+              {n}
+            </Boton>
+          ))}
+          <Boton tamano="sm" variante="secundario" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
+            Siguiente
+          </Boton>
+        </div>
+      ) : null}
+      <p className="mt-2 text-xs text-tenue">
+        Para comparar: las más grandes suelen ser menos arriesgadas y las que más suben también pueden caer igual de rápido. Esto son datos, no una recomendación: nadie sabe qué subirá. Invierte solo lo que puedas perder.
+      </p>
+    </Tarjeta>
+  );
 }
 
 export default function Cripto() {
@@ -59,6 +175,7 @@ export default function Cripto() {
           </>
         }
       />
+      <ExplorarCripto moneda={moneda} misIds={ids} alAgregar={(id) => guardar.mutate([...ids, id])} />
       <Tarjeta titulo="Agregar moneda" icono={Search}>
         <form
           className="flex gap-2"
