@@ -12,6 +12,7 @@ import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { clientInfo, requireCipher, type ModuleDeps } from "./common.js";
 import { deleteSetting, getSetting, setSetting } from "./settings.js";
+import { politicaDe } from "./claves-usuario.js";
 
 export interface DefClave {
   readonly nombre: keyof Env & string;
@@ -98,8 +99,11 @@ export function clavesRoutes(deps: ModuleDeps) {
   };
 
   return async function (app: FastifyInstance): Promise<void> {
-    app.get("/api/claves", { config: { acceso: { modulo: "ajustes", nivel: "administrar" } } }, async (request) => {
-      soloMaestra(request);
+    // Verlas (enmascaradas): la cuenta maestra o quien tenga permiso «ver servicios» en Cuentas y permisos.
+    app.get("/api/claves", { config: { acceso: { autenticado: true } } }, async (request) => {
+      const yo = currentUser(request);
+      const soloLectura = yo.role !== "maestra";
+      if (soloLectura && !(await politicaDe(deps, yo.id)).verServicios) throw new HttpError(403, "Sin permiso para ver los servicios", "sin_permiso");
       const resultado = [];
       for (const c of CLAVES) {
         const enBase = Boolean((await getSetting<{ cifrado: string }>(deps.db, clave(c.nombre)))?.cifrado);
@@ -114,8 +118,9 @@ export function clavesRoutes(deps: ModuleDeps) {
           reinicio: Boolean(c.reinicio),
           configurada: texto !== "",
           origen: enBase ? "ajustes" : texto !== "" ? "env" : null,
-          // Los secretos nunca se devuelven: solo los últimos 4 caracteres.
-          valor: c.secreto ? (texto ? enmascarar(texto) : "") : texto,
+          // Los secretos nunca se devuelven: solo los últimos 4 caracteres (y nada a quien solo puede ver).
+          valor: c.secreto ? (texto && !soloLectura ? enmascarar(texto) : "") : texto,
+          soloLectura,
         });
       }
       return resultado;

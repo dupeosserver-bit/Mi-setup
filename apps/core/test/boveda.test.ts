@@ -22,7 +22,7 @@ async function maestra(c: Ctx) {
 }
 
 describe("bóveda (el servidor solo guarda datos cifrados)", () => {
-  it("guarda y entrega texto cifrado; abrirla exige reautenticación fuerte", async () => {
+  it("guarda y entrega texto cifrado; abrirla exige confirmar identidad (PIN, huella o contraseña)", async () => {
     ctx = await createTestContext();
     const h = await maestra(ctx);
     expect((await ctx.app.inject({ method: "GET", url: "/api/boveda/config", headers: h })).json()).toEqual({ configurada: false });
@@ -40,7 +40,20 @@ describe("bóveda (el servidor solo guarda datos cifrados)", () => {
 
     ctx.advance(6 * 60_000);
     const vencida = await ctx.app.inject({ method: "GET", url: "/api/boveda/items", headers: h });
-    expect(vencida.json()).toMatchObject({ codigo: "reauth_requerida", metodo: "fuerte" });
+    expect(vencida.json()).toMatchObject({ codigo: "reauth_requerida", metodo: "pin" });
+  });
+
+  it("apertura rápida: la llave solo sale con una confirmación reciente y se borra al cambiar la clave maestra", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    await ctx.app.inject({ method: "PUT", url: "/api/boveda/config", headers: h, payload: CONFIG });
+    const llave = "A".repeat(43);
+    expect((await ctx.app.inject({ method: "POST", url: "/api/boveda/rapida", headers: h, payload: { dispositivo: "pc-de-prueba-1", llave, metodo: "pin" } })).statusCode).toBe(200);
+    expect((await ctx.app.inject({ method: "POST", url: "/api/boveda/rapida/abrir", headers: h, payload: { dispositivo: "pc-de-prueba-1" } })).json()).toEqual({ llave });
+    // Pasados 3 minutos sin confirmar otra vez, ya no la entrega.
+    ctx.advance(3 * 60_000);
+    expect((await ctx.app.inject({ method: "POST", url: "/api/boveda/rapida/abrir", headers: h, payload: { dispositivo: "pc-de-prueba-1" } })).json()).toMatchObject({ codigo: "reauth_requerida" });
+    expect((await ctx.app.inject({ method: "POST", url: "/api/boveda/rapida/abrir", headers: h, payload: { dispositivo: "otro-equipo-xx" } })).statusCode).toBe(403);
   });
 
   it("cambiar la clave maestra re-cifra todo de una vez o nada", async () => {

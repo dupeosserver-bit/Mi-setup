@@ -30,16 +30,7 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Compras } from "../components/Compras";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Boton,
   Campo,
@@ -93,19 +84,14 @@ interface Pronostico {
 }
 
 /** Códigos WMO de Open-Meteo → texto e ícono. */
-function tiempo(
-  codigo: number,
-  dia = true,
-): { texto: string; icono: LucideIcon } {
+function tiempo(codigo: number, dia = true): { texto: string; icono: LucideIcon } {
   if (codigo === 0) return { texto: "Despejado", icono: dia ? Sun : Moon };
   if (codigo <= 2) return { texto: "Parcialmente nublado", icono: CloudSun };
   if (codigo === 3) return { texto: "Nublado", icono: Cloud };
   if (codigo <= 48) return { texto: "Niebla", icono: CloudFog };
   if (codigo <= 57) return { texto: "Llovizna", icono: CloudDrizzle };
-  if (codigo <= 67 || (codigo >= 80 && codigo <= 82))
-    return { texto: "Lluvia", icono: CloudRain };
-  if (codigo <= 77 || codigo === 85 || codigo === 86)
-    return { texto: "Nieve", icono: CloudSnow };
+  if (codigo <= 67 || (codigo >= 80 && codigo <= 82)) return { texto: "Lluvia", icono: CloudRain };
+  if (codigo <= 77 || codigo === 85 || codigo === 86) return { texto: "Nieve", icono: CloudSnow };
   return { texto: "Tormenta", icono: CloudLightning };
 }
 
@@ -133,16 +119,13 @@ interface ClimaDetalle {
 function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
   const q = useQuery({
     queryKey: ["novedades", "clima-detalle", lat, lon],
-    queryFn: () =>
-      api<ClimaDetalle>(`/api/novedades/clima/detalle?lat=${lat}&lon=${lon}`),
+    queryFn: () => api<ClimaDetalle>(`/api/novedades/clima/detalle?lat=${lat}&lon=${lon}`),
     refetchInterval: 15 * 60_000,
   });
   const d = q.data;
   if (!d) return q.isLoading ? <Cargando /> : <ErrorCaja error={q.error} />;
   // «Ahora» en la hora del lugar (no la de tu teléfono).
-  const ahora = new Date(Date.now() + d.utc_offset_seconds * 1000)
-    .toISOString()
-    .slice(0, 13);
+  const ahora = new Date(Date.now() + d.utc_offset_seconds * 1000).toISOString().slice(0, 13);
   const inicio = Math.max(
     0,
     d.hourly.time.findIndex((t) => t.slice(0, 13) >= ahora),
@@ -172,11 +155,8 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
   const max = Math.max(...horas.map((h) => h.temp));
   const ancho = 56;
   const alto = 48;
-  const y = (t: number) =>
-    max === min ? alto / 2 : alto - 6 - ((t - min) / (max - min)) * (alto - 12);
-  const puntos = horas
-    .map((h, i) => `${i * ancho + ancho / 2},${y(h.temp)}`)
-    .join(" ");
+  const y = (t: number) => (max === min ? alto / 2 : alto - 6 - ((t - min) / (max - min)) * (alto - 12));
+  const puntos = horas.map((h, i) => `${i * ancho + ancho / 2},${y(h.temp)}`).join(" ");
   const horaCorta = (iso: string) => {
     const hh = Number(iso.slice(11, 13));
     return `${hh % 12 || 12} ${hh < 12 ? "a.m." : "p.m."}`;
@@ -190,11 +170,7 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
               {horas.map((h) => {
                 const t = tiempo(h.codigo, h.dia);
                 return (
-                  <div
-                    key={h.hora}
-                    className="flex shrink-0 flex-col items-center text-xs"
-                    style={{ width: ancho }}
-                  >
+                  <div key={h.hora} className="flex shrink-0 flex-col items-center text-xs" style={{ width: ancho }}>
                     <span className="text-tenue">{horaCorta(h.hora)}</span>
                     <t.icono className="my-1.5 h-6 w-6" />
                     <span className="font-semibold">{Math.round(h.temp)}°</span>
@@ -203,30 +179,14 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
               })}
             </div>
             <svg width={horas.length * ancho} height={alto} className="block">
-              <polyline
-                points={puntos}
-                fill="none"
-                stroke="rgb(var(--acento))"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
+              <polyline points={puntos} fill="none" stroke="rgb(var(--acento))" strokeWidth="2" strokeLinejoin="round" />
               {horas.map((h, i) => (
-                <circle
-                  key={h.hora}
-                  cx={i * ancho + ancho / 2}
-                  cy={y(h.temp)}
-                  r="3"
-                  fill="currentColor"
-                />
+                <circle key={h.hora} cx={i * ancho + ancho / 2} cy={y(h.temp)} r="3" fill="currentColor" />
               ))}
             </svg>
             <div className="flex">
               {horas.map((h) => (
-                <span
-                  key={h.hora}
-                  className="shrink-0 text-center text-[11px] text-tenue"
-                  style={{ width: ancho }}
-                >
+                <span key={h.hora} className="shrink-0 text-center text-[11px] text-tenue" style={{ width: ancho }}>
                   💧 {h.lluvia}%
                 </span>
               ))}
@@ -245,8 +205,7 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Ayer</p>
             <p className="font-medium">
-              {Math.round(d.daily.temperature_2m_max[ayer] ?? 0)}° /{" "}
-              {Math.round(d.daily.temperature_2m_min[ayer] ?? 0)}°
+              {Math.round(d.daily.temperature_2m_max[ayer] ?? 0)}° / {Math.round(d.daily.temperature_2m_min[ayer] ?? 0)}°
             </p>
           </div>
         ) : null}
@@ -254,32 +213,26 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Sol</p>
             <p className="font-medium">
-              ☀️ {d.daily.sunrise[iHoy]?.slice(11, 16)} · 🌙{" "}
-              {d.daily.sunset[iHoy]?.slice(11, 16)}
+              ☀️ {d.daily.sunrise[iHoy]?.slice(11, 16)} · 🌙 {d.daily.sunset[iHoy]?.slice(11, 16)}
             </p>
           </div>
         ) : null}
         <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
           <p className="text-xs text-tenue">Índice UV</p>
           <p className="font-medium">
-            {Math.round(d.current.uv_index ?? 0)} (máx.{" "}
-            {Math.round(d.daily.uv_index_max[iHoy] ?? 0)})
+            {Math.round(d.current.uv_index ?? 0)} (máx. {Math.round(d.daily.uv_index_max[iHoy] ?? 0)})
           </p>
         </div>
         {d.current.visibility !== undefined ? (
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Visibilidad</p>
-            <p className="font-medium">
-              {(d.current.visibility / 1000).toFixed(0)} km
-            </p>
+            <p className="font-medium">{(d.current.visibility / 1000).toFixed(0)} km</p>
           </div>
         ) : null}
         {d.current.pressure_msl !== undefined ? (
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Presión</p>
-            <p className="font-medium">
-              {Math.round(d.current.pressure_msl)} hPa
-            </p>
+            <p className="font-medium">{Math.round(d.current.pressure_msl)} hPa</p>
           </div>
         ) : null}
       </div>
@@ -297,8 +250,7 @@ function Clima() {
   const [detectando, setDetectando] = useState(false);
   const ciudades = useQuery({
     queryKey: ["novedades", "ciudades", q],
-    queryFn: () =>
-      api<Ubicacion[]>(`/api/novedades/ciudades?q=${encodeURIComponent(q)}`),
+    queryFn: () => api<Ubicacion[]>(`/api/novedades/ciudades?q=${encodeURIComponent(q)}`),
     enabled: q.length >= 2,
   });
   const guardar = useMutation({
@@ -328,13 +280,7 @@ function Clima() {
         lon: lugar.lon,
         auto,
       });
-      if (!silencioso)
-        avisar(
-          lugar.metodo === "gps"
-            ? `Ubicación detectada: ${lugar.nombre}`
-            : `Ubicación aproximada por tu internet: ${lugar.nombre}`,
-          "info",
-        );
+      if (!silencioso) avisar(lugar.metodo === "gps" ? `Ubicación detectada: ${lugar.nombre}` : `Ubicación aproximada por tu internet: ${lugar.nombre}`, "info");
     } catch (err) {
       if (!silencioso) avisarError(err);
     } finally {
@@ -353,24 +299,16 @@ function Clima() {
 
   const clima = useQuery({
     queryKey: ["novedades", "clima", u?.lat, u?.lon],
-    queryFn: () =>
-      api<Pronostico>(`/api/novedades/clima?lat=${u!.lat}&lon=${u!.lon}`),
+    queryFn: () => api<Pronostico>(`/api/novedades/clima?lat=${u!.lat}&lon=${u!.lon}`),
     enabled: Boolean(u),
     refetchInterval: 15 * 60_000,
   });
 
-  const actual = clima.data
-    ? tiempo(clima.data.current.weather_code, clima.data.current.is_day === 1)
-    : null;
+  const actual = clima.data ? tiempo(clima.data.current.weather_code, clima.data.current.is_day === 1) : null;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <Boton
-          variante="primario"
-          icono={Crosshair}
-          cargando={detectando}
-          onClick={() => void detectar(Boolean(u?.auto))}
-        >
+        <Boton variante="primario" icono={Crosshair} cargando={detectando} onClick={() => void detectar(Boolean(u?.auto))}>
           Usar mi ubicación
         </Boton>
         <form
@@ -380,15 +318,7 @@ function Clima() {
             setQ(buscar.trim());
           }}
         >
-          <Entrada
-            value={buscar}
-            onChange={(e) => setBuscar(e.target.value)}
-            placeholder={
-              u
-                ? `O busca otra ciudad (ahora: ${u.nombre})`
-                : "O busca tu ciudad…"
-            }
-          />
+          <Entrada value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={u ? `O busca otra ciudad (ahora: ${u.nombre})` : "O busca tu ciudad…"} />
           <Boton type="submit" icono={MapPin}>
             Buscar
           </Boton>
@@ -396,49 +326,29 @@ function Clima() {
       </div>
       <Interruptor
         activo={Boolean(u?.auto)}
-        alCambiar={(v) =>
-          u ? guardar.mutate({ ...u, auto: v }) : void detectar(v)
-        }
+        alCambiar={(v) => (u ? guardar.mutate({ ...u, auto: v }) : void detectar(v))}
         etiqueta="Ubicación en tiempo real (detectarla cada vez que abro Clima)"
       />
       {ciudades.data?.length ? (
         <div className="flex flex-wrap gap-2">
           {ciudades.data.map((c) => (
-            <Boton
-              key={`${c.lat},${c.lon}`}
-              tamano="sm"
-              onClick={() => guardar.mutate({ ...c, auto: false })}
-            >
+            <Boton key={`${c.lat},${c.lon}`} tamano="sm" onClick={() => guardar.mutate({ ...c, auto: false })}>
               {c.nombre}
             </Boton>
           ))}
         </div>
       ) : null}
-      {!u && !ubicacion.isLoading ? (
-        <Vacio
-          icono={MapPin}
-          texto="Toca 'Usar mi ubicación' o busca tu ciudad."
-        />
-      ) : null}
+      {!u && !ubicacion.isLoading ? <Vacio icono={MapPin} texto="Toca 'Usar mi ubicación' o busca tu ciudad." /> : null}
       <ErrorCaja error={clima.error} />
       {clima.data && actual && u ? (
         <>
-          <Tarjeta
-            titulo={u.nombre}
-            acciones={
-              u.auto ? <Insignia tono="ok">En tiempo real</Insignia> : null
-            }
-          >
+          <Tarjeta titulo={u.nombre} acciones={u.auto ? <Insignia tono="ok">En tiempo real</Insignia> : null}>
             <div className="flex items-center gap-4">
               <actual.icono className="h-12 w-12 text-acento" />
               <div>
-                <p className="text-4xl font-bold">
-                  {Math.round(clima.data.current.temperature_2m)}°
-                </p>
+                <p className="text-4xl font-bold">{Math.round(clima.data.current.temperature_2m)}°</p>
                 <p className="text-sm text-tenue">
-                  {actual.texto} · Sensación{" "}
-                  {Math.round(clima.data.current.apparent_temperature)}° ·
-                  Humedad {clima.data.current.relative_humidity_2m}% · Viento{" "}
+                  {actual.texto} · Sensación {Math.round(clima.data.current.apparent_temperature)}° · Humedad {clima.data.current.relative_humidity_2m}% · Viento{" "}
                   {Math.round(clima.data.current.wind_speed_10m)} km/h
                 </p>
               </div>
@@ -449,10 +359,7 @@ function Clima() {
             {clima.data.daily.time.map((dia, i) => {
               const t = tiempo(clima.data.daily.weather_code[i] ?? 0);
               return (
-                <div
-                  key={dia}
-                  className="rounded-tarjeta border border-borde bg-superficie p-3 text-center text-sm"
-                >
+                <div key={dia} className="rounded-tarjeta border border-borde bg-superficie p-3 text-center text-sm">
                   <p className="text-tenue">
                     {new Date(`${dia}T12:00:00`).toLocaleDateString("es-MX", {
                       weekday: "short",
@@ -461,21 +368,14 @@ function Clima() {
                   </p>
                   <t.icono className="mx-auto my-2 h-6 w-6" />
                   <p className="font-medium">
-                    {Math.round(clima.data.daily.temperature_2m_max[i] ?? 0)}° /{" "}
-                    {Math.round(clima.data.daily.temperature_2m_min[i] ?? 0)}°
+                    {Math.round(clima.data.daily.temperature_2m_max[i] ?? 0)}° / {Math.round(clima.data.daily.temperature_2m_min[i] ?? 0)}°
                   </p>
-                  <p className="text-xs text-tenue">
-                    Lluvia{" "}
-                    {clima.data.daily.precipitation_probability_max[i] ?? 0}%
-                  </p>
+                  <p className="text-xs text-tenue">Lluvia {clima.data.daily.precipitation_probability_max[i] ?? 0}%</p>
                 </div>
               );
             })}
           </div>
-          <p className="text-xs text-tenue">
-            Datos de Open-Meteo. La ubicación usa el GPS del celular o la del
-            sistema en la PC; si no hay, una aproximada por tu internet.
-          </p>
+          <p className="text-xs text-tenue">Datos de Open-Meteo. La ubicación usa el GPS del celular o la del sistema en la PC; si no hay, una aproximada por tu internet.</p>
         </>
       ) : null}
     </div>
@@ -503,10 +403,7 @@ interface TiendaJuegos {
   url: string;
 }
 
-const TIPO_TIENDA: Record<
-  TiendaJuegos["tipo"],
-  { texto: string; tono: "ok" | "neutro" | "aviso" }
-> = {
+const TIPO_TIENDA: Record<TiendaJuegos["tipo"], { texto: string; tono: "ok" | "neutro" | "aviso" }> = {
   oficial: { texto: "Oficial", tono: "ok" },
   autorizada: { texto: "Autorizada", tono: "ok" },
   revendedor: { texto: "Revendedor", tono: "neutro" },
@@ -522,90 +419,50 @@ function BuscarEnTiendas() {
   const [juego, setJuego] = useState("");
   return (
     <Tarjeta titulo="Buscar un juego en tiendas confiables" icono={Search}>
-      <Entrada
-        value={juego}
-        onChange={(e) => setJuego(e.target.value)}
-        placeholder="Nombre del juego, ej. Minecraft"
-      />
+      <Entrada value={juego} onChange={(e) => setJuego(e.target.value)} placeholder="Nombre del juego, ej. Minecraft" />
       <div className="mt-3 flex flex-wrap gap-2">
         {tiendas.data?.map((t) => (
           <button
             key={t.id}
             type="button"
             disabled={!juego.trim()}
-            onClick={() =>
-              abrirExterno(`${t.url}${encodeURIComponent(juego.trim())}`)
-            }
+            onClick={() => abrirExterno(`${t.url}${encodeURIComponent(juego.trim())}`)}
             className="flex items-center gap-2 rounded-xl border border-borde bg-fondo px-3 py-2 text-sm hover:bg-tarjeta disabled:opacity-40"
           >
             {t.nombre}
-            <Insignia tono={TIPO_TIENDA[t.tipo].tono}>
-              {TIPO_TIENDA[t.tipo].texto}
-            </Insignia>
+            <Insignia tono={TIPO_TIENDA[t.tipo].tono}>{TIPO_TIENDA[t.tipo].texto}</Insignia>
           </button>
         ))}
       </div>
       <p className="mt-3 text-xs text-tenue">
-        Oficial/Autorizada: venden claves directo del desarrollador. Eneba, G2A
-        y Kinguin son mercados donde venden otras personas: suelen ser más
-        baratos, pero revisa la calificación del vendedor, que la clave sea para
-        tu región (México o Global) y evita pagar la "protección" extra si no la
-        necesitas.
+        Oficial/Autorizada: venden claves directo del desarrollador. Eneba, G2A y Kinguin son mercados donde venden otras personas: suelen ser más baratos, pero revisa la
+        calificación del vendedor, que la clave sea para tu región (México o Global) y evita pagar la "protección" extra si no la necesitas.
       </p>
     </Tarjeta>
   );
 }
 
 /** Botones Anterior / Siguiente con el número de página. */
-function Paginador({
-  pagina,
-  total,
-  hayMas,
-  alCambiar,
-}: {
-  pagina: number;
-  total?: number | undefined;
-  hayMas?: boolean;
-  alCambiar: (p: number) => void;
-}) {
+function Paginador({ pagina, total, hayMas, alCambiar }: { pagina: number; total?: number | undefined; hayMas?: boolean; alCambiar: (p: number) => void }) {
   const siguiente = total !== undefined ? pagina < total : Boolean(hayMas);
   if (pagina === 1 && !siguiente) return null;
   return (
     <div className="flex items-center justify-center gap-2">
-      <Boton
-        tamano="sm"
-        icono={ChevronLeft}
-        disabled={pagina <= 1}
-        onClick={() => alCambiar(pagina - 1)}
-      >
+      <Boton tamano="sm" icono={ChevronLeft} disabled={pagina <= 1} onClick={() => alCambiar(pagina - 1)}>
         Anterior
       </Boton>
       <span className="text-sm text-tenue">
         Página {pagina}
         {total !== undefined ? ` de ${total}` : ""}
       </span>
-      <Boton
-        tamano="sm"
-        disabled={!siguiente}
-        onClick={() => alCambiar(pagina + 1)}
-      >
+      <Boton tamano="sm" disabled={!siguiente} onClick={() => alCambiar(pagina + 1)}>
         Siguiente <ChevronRight className="h-4 w-4" />
       </Boton>
     </div>
   );
 }
 
-const MONEDAS = [
-  "MXN",
-  "USD",
-  "EUR",
-  "ARS",
-  "BRL",
-  "COP",
-  "CLP",
-  "PEN",
-  "GBP",
-] as const;
+const MONEDAS = ["MXN", "USD", "EUR", "ARS", "BRL", "COP", "CLP", "PEN", "GBP"] as const;
 const CLAVE_MONEDA = "mi-setup.moneda-juegos";
 
 /** Moneda elegida para ver precios de juegos (se recuerda en este dispositivo). */
@@ -619,8 +476,7 @@ function useMonedaJuegos() {
   });
   const tasas = useQuery({
     queryKey: ["novedades", "tasas"],
-    queryFn: () =>
-      api<{ tasas: Record<string, number> }>("/api/novedades/tasas"),
+    queryFn: () => api<{ tasas: Record<string, number> }>("/api/novedades/tasas"),
     staleTime: 6 * 60 * 60_000,
   });
   const setMoneda = (m: string) => {
@@ -639,27 +495,15 @@ function useMonedaJuegos() {
     return enMoneda.toLocaleString("es-MX", {
       style: "currency",
       currency: moneda,
-      maximumFractionDigits:
-        moneda === "CLP" || moneda === "COP" || moneda === "ARS" ? 0 : 2,
+      maximumFractionDigits: moneda === "CLP" || moneda === "COP" || moneda === "ARS" ? 0 : 2,
     });
   };
   return { moneda, setMoneda, convertir };
 }
 
-function SelectorMoneda({
-  moneda,
-  alCambiar,
-}: {
-  moneda: string;
-  alCambiar: (m: string) => void;
-}) {
+function SelectorMoneda({ moneda, alCambiar }: { moneda: string; alCambiar: (m: string) => void }) {
   return (
-    <Selector
-      className="w-auto"
-      value={moneda}
-      onChange={(e) => alCambiar(e.target.value)}
-      aria-label="Moneda"
-    >
+    <Selector className="w-auto" value={moneda} onChange={(e) => alCambiar(e.target.value)} aria-label="Moneda">
       {MONEDAS.map((m) => (
         <option key={m} value={m}>
           Ver en {m}
@@ -707,12 +551,7 @@ function OfertasSteamRegion() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Selector
-          className="w-auto"
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          aria-label="Región de Steam"
-        >
+        <Selector className="w-auto" value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Región de Steam">
           {Object.entries(REGIONES_STEAM).map(([cc, n]) => (
             <option key={cc} value={cc}>
               Steam {n}
@@ -731,13 +570,7 @@ function OfertasSteamRegion() {
             onClick={() => abrirExterno(o.url)}
             className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-3 text-left hover:bg-tarjeta"
           >
-            <img
-              src={o.imagen}
-              alt={o.nombre}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="h-16 w-28 shrink-0 rounded-lg object-cover"
-            />
+            <img src={o.imagen} alt={o.nombre} loading="lazy" referrerPolicy="no-referrer" className="h-16 w-28 shrink-0 rounded-lg object-cover" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{o.nombre}</p>
               <p className="text-sm">
@@ -746,19 +579,12 @@ function OfertasSteamRegion() {
                 </b>{" "}
                 <Insignia tono="ok">-{o.descuento}%</Insignia>
               </p>
-              {o.moneda !== moneda ? (
-                <p className="text-xs text-tenue">
-                  ≈ {convertir(o.precio, o.moneda) ?? "—"}
-                </p>
-              ) : null}
+              {o.moneda !== moneda ? <p className="text-xs text-tenue">≈ {convertir(o.precio, o.moneda) ?? "—"}</p> : null}
             </div>
           </button>
         ))}
       </div>
-      <p className="text-xs text-tenue">
-        Comprar en otra región puede no estar permitido por Steam (revisa sus
-        reglas); sirve para comparar precios.
-      </p>
+      <p className="text-xs text-tenue">Comprar en otra región puede no estar permitido por Steam (revisa sus reglas); sirve para comparar precios.</p>
     </div>
   );
 }
@@ -816,13 +642,7 @@ const NOMBRE_GENERO: Record<string, string> = {
 const CLAVE_GUSTOS = "mi-setup.gustos-steam";
 
 /** Listas de Steam: populares, con más gente, mejor valorados y recomendados según tus gustos. */
-function ListaSteam({
-  tipo,
-  alElegir,
-}: {
-  tipo: "populares" | "mas-jugados" | "mejor-valorados" | "recomendados";
-  alElegir: (id: number) => void;
-}) {
+function ListaSteam({ tipo, alElegir }: { tipo: "populares" | "mas-jugados" | "mejor-valorados" | "recomendados"; alElegir: (id: number) => void }) {
   const [pagina, setPagina] = useState(1);
   const [gustos, setGustosEstado] = useState<string[]>(() => {
     try {
@@ -843,10 +663,7 @@ function ListaSteam({
   };
   const q = useQuery({
     queryKey: ["novedades", "steam-lista", tipo, gustos.join(","), pagina],
-    queryFn: () =>
-      api<{ total: number; juegos: JuegoLista[] }>(
-        `/api/novedades/steam/listas?tipo=${tipo}&pagina=${pagina}&generos=${encodeURIComponent(gustos.join(","))}`,
-      ),
+    queryFn: () => api<{ total: number; juegos: JuegoLista[] }>(`/api/novedades/steam/listas?tipo=${tipo}&pagina=${pagina}&generos=${encodeURIComponent(gustos.join(","))}`),
     enabled: tipo !== "recomendados" || gustos.length > 0,
     staleTime: 30 * 60_000,
   });
@@ -854,9 +671,7 @@ function ListaSteam({
     <div className="space-y-3">
       {tipo === "recomendados" ? (
         <div>
-          <p className="mb-1 text-xs text-tenue">
-            Elige hasta 4 géneros que te gusten:
-          </p>
+          <p className="mb-1 text-xs text-tenue">Elige hasta 4 géneros que te gusten:</p>
           <div className="flex flex-wrap gap-1">
             {GENEROS_STEAM.map((g) => {
               const activo = gustos.includes(g);
@@ -864,21 +679,8 @@ function ListaSteam({
                 <button
                   key={g}
                   type="button"
-                  onClick={() =>
-                    setGustos(
-                      activo
-                        ? gustos.filter((x) => x !== g)
-                        : gustos.length < 4
-                          ? [...gustos, g]
-                          : gustos,
-                    )
-                  }
-                  className={cx(
-                    "rounded-full border px-2.5 py-1 text-xs",
-                    activo
-                      ? "border-acento bg-acento text-black"
-                      : "border-borde hover:bg-tarjeta",
-                  )}
+                  onClick={() => setGustos(activo ? gustos.filter((x) => x !== g) : gustos.length < 4 ? [...gustos, g] : gustos)}
+                  className={cx("rounded-full border px-2.5 py-1 text-xs", activo ? "border-acento bg-acento text-black" : "border-borde hover:bg-tarjeta")}
                 >
                   {NOMBRE_GENERO[g] ?? g}
                 </button>
@@ -897,42 +699,21 @@ function ListaSteam({
             onClick={() => alElegir(j.id)}
             className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-2 text-left hover:bg-tarjeta"
           >
-            <span className="w-6 shrink-0 text-center text-xs text-tenue">
-              {(pagina - 1) * 12 + i + 1}
-            </span>
-            <img
-              src={j.imagen}
-              alt={j.nombre}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="h-12 w-24 shrink-0 rounded-lg object-cover"
-            />
+            <span className="w-6 shrink-0 text-center text-xs text-tenue">{(pagina - 1) * 12 + i + 1}</span>
+            <img src={j.imagen} alt={j.nombre} loading="lazy" referrerPolicy="no-referrer" className="h-12 w-24 shrink-0 rounded-lg object-cover" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{j.nombre}</p>
               <p className="text-xs text-tenue">
                 {j.valoracion !== null ? `${j.valoracion} % positivas` : ""}
-                {tipo === "mas-jugados" || tipo === "populares"
-                  ? ` · ${j.jugadores.toLocaleString("es-MX")} jugando`
-                  : ""}
-                {j.precioUsd !== null
-                  ? ` · ${j.precioUsd === 0 ? "Gratis" : (convertir(j.precioUsd, "USD") ?? `${j.precioUsd} USD`)}`
-                  : ""}
+                {tipo === "mas-jugados" || tipo === "populares" ? ` · ${j.jugadores.toLocaleString("es-MX")} jugando` : ""}
+                {j.precioUsd !== null ? ` · ${j.precioUsd === 0 ? "Gratis" : (convertir(j.precioUsd, "USD") ?? `${j.precioUsd} USD`)}` : ""}
               </p>
             </div>
           </button>
         ))}
       </div>
-      {q.data ? (
-        <Paginador
-          pagina={pagina}
-          total={Math.max(1, Math.ceil(q.data.total / 12))}
-          alCambiar={setPagina}
-        />
-      ) : null}
-      <p className="text-xs text-tenue">
-        Datos de SteamSpy (se actualizan cada día). Precios aproximados en{" "}
-        {moneda}.
-      </p>
+      {q.data ? <Paginador pagina={pagina} total={Math.max(1, Math.ceil(q.data.total / 12))} alCambiar={setPagina} /> : null}
+      <p className="text-xs text-tenue">Datos de SteamSpy (se actualizan cada día). Precios aproximados en {moneda}.</p>
     </div>
   );
 }
@@ -954,27 +735,18 @@ function PreciosPorRegion({ id }: { id: number }) {
   const { moneda, setMoneda, convertir } = useMonedaJuegos();
   const filas = (q.data ?? []).filter((r) => r.precio !== null);
   return (
-    <Tarjeta
-      titulo="Precio en otras regiones"
-      acciones={<SelectorMoneda moneda={moneda} alCambiar={setMoneda} />}
-    >
+    <Tarjeta titulo="Precio en otras regiones" acciones={<SelectorMoneda moneda={moneda} alCambiar={setMoneda} />}>
       {q.isLoading ? <Cargando /> : null}
-      {q.data && !filas.length ? (
-        <p className="text-sm text-tenue">Gratis o sin precio en Steam.</p>
-      ) : null}
+      {q.data && !filas.length ? <p className="text-sm text-tenue">Gratis o sin precio en Steam.</p> : null}
       <ul className="divide-y divide-borde text-sm">
         {filas.map((r) => (
           <li key={r.region} className="flex items-center gap-2 py-1.5">
-            <span className="w-32 shrink-0">
-              {REGIONES_STEAM[r.region] ?? r.region}
-            </span>
+            <span className="w-32 shrink-0">{REGIONES_STEAM[r.region] ?? r.region}</span>
             <span className="flex-1 text-tenue">
               {r.precio!.toLocaleString("es-MX")} {r.moneda}
               {r.descuento ? ` (-${r.descuento}%)` : ""}
             </span>
-            <span className="font-medium">
-              {r.moneda ? (convertir(r.precio!, r.moneda) ?? "—") : "—"}
-            </span>
+            <span className="font-medium">{r.moneda ? (convertir(r.precio!, r.moneda) ?? "—") : "—"}</span>
           </li>
         ))}
       </ul>
@@ -991,19 +763,13 @@ function Ofertas() {
   useEffect(() => setPagina(1), [tienda, precioMax]);
   const tiendas = useQuery({
     queryKey: ["novedades", "tiendas"],
-    queryFn: () =>
-      api<{ id: string; nombre: string }[]>("/api/novedades/tiendas"),
+    queryFn: () => api<{ id: string; nombre: string }[]>("/api/novedades/tiendas"),
   });
   const ofertas = useQuery({
     queryKey: ["novedades", "ofertas", tienda, precioMax, pagina],
-    queryFn: () =>
-      api<Oferta[]>(
-        `/api/novedades/ofertas?precioMax=${precioMax}&pagina=${pagina}${tienda ? `&tienda=${tienda}` : ""}`,
-      ),
+    queryFn: () => api<Oferta[]>(`/api/novedades/ofertas?precioMax=${precioMax}&pagina=${pagina}${tienda ? `&tienda=${tienda}` : ""}`),
   });
-  const nombreTienda = new Map(
-    (tiendas.data ?? []).map((t) => [t.id, t.nombre]),
-  );
+  const nombreTienda = new Map((tiendas.data ?? []).map((t) => [t.id, t.nombre]));
   return (
     <div className="space-y-4">
       <BuscarEnTiendas />
@@ -1020,11 +786,7 @@ function Ofertas() {
         <>
           <div className="flex flex-wrap gap-2">
             <SelectorMoneda moneda={moneda} alCambiar={setMoneda} />
-            <Selector
-              className="max-w-xs"
-              value={tienda}
-              onChange={(e) => setTienda(e.target.value)}
-            >
+            <Selector className="max-w-xs" value={tienda} onChange={(e) => setTienda(e.target.value)}>
               <option value="">Todas las tiendas</option>
               {tiendas.data?.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -1032,11 +794,7 @@ function Ofertas() {
                 </option>
               ))}
             </Selector>
-            <Selector
-              className="max-w-[10rem]"
-              value={precioMax}
-              onChange={(e) => setPrecioMax(e.target.value)}
-            >
+            <Selector className="max-w-[10rem]" value={precioMax} onChange={(e) => setPrecioMax(e.target.value)}>
               {["5", "10", "15", "30", "60"].map((p) => (
                 <option key={p} value={p}>
                   Hasta {p} USD
@@ -1054,30 +812,14 @@ function Ofertas() {
                 onClick={() => abrirExterno(o.url)}
                 className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-3 text-left hover:bg-tarjeta"
               >
-                <img
-                  src={o.imagen}
-                  alt={o.titulo}
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  className="h-16 w-28 shrink-0 rounded-lg object-cover"
-                />
+                <img src={o.imagen} alt={o.titulo} loading="lazy" referrerPolicy="no-referrer" className="h-16 w-28 shrink-0 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{o.titulo}</p>
-                  <p className="text-xs text-tenue">
-                    {nombreTienda.get(o.tienda) ?? "Tienda"}
-                  </p>
+                  <p className="text-xs text-tenue">{nombreTienda.get(o.tienda) ?? "Tienda"}</p>
                   <div className="mt-1 flex items-center gap-2 text-sm">
-                    <span className="font-bold">
-                      {moneda === "USD"
-                        ? `${o.precio.toFixed(2)} USD`
-                        : (convertir(o.precio, "USD") ??
-                          `${o.precio.toFixed(2)} USD`)}
-                    </span>
+                    <span className="font-bold">{moneda === "USD" ? `${o.precio.toFixed(2)} USD` : (convertir(o.precio, "USD") ?? `${o.precio.toFixed(2)} USD`)}</span>
                     <span className="text-xs text-tenue line-through">
-                      {moneda === "USD"
-                        ? o.precioNormal.toFixed(2)
-                        : (convertir(o.precioNormal, "USD") ??
-                          o.precioNormal.toFixed(2))}
+                      {moneda === "USD" ? o.precioNormal.toFixed(2) : (convertir(o.precioNormal, "USD") ?? o.precioNormal.toFixed(2))}
                     </span>
                     <Insignia tono="ok">-{o.ahorro}%</Insignia>
                   </div>
@@ -1086,15 +828,8 @@ function Ofertas() {
               </button>
             ))}
           </div>
-          <Paginador
-            pagina={pagina}
-            hayMas={(ofertas.data?.length ?? 0) >= 30}
-            alCambiar={setPagina}
-          />
-          <p className="text-xs text-tenue">
-            Ofertas de tiendas oficiales vía CheapShark (precios en dólares; los
-            demás son una conversión aproximada).
-          </p>
+          <Paginador pagina={pagina} hayMas={(ofertas.data?.length ?? 0) >= 30} alCambiar={setPagina} />
+          <p className="text-xs text-tenue">Ofertas de tiendas oficiales vía CheapShark (precios en dólares; los demás son una conversión aproximada).</p>
         </>
       ) : null}
     </div>
@@ -1118,19 +853,12 @@ function JuegosGratis() {
   useEffect(() => setPagina(1), [plataforma]);
   const respuesta = useQuery({
     queryKey: ["novedades", "gratis", plataforma, pagina],
-    queryFn: () =>
-      api<{ pagina: number; totalPaginas: number; juegos: Gratis[] }>(
-        `/api/novedades/juegos-gratis?plataforma=${plataforma}&pagina=${pagina}`,
-      ),
+    queryFn: () => api<{ pagina: number; totalPaginas: number; juegos: Gratis[] }>(`/api/novedades/juegos-gratis?plataforma=${plataforma}&pagina=${pagina}`),
   });
   const lista = { ...respuesta, data: respuesta.data?.juegos };
   return (
     <div className="space-y-4">
-      <Selector
-        className="max-w-xs"
-        value={plataforma}
-        onChange={(e) => setPlataforma(e.target.value)}
-      >
+      <Selector className="max-w-xs" value={plataforma} onChange={(e) => setPlataforma(e.target.value)}>
         <option value="todas">Todas las plataformas</option>
         <option value="pc">PC</option>
         <option value="epic-games-store">Epic Games</option>
@@ -1143,12 +871,7 @@ function JuegosGratis() {
       </Selector>
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
-      {lista.data?.length === 0 ? (
-        <Vacio
-          icono={Gift}
-          texto="No hay juegos gratis activos para esa plataforma."
-        />
-      ) : null}
+      {lista.data?.length === 0 ? <Vacio icono={Gift} texto="No hay juegos gratis activos para esa plataforma." /> : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((g) => (
           <button
@@ -1157,35 +880,21 @@ function JuegosGratis() {
             onClick={() => abrirExterno(g.url)}
             className="overflow-hidden rounded-tarjeta border border-borde bg-superficie text-left hover:bg-tarjeta"
           >
-            <img
-              src={g.imagen}
-              alt={g.titulo}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="h-32 w-full object-cover"
-            />
+            <img src={g.imagen} alt={g.titulo} loading="lazy" referrerPolicy="no-referrer" className="h-32 w-full object-cover" />
             <div className="space-y-1 p-3">
               <p className="text-sm font-medium">{g.titulo}</p>
               <p className="text-xs text-tenue">{g.plataformas}</p>
               <div className="flex flex-wrap gap-1">
                 <Insignia tono="ok">Gratis</Insignia>
                 {g.valor ? <Insignia>Vale {g.valor}</Insignia> : null}
-                {g.termina ? (
-                  <Insignia tono="aviso">Hasta {fmtFecha(g.termina)}</Insignia>
-                ) : null}
+                {g.termina ? <Insignia tono="aviso">Hasta {fmtFecha(g.termina)}</Insignia> : null}
               </div>
             </div>
           </button>
         ))}
       </div>
-      <Paginador
-        pagina={pagina}
-        total={respuesta.data?.totalPaginas}
-        alCambiar={setPagina}
-      />
-      <p className="text-xs text-tenue">
-        Datos de GamerPower. Ábrelos para reclamarlos en su tienda.
-      </p>
+      <Paginador pagina={pagina} total={respuesta.data?.totalPaginas} alCambiar={setPagina} />
+      <p className="text-xs text-tenue">Datos de GamerPower. Ábrelos para reclamarlos en su tienda.</p>
     </div>
   );
 }
@@ -1241,18 +950,12 @@ function leerMiPc(): MiPc | null {
 /** Busca "8 GB" de RAM o de espacio dentro del texto de requisitos. */
 function gbEn(texto: string | null, palabras: RegExp): number | null {
   if (!texto) return null;
-  for (const linea of texto.split(
-    /\n|(?=Memoria|Almacenamiento|Gráficos|Procesador|Memory|Storage)/i,
-  )) {
+  for (const linea of texto.split(/\n|(?=Memoria|Almacenamiento|Gráficos|Procesador|Memory|Storage)/i)) {
     if (!palabras.test(linea)) continue;
     const m = /(\d+(?:[.,]\d+)?)\s*(GB|MB|TB)/i.exec(linea);
     if (!m) continue;
     const n = Number(m[1]!.replace(",", "."));
-    return m[2]!.toUpperCase() === "MB"
-      ? n / 1024
-      : m[2]!.toUpperCase() === "TB"
-        ? n * 1024
-        : n;
+    return m[2]!.toUpperCase() === "MB" ? n / 1024 : m[2]!.toUpperCase() === "TB" ? n * 1024 : n;
   }
   return null;
 }
@@ -1261,9 +964,7 @@ function MeCorre({ juego }: { juego: JuegoSteam }) {
   const navegar = useNavigate();
   const [pc, setPc] = useState<MiPc | null>(leerMiPc);
   const [editando, setEditando] = useState(false);
-  const [borrador, setBorrador] = useState<MiPc>(
-    pc ?? { procesador: "", graficos: "", ramGb: 16 },
-  );
+  const [borrador, setBorrador] = useState<MiPc>(pc ?? { procesador: "", graficos: "", ramGb: 16 });
 
   // En la app de Windows se leen las piezas reales de la PC.
   useEffect(() => {
@@ -1286,18 +987,8 @@ function MeCorre({ juego }: { juego: JuegoSteam }) {
 
   const ramMin = gbEn(juego.requisitos.minimos, /memoria|memory|ram/i);
   const ramRec = gbEn(juego.requisitos.recomendados, /memoria|memory|ram/i);
-  const espacio = gbEn(
-    juego.requisitos.minimos,
-    /almacenamiento|espacio|storage|disco/i,
-  );
-  const veredictoRam =
-    !pc || ramMin === null
-      ? null
-      : pc.ramGb >= (ramRec ?? ramMin)
-        ? "ok"
-        : pc.ramGb >= ramMin
-          ? "justo"
-          : "no";
+  const espacio = gbEn(juego.requisitos.minimos, /almacenamiento|espacio|storage|disco/i);
+  const veredictoRam = !pc || ramMin === null ? null : pc.ramGb >= (ramRec ?? ramMin) ? "ok" : pc.ramGb >= ramMin ? "justo" : "no";
 
   const preguntar = () => {
     if (!pc) return;
@@ -1323,92 +1014,38 @@ function MeCorre({ juego }: { juego: JuegoSteam }) {
       {pc && !editando ? (
         <div className="space-y-2 text-sm">
           <p className="text-tenue">
-            Tu PC: <span className="text-texto">{pc.procesador}</span> ·{" "}
-            <span className="text-texto">{pc.graficos}</span> ·{" "}
-            <span className="text-texto">{pc.ramGb} GB RAM</span>{" "}
-            <button
-              type="button"
-              className="text-xs underline"
-              onClick={() => setEditando(true)}
-            >
+            Tu PC: <span className="text-texto">{pc.procesador}</span> · <span className="text-texto">{pc.graficos}</span> · <span className="text-texto">{pc.ramGb} GB RAM</span>{" "}
+            <button type="button" className="text-xs underline" onClick={() => setEditando(true)}>
               cambiar
             </button>
           </p>
           {veredictoRam ? (
             <p>
               RAM:{" "}
-              <Insignia
-                tono={
-                  veredictoRam === "ok"
-                    ? "ok"
-                    : veredictoRam === "justo"
-                      ? "aviso"
-                      : "peligro"
-                }
-              >
-                {veredictoRam === "ok"
-                  ? "suficiente"
-                  : veredictoRam === "justo"
-                    ? "justa (cumple el mínimo)"
-                    : `insuficiente (pide ${ramMin} GB)`}
+              <Insignia tono={veredictoRam === "ok" ? "ok" : veredictoRam === "justo" ? "aviso" : "peligro"}>
+                {veredictoRam === "ok" ? "suficiente" : veredictoRam === "justo" ? "justa (cumple el mínimo)" : `insuficiente (pide ${ramMin} GB)`}
               </Insignia>
             </p>
           ) : null}
-          {espacio ? (
-            <p className="text-tenue">Espacio necesario: {espacio} GB</p>
-          ) : null}
-          <p className="text-xs text-tenue">
-            El procesador y la tarjeta de video son difíciles de comparar a
-            mano: la IA te dice si te corre, en qué calidad y a cuántos FPS.
-          </p>
+          {espacio ? <p className="text-tenue">Espacio necesario: {espacio} GB</p> : null}
+          <p className="text-xs text-tenue">El procesador y la tarjeta de video son difíciles de comparar a mano: la IA te dice si te corre, en qué calidad y a cuántos FPS.</p>
           <Boton variante="primario" icono={Sparkles} onClick={preguntar}>
             Preguntarle a la IA
           </Boton>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-tenue">
-            Escribe las piezas de tu PC una vez (en la app de Windows se
-            detectan solas).
-          </p>
+          <p className="text-sm text-tenue">Escribe las piezas de tu PC una vez (en la app de Windows se detectan solas).</p>
           <Campo etiqueta="Procesador">
-            <Entrada
-              value={borrador.procesador}
-              onChange={(e) =>
-                setBorrador({ ...borrador, procesador: e.target.value })
-              }
-              placeholder="Ej. Ryzen 5 5600"
-            />
+            <Entrada value={borrador.procesador} onChange={(e) => setBorrador({ ...borrador, procesador: e.target.value })} placeholder="Ej. Ryzen 5 5600" />
           </Campo>
           <Campo etiqueta="Tarjeta de video">
-            <Entrada
-              value={borrador.graficos}
-              onChange={(e) =>
-                setBorrador({ ...borrador, graficos: e.target.value })
-              }
-              placeholder="Ej. RTX 3060 12 GB"
-            />
+            <Entrada value={borrador.graficos} onChange={(e) => setBorrador({ ...borrador, graficos: e.target.value })} placeholder="Ej. RTX 3060 12 GB" />
           </Campo>
           <Campo etiqueta="RAM (GB)">
-            <Entrada
-              type="number"
-              min={1}
-              max={512}
-              value={borrador.ramGb}
-              onChange={(e) =>
-                setBorrador({ ...borrador, ramGb: Number(e.target.value) || 0 })
-              }
-            />
+            <Entrada type="number" min={1} max={512} value={borrador.ramGb} onChange={(e) => setBorrador({ ...borrador, ramGb: Number(e.target.value) || 0 })} />
           </Campo>
-          <Boton
-            variante="primario"
-            disabled={
-              !borrador.procesador.trim() ||
-              !borrador.graficos.trim() ||
-              borrador.ramGb <= 0
-            }
-            onClick={guardar}
-          >
+          <Boton variante="primario" disabled={!borrador.procesador.trim() || !borrador.graficos.trim() || borrador.ramGb <= 0} onClick={guardar}>
             Guardar mi PC
           </Boton>
         </div>
@@ -1437,12 +1074,7 @@ function FichaSteam({ id }: { id: number }) {
     <div className="space-y-4">
       <Tarjeta>
         <div className="flex flex-col gap-4 md:flex-row">
-          <img
-            src={j.imagen}
-            alt={j.nombre}
-            referrerPolicy="no-referrer"
-            className="w-full rounded-xl object-cover md:w-80"
-          />
+          <img src={j.imagen} alt={j.nombre} referrerPolicy="no-referrer" className="w-full rounded-xl object-cover md:w-80" />
           <div className="min-w-0 flex-1 space-y-2">
             <h3 className="text-xl font-semibold">{j.nombre}</h3>
             <p className="text-sm text-tenue">{j.descripcion}</p>
@@ -1454,18 +1086,10 @@ function FichaSteam({ id }: { id: number }) {
               {j.desarrollador ? <Insignia>{j.desarrollador}</Insignia> : null}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Boton
-                tamano="sm"
-                icono={ExternalLink}
-                onClick={() => abrirExterno(j.url)}
-              >
+              <Boton tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(j.url)}>
                 Steam
               </Boton>
-              <Boton
-                tamano="sm"
-                icono={ExternalLink}
-                onClick={() => abrirExterno(j.steamdb)}
-              >
+              <Boton tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(j.steamdb)}>
                 SteamDB (historial de precios)
               </Boton>
             </div>
@@ -1473,50 +1097,22 @@ function FichaSteam({ id }: { id: number }) {
         </div>
       </Tarjeta>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {dato(
-          "Jugando ahora",
-          j.jugadoresAhora !== null
-            ? j.jugadoresAhora.toLocaleString("es-MX")
-            : null,
-        )}
-        {dato(
-          "Pico de ayer",
-          j.picoAyer !== null ? j.picoAyer.toLocaleString("es-MX") : null,
-        )}
-        {dato(
-          "Reseñas positivas",
-          j.resenas ? `${j.resenas.porcentaje} %` : null,
-        )}
-        {dato(
-          "Precio",
-          j.precio === null
-            ? null
-            : j.precio === 0
-              ? "Gratis"
-              : `$${j.precio.toLocaleString("es-MX")} MXN${j.descuento ? ` (-${j.descuento}%)` : ""}`,
-        )}
+        {dato("Jugando ahora", j.jugadoresAhora !== null ? j.jugadoresAhora.toLocaleString("es-MX") : null)}
+        {dato("Pico de ayer", j.picoAyer !== null ? j.picoAyer.toLocaleString("es-MX") : null)}
+        {dato("Reseñas positivas", j.resenas ? `${j.resenas.porcentaje} %` : null)}
+        {dato("Precio", j.precio === null ? null : j.precio === 0 ? "Gratis" : `$${j.precio.toLocaleString("es-MX")} MXN${j.descuento ? ` (-${j.descuento}%)` : ""}`)}
         {dato("Dueños (aprox.)", j.duenos)}
-        {dato(
-          "Horas promedio",
-          j.horasPromedio !== null ? `${j.horasPromedio} h` : null,
-        )}
-        {dato(
-          "Metacritic",
-          j.metacritic !== null ? String(j.metacritic) : null,
-        )}
+        {dato("Horas promedio", j.horasPromedio !== null ? `${j.horasPromedio} h` : null)}
+        {dato("Metacritic", j.metacritic !== null ? String(j.metacritic) : null)}
       </div>
       <PreciosPorRegion id={j.id} />
       <MeCorre juego={j} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Tarjeta titulo="Requisitos mínimos">
-          <p className="whitespace-pre-line text-sm text-tenue">
-            {j.requisitos.minimos ?? "Steam no los publica."}
-          </p>
+          <p className="whitespace-pre-line text-sm text-tenue">{j.requisitos.minimos ?? "Steam no los publica."}</p>
         </Tarjeta>
         <Tarjeta titulo="Requisitos recomendados">
-          <p className="whitespace-pre-line text-sm text-tenue">
-            {j.requisitos.recomendados ?? "Steam no los publica."}
-          </p>
+          <p className="whitespace-pre-line text-sm text-tenue">{j.requisitos.recomendados ?? "Steam no los publica."}</p>
         </Tarjeta>
       </div>
     </div>
@@ -1524,29 +1120,19 @@ function FichaSteam({ id }: { id: number }) {
 }
 
 function Steam() {
-  const [lista, setLista] = useState<
-    "buscar" | "populares" | "mas-jugados" | "mejor-valorados" | "recomendados"
-  >("populares");
+  const [lista, setLista] = useState<"buscar" | "populares" | "mas-jugados" | "mejor-valorados" | "recomendados">("populares");
   const [texto, setTexto] = useState("");
   const [buscar, setBuscar] = useState("");
   const [elegido, setElegido] = useState<number | null>(null);
   const resultados = useQuery({
     queryKey: ["novedades", "steam-buscar", buscar],
-    queryFn: () =>
-      api<ResultadoSteam[]>(
-        `/api/novedades/steam/buscar?q=${encodeURIComponent(buscar)}`,
-      ),
+    queryFn: () => api<ResultadoSteam[]>(`/api/novedades/steam/buscar?q=${encodeURIComponent(buscar)}`),
     enabled: buscar.length >= 2,
   });
   if (elegido !== null && lista !== "buscar") {
     return (
       <div className="space-y-4">
-        <Boton
-          tamano="sm"
-          variante="fantasma"
-          icono={ChevronLeft}
-          onClick={() => setElegido(null)}
-        >
+        <Boton tamano="sm" variante="fantasma" icono={ChevronLeft} onClick={() => setElegido(null)}>
           Volver a la lista
         </Boton>
         <FichaSteam id={elegido} />
@@ -1569,9 +1155,7 @@ function Steam() {
           { id: "buscar", texto: "Buscar" },
         ]}
       />
-      {lista !== "buscar" ? (
-        <ListaSteam tipo={lista} alElegir={setElegido} />
-      ) : null}
+      {lista !== "buscar" ? <ListaSteam tipo={lista} alElegir={setElegido} /> : null}
       {lista === "buscar" ? (
         <>
           <form
@@ -1582,17 +1166,8 @@ function Steam() {
               setElegido(null);
             }}
           >
-            <Entrada
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              placeholder="Busca un juego de Steam, ej. Cyberpunk"
-            />
-            <Boton
-              type="submit"
-              variante="primario"
-              icono={Search}
-              disabled={texto.trim().length < 2}
-            >
+            <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Busca un juego de Steam, ej. Cyberpunk" />
+            <Boton type="submit" variante="primario" icono={Search} disabled={texto.trim().length < 2}>
               Buscar
             </Boton>
           </form>
@@ -1607,54 +1182,27 @@ function Steam() {
                   onClick={() => setElegido(r.id)}
                   className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-2 text-left hover:bg-tarjeta"
                 >
-                  <img
-                    src={r.imagen}
-                    alt={r.nombre}
-                    referrerPolicy="no-referrer"
-                    className="h-12 w-24 shrink-0 rounded-lg object-cover"
-                  />
+                  <img src={r.imagen} alt={r.nombre} referrerPolicy="no-referrer" className="h-12 w-24 shrink-0 rounded-lg object-cover" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.nombre}</p>
-                    <p className="text-xs text-tenue">
-                      {r.precio === null
-                        ? "Gratis o sin precio"
-                        : `$${r.precio.toLocaleString("es-MX")} ${r.moneda ?? ""}`}
-                    </p>
+                    <p className="text-xs text-tenue">{r.precio === null ? "Gratis o sin precio" : `$${r.precio.toLocaleString("es-MX")} ${r.moneda ?? ""}`}</p>
                   </div>
                 </button>
               ))}
-              {resultados.data?.length === 0 ? (
-                <Vacio
-                  icono={Gamepad2}
-                  texto="No encontré juegos con ese nombre."
-                />
-              ) : null}
+              {resultados.data?.length === 0 ? <Vacio icono={Gamepad2} texto="No encontré juegos con ese nombre." /> : null}
             </div>
           ) : (
             <>
-              <Boton
-                tamano="sm"
-                variante="fantasma"
-                icono={ChevronLeft}
-                onClick={() => setElegido(null)}
-              >
+              <Boton tamano="sm" variante="fantasma" icono={ChevronLeft} onClick={() => setElegido(null)}>
                 Volver a los resultados
               </Boton>
               <FichaSteam id={elegido} />
             </>
           )}
-          {!buscar ? (
-            <Vacio
-              icono={Gamepad2}
-              texto="Busca un juego para ver jugadores en línea, reseñas, requisitos y si te corre."
-            />
-          ) : null}
+          {!buscar ? <Vacio icono={Gamepad2} texto="Busca un juego para ver jugadores en línea, reseñas, requisitos y si te corre." /> : null}
         </>
       ) : null}
-      <p className="text-xs text-tenue">
-        Datos de la tienda de Steam y SteamSpy. SteamDB no tiene API pública: se
-        abre en el navegador.
-      </p>
+      <p className="text-xs text-tenue">Datos de la tienda de Steam y SteamSpy. SteamDB no tiene API pública: se abre en el navegador.</p>
     </div>
   );
 }
@@ -1677,33 +1225,16 @@ interface Vigilante {
 function Historial({ id, objetivo }: { id: string; objetivo: number | null }) {
   const h = useQuery({
     queryKey: ["novedades", "historial", id],
-    queryFn: () =>
-      api<{ precio: number; fecha: string }[]>(
-        `/api/novedades/vigilante/${id}/historial`,
-      ),
+    queryFn: () => api<{ precio: number; fecha: string }[]>(`/api/novedades/vigilante/${id}/historial`),
   });
   if (!h.data || h.data.length < 2) return null;
   return (
     <div className="mt-3 h-32">
       <ResponsiveContainer>
-        <LineChart
-          data={h.data.map((p) => ({ ...p, t: new Date(p.fecha).getTime() }))}
-        >
+        <LineChart data={h.data.map((p) => ({ ...p, t: new Date(p.fecha).getTime() }))}>
           <CartesianGrid stroke="var(--borde)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="t"
-            type="number"
-            domain={["dataMin", "dataMax"]}
-            tickFormatter={(v: number) => fmtFecha(v)}
-            stroke="var(--texto-2)"
-            fontSize={11}
-          />
-          <YAxis
-            stroke="var(--texto-2)"
-            fontSize={11}
-            width={50}
-            domain={["auto", "auto"]}
-          />
+          <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={(v: number) => fmtFecha(v)} stroke="var(--texto-2)" fontSize={11} />
+          <YAxis stroke="var(--texto-2)" fontSize={11} width={50} domain={["auto", "auto"]} />
           <Tooltip
             labelFormatter={(v) => fmtFechaHora(Number(v))}
             contentStyle={{
@@ -1712,21 +1243,8 @@ function Historial({ id, objetivo }: { id: string; objetivo: number | null }) {
               borderRadius: 12,
             }}
           />
-          {objetivo !== null ? (
-            <ReferenceLine
-              y={objetivo}
-              stroke="var(--aviso)"
-              strokeDasharray="4 4"
-            />
-          ) : null}
-          <Line
-            type="stepAfter"
-            dataKey="precio"
-            stroke="var(--ok)"
-            dot={false}
-            strokeWidth={2}
-            isAnimationActive={false}
-          />
+          {objetivo !== null ? <ReferenceLine y={objetivo} stroke="var(--aviso)" strokeDasharray="4 4" /> : null}
+          <Line type="stepAfter" dataKey="precio" stroke="var(--ok)" dot={false} strokeWidth={2} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -1738,29 +1256,22 @@ function ComoFunciona() {
     <Tarjeta titulo="¿Cómo se usa? (3 pasos)" icono={Info}>
       <ol className="list-decimal space-y-2 pl-5 text-sm text-tenue">
         <li>
-          En tu celular o PC abre el producto en la tienda y{" "}
-          <b className="text-texto">copia el enlace</b> (en el celular:
-          Compartir → Copiar enlace).
+          En tu celular o PC abre el producto en la tienda y <b className="text-texto">copia el enlace</b> (en el celular: Compartir → Copiar enlace).
         </li>
         <li>
-          Toca <b className="text-texto">Vigilar URL</b>, pega el enlace y toca{" "}
-          <b className="text-texto">Probar</b>: la app busca el precio sola y te
-          dice cuánto encontró.
+          Toca <b className="text-texto">Vigilar URL</b>, pega el enlace y toca <b className="text-texto">Probar</b>: la app busca el precio sola y te dice cuánto encontró.
         </li>
         <li>
-          Si el precio es correcto, pon tu{" "}
-          <b className="text-texto">precio objetivo</b> (opcional) y guarda. Te
-          llega un aviso cuando baje a esa cantidad o menos.
+          Si el precio es correcto, pon tu <b className="text-texto">precio objetivo</b> (opcional) y guarda. Te llega un aviso cuando baje a esa cantidad o menos.
         </li>
       </ol>
       <p className="mt-2 text-xs text-tenue">
-        Funciona con Mercado Libre, Amazon, Coppel, Liverpool, Walmart, Elektra, Costco, Cyberpuerta y la mayoría de tiendas en línea. También puedes vigilar desde Compras con el botón «Vigilar precio».
+        Funciona con Mercado Libre, Amazon, Coppel, Liverpool, Walmart, Elektra, Costco, Cyberpuerta y la mayoría de tiendas en línea. También puedes vigilar desde Compras con el
+        botón «Vigilar precio».
       </p>
       <p className="mt-2 text-xs text-tenue">
-        Si "Probar" no encuentra el precio, la tienda bloquea a los robots o lo
-        muestra con JavaScript: prueba el mismo producto en otra tienda. Solo si
-        sabes hacerlo, abre "Opciones avanzadas" y escribe el selector CSS del
-        precio nuevo (no el tachado).
+        Si "Probar" no encuentra el precio, la tienda bloquea a los robots o lo muestra con JavaScript: prueba el mismo producto en otra tienda. Solo si sabes hacerlo, abre
+        "Opciones avanzadas" y escribe el selector CSS del precio nuevo (no el tachado).
       </p>
     </Tarjeta>
   );
@@ -1806,8 +1317,7 @@ function Precios() {
     nombre: string;
     valor: string;
   } | null>(null);
-  const refrescar = () =>
-    void queryClient.invalidateQueries({ queryKey: ["novedades"] });
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["novedades"] });
   const crear = useMutation({
     mutationFn: () =>
       api<Vigilante>("/api/novedades/vigilante", {
@@ -1836,13 +1346,11 @@ function Precios() {
     onSuccess: (r) => {
       setPrueba(r);
       // Si no puso nombre, se sugiere uno a partir del enlace.
-      if (!d.nombre.trim())
-        setD((v) => ({ ...v, nombre: nombreDesdeUrl(v.url) }));
+      if (!d.nombre.trim()) setD((v) => ({ ...v, nombre: nombreDesdeUrl(v.url) }));
     },
   });
   const revisar = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/novedades/vigilante/${id}/revisar`, { metodo: "POST" }),
+    mutationFn: (id: string) => api(`/api/novedades/vigilante/${id}/revisar`, { metodo: "POST" }),
     onSuccess: refrescar,
     onError: avisarError,
   });
@@ -1856,8 +1364,7 @@ function Precios() {
     onError: avisarError,
   });
   const borrar = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/novedades/vigilante/${id}`, { metodo: "DELETE" }),
+    mutationFn: (id: string) => api(`/api/novedades/vigilante/${id}`, { metodo: "DELETE" }),
     onSuccess: refrescar,
     onError: avisarError,
   });
@@ -1865,25 +1372,16 @@ function Precios() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-tenue">
-          Se revisa cada 3 horas y avisa por push cuando cambia el precio o
-          llega a tu objetivo.
-        </p>
+        <p className="text-sm text-tenue">Se revisa cada 3 horas y avisa por push cuando cambia el precio o llega a tu objetivo.</p>
         {puede ? (
-          <Boton
-            variante="primario"
-            icono={Plus}
-            onClick={() => setNuevo(true)}
-          >
+          <Boton variante="primario" icono={Plus} onClick={() => setNuevo(true)}>
             Vigilar URL
           </Boton>
         ) : null}
       </div>
       <ComoFunciona />
       {lista.isLoading ? <Cargando /> : null}
-      {lista.data?.length === 0 ? (
-        <Vacio texto="Agrega la página de una tienda y el selector CSS del precio." />
-      ) : null}
+      {lista.data?.length === 0 ? <Vacio texto="Agrega la página de una tienda y el selector CSS del precio." /> : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {lista.data?.map((w) => (
           <Tarjeta
@@ -1933,58 +1431,33 @@ function Precios() {
             }
           >
             <div className="flex flex-wrap items-baseline gap-3">
-              <p
-                className={cx(
-                  "text-2xl font-bold",
-                  w.precio === null && "text-tenue",
-                )}
-              >
-                {w.precio === null ? "—" : w.precio.toLocaleString("es-MX")}
-              </p>
+              <p className={cx("text-2xl font-bold", w.precio === null && "text-tenue")}>{w.precio === null ? "—" : w.precio.toLocaleString("es-MX")}</p>
               {w.objetivo !== null ? (
-                <Insignia
-                  tono={
-                    w.precio !== null && w.precio <= w.objetivo ? "ok" : "aviso"
-                  }
-                >
+                <Insignia tono={w.precio !== null && w.precio <= w.objetivo ? "ok" : "aviso"}>
                   Objetivo: {w.objetivo.toLocaleString("es-MX")}
                   {w.precio !== null && w.precio <= w.objetivo ? " ✓" : ""}
                 </Insignia>
               ) : null}
             </div>
             <p className="truncate text-xs text-tenue">
-              {w.texto ? `"${w.texto}" · ` : ""}revisado{" "}
-              {haceCuanto(w.revisado)}
+              {w.texto ? `"${w.texto}" · ` : ""}revisado {haceCuanto(w.revisado)}
             </p>
-            {w.error ? (
-              <p className="mt-1 text-xs text-peligro">{w.error}</p>
-            ) : null}
-            <button
-              type="button"
-              className="mt-1 block max-w-full truncate text-xs text-tenue underline"
-              onClick={() => abrirExterno(w.url)}
-            >
+            {w.error ? <p className="mt-1 text-xs text-peligro">{w.error}</p> : null}
+            <button type="button" className="mt-1 block max-w-full truncate text-xs text-tenue underline" onClick={() => abrirExterno(w.url)}>
               {w.url}
             </button>
             <Historial id={w.id} objetivo={w.objetivo} />
           </Tarjeta>
         ))}
       </div>
-      <Modal
-        abierto={objetivoDe !== null}
-        titulo={`Precio objetivo · ${objetivoDe?.nombre ?? ""}`}
-        alCerrar={() => setObjetivoDe(null)}
-      >
+      <Modal abierto={objetivoDe !== null} titulo={`Precio objetivo · ${objetivoDe?.nombre ?? ""}`} alCerrar={() => setObjetivoDe(null)}>
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!objetivoDe) return;
-            const valor = objetivoDe.valor.trim()
-              ? Number(objetivoDe.valor.replace(",", "."))
-              : null;
-            if (valor !== null && !(valor > 0))
-              return avisar("Escribe un número mayor que 0", "error");
+            const valor = objetivoDe.valor.trim() ? Number(objetivoDe.valor.replace(",", ".")) : null;
+            if (valor !== null && !(valor > 0)) return avisar("Escribe un número mayor que 0", "error");
             objetivo.mutate({ id: objetivoDe.id, valor });
             setObjetivoDe(null);
           }}
@@ -1994,10 +1467,7 @@ function Precios() {
             min={0}
             step="0.01"
             value={objetivoDe?.valor ?? ""}
-            onChange={(e) =>
-              objetivoDe &&
-              setObjetivoDe({ ...objetivoDe, valor: e.target.value })
-            }
+            onChange={(e) => objetivoDe && setObjetivoDe({ ...objetivoDe, valor: e.target.value })}
             placeholder="Vacío = sin objetivo"
             autoFocus
           />
@@ -2006,11 +1476,7 @@ function Precios() {
           </Boton>
         </form>
       </Modal>
-      <Modal
-        abierto={nuevo}
-        titulo="Vigilar precio"
-        alCerrar={() => setNuevo(false)}
-      >
+      <Modal abierto={nuevo} titulo="Vigilar precio" alCerrar={() => setNuevo(false)}>
         <form
           className="space-y-3"
           onSubmit={(e) => {
@@ -2019,12 +1485,7 @@ function Precios() {
           }}
         >
           <Campo etiqueta="Nombre">
-            <Entrada
-              value={d.nombre}
-              onChange={(e) => setD({ ...d, nombre: e.target.value })}
-              placeholder="RAM DDR5 32 GB"
-              required
-            />
+            <Entrada value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} placeholder="RAM DDR5 32 GB" required />
           </Campo>
           <Campo etiqueta="Enlace del producto">
             <div className="flex gap-2">
@@ -2038,12 +1499,7 @@ function Precios() {
                 placeholder="Pega aquí el enlace de la tienda"
                 required
               />
-              <Boton
-                icono={Search}
-                cargando={probar.isPending}
-                disabled={!d.url.trim()}
-                onClick={() => probar.mutate()}
-              >
+              <Boton icono={Search} cargando={probar.isPending} disabled={!d.url.trim()} onClick={() => probar.mutate()}>
                 Probar
               </Boton>
             </div>
@@ -2051,27 +1507,17 @@ function Precios() {
           {prueba ? (
             <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm">
               <p>
-                Precio encontrado:{" "}
-                <b className="text-lg">
-                  {prueba.precio.toLocaleString("es-MX")}
-                </b>
+                Precio encontrado: <b className="text-lg">{prueba.precio.toLocaleString("es-MX")}</b>
               </p>
               <p className="text-xs text-tenue">
-                Leído: "{prueba.texto}" · {prueba.metodo}. Si no es el precio
-                correcto (por ejemplo, es el tachado), usa las opciones
-                avanzadas.
+                Leído: "{prueba.texto}" · {prueba.metodo}. Si no es el precio correcto (por ejemplo, es el tachado), usa las opciones avanzadas.
               </p>
             </div>
           ) : null}
           <ErrorCaja error={probar.error} />
           <details>
-            <summary className="cursor-pointer text-xs text-tenue">
-              Opciones avanzadas (selector CSS)
-            </summary>
-            <Campo
-              etiqueta="Selector CSS del precio"
-              ayuda='Vacío = automático. Si hay descuento, usa el del precio NUEVO. Ej.: ".precio-final", "#price".'
-            >
+            <summary className="cursor-pointer text-xs text-tenue">Opciones avanzadas (selector CSS)</summary>
+            <Campo etiqueta="Selector CSS del precio" ayuda='Vacío = automático. Si hay descuento, usa el del precio NUEVO. Ej.: ".precio-final", "#price".'>
               <Entrada
                 value={d.selector}
                 onChange={(e) => {
@@ -2082,18 +1528,8 @@ function Precios() {
               />
             </Campo>
           </details>
-          <Campo
-            etiqueta="Precio objetivo (opcional)"
-            ayuda="Te avisa cuando baje a este precio o menos."
-          >
-            <Entrada
-              type="number"
-              min={0}
-              step="0.01"
-              value={d.objetivo}
-              onChange={(e) => setD({ ...d, objetivo: e.target.value })}
-              placeholder="Ej. 1500"
-            />
+          <Campo etiqueta="Precio objetivo (opcional)" ayuda="Te avisa cuando baje a este precio o menos.">
+            <Entrada type="number" min={0} step="0.01" value={d.objetivo} onChange={(e) => setD({ ...d, objetivo: e.target.value })} placeholder="Ej. 1500" />
           </Campo>
           <ErrorCaja error={crear.error} />
           <Boton type="submit" variante="primario" cargando={crear.isPending}>
@@ -2110,37 +1546,14 @@ const Cripto = lazy(() => import("./Cripto"));
 const Inversiones = lazy(() => import("./Inversiones"));
 const Divisas = lazy(() => import("./Divisas"));
 
-type PestanaNovedades =
-  | "clima"
-  | "noticias"
-  | "compras"
-  | "ofertas"
-  | "gratis"
-  | "steam"
-  | "precios"
-  | "cripto"
-  | "inversiones"
-  | "monedas";
-const PESTANAS: readonly PestanaNovedades[] = [
-  "clima",
-  "noticias",
-  "compras",
-  "ofertas",
-  "gratis",
-  "steam",
-  "precios",
-  "cripto",
-  "inversiones",
-  "monedas",
-];
+type PestanaNovedades = "clima" | "noticias" | "compras" | "ofertas" | "gratis" | "steam" | "precios" | "cripto" | "inversiones" | "monedas";
+const PESTANAS: readonly PestanaNovedades[] = ["clima", "noticias", "compras", "ofertas", "gratis", "steam", "precios", "cripto", "inversiones", "monedas"];
 
 export default function Novedades() {
   // ?pestana=… permite llegar directo (p. ej. desde el buscador o las rutas viejas).
   const [params, setParams] = useSearchParams();
   const pedida = params.get("pestana") as PestanaNovedades | null;
-  const [pestana, setPestanaEstado] = useState<PestanaNovedades>(
-    pedida && PESTANAS.includes(pedida) ? pedida : "clima",
-  );
+  const [pestana, setPestanaEstado] = useState<PestanaNovedades>(pedida && PESTANAS.includes(pedida) ? pedida : "clima");
   const setPestana = (p: PestanaNovedades) => {
     setPestanaEstado(p);
     setParams(p === "clima" ? {} : { pestana: p }, { replace: true });
@@ -2158,19 +1571,12 @@ export default function Novedades() {
     { id: "steam", texto: "Steam" },
     { id: "precios", texto: "Vigilar precios" },
     ...(verCripto ? [{ id: "cripto" as const, texto: "Cripto" }] : []),
-    ...(verInversiones
-      ? [{ id: "inversiones" as const, texto: "Inversiones" }]
-      : []),
-    ...(verDivisas
-      ? [{ id: "monedas" as const, texto: "Cambio de monedas" }]
-      : []),
+    ...(verInversiones ? [{ id: "inversiones" as const, texto: "Inversiones" }] : []),
+    ...(verDivisas ? [{ id: "monedas" as const, texto: "Cambio de monedas" }] : []),
   ];
   return (
     <div className="space-y-4">
-      <Encabezado
-        titulo="Novedades"
-        descripcion="Clima, noticias, compras, juegos, precios, cripto, inversiones y monedas en un solo lugar."
-      />
+      <Encabezado titulo="Novedades" descripcion="Clima, noticias, compras, juegos, precios, cripto, inversiones y monedas en un solo lugar." />
       <Pestanas valor={pestana} alCambiar={setPestana} opciones={opciones} />
       <Suspense fallback={<Cargando />}>
         {pestana === "clima" ? <Clima /> : null}

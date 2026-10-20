@@ -141,6 +141,37 @@ function Nueva({ alCerrar }: { alCerrar: () => void }) {
   );
 }
 
+/** Claves de los servicios: si esta persona usa las del servidor y si puede verlas (enmascaradas). */
+function PoliticaClaves({ id }: { id: string }) {
+  const q = useQuery({ queryKey: ["cuentas", id, "politica-claves"], queryFn: () => api<{ usarDelServidor: boolean; verServicios: boolean }>(`/api/cuentas/${id}/politica-claves`) });
+  const guardar = useMutation({
+    mutationFn: (d: { usarDelServidor: boolean; verServicios: boolean }) => api(`/api/cuentas/${id}/politica-claves`, { metodo: "PUT", cuerpo: d }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["cuentas", id, "politica-claves"] }),
+    onError: avisarError,
+  });
+  if (!q.data) return null;
+  const d = q.data;
+  return (
+    <div className="space-y-2 rounded-xl border border-borde p-3">
+      <p className="text-sm font-medium">Claves de los servicios (APIs)</p>
+      <Interruptor
+        activo={d.usarDelServidor}
+        alCambiar={(v) => guardar.mutate({ ...d, usarDelServidor: v })}
+        etiqueta="Puede usar tus claves (IA, Gemini, TMDB…); si no, usa las suyas"
+      />
+      <Interruptor
+        activo={d.verServicios}
+        alCambiar={async (v) => {
+          if (v && !(await confirmar({ titulo: "Mostrar servicios y claves", mensaje: "Podrá ver qué servicios tienes configurados y los datos que no son secretos (URLs, IDs). Las claves secretas nunca se le muestran.", boton: "Permitir" }))) return;
+          guardar.mutate({ ...d, verServicios: v });
+        }}
+        etiqueta="Puede ver Ajustes → Servicios y claves (solo lectura, secretos ocultos)"
+      />
+      <p className="text-xs text-tenue">Cada persona puede poner sus propias claves en Ajustes → Mis claves, y compartirlas si quiere (se le avisa que gastan su cuota).</p>
+    </div>
+  );
+}
+
 function Detalle({ c }: { c: Cuenta }) {
   const [permisos, setPermisos] = useState(c.permisos);
   const [roles, setRoles] = useState(c.roles);
@@ -274,6 +305,7 @@ function Detalle({ c }: { c: Cuenta }) {
               Pasar cuenta maestra
             </Boton>
           </div>
+          <PoliticaClaves id={c.id} />
           <p className="text-sm font-medium">Permisos extra (además de los de sus roles)</p>
           <EditorPermisos valor={permisos} alCambiar={setPermisos} />
           <Boton variante="primario" disabled={!cambioPermisos} cargando={cambiar.isPending} onClick={() => cambiar.mutate({ permisos })}>

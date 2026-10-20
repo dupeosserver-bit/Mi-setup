@@ -11,6 +11,9 @@ import { cifrar, contextoDe } from "../lib/boveda/cripto";
 import { leerColeccion, recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
 import { generarContrasena, OPCIONES_POR_DEFECTO, SIMBOLOS_POR_DEFECTO, type OpcionesGenerador } from "../lib/boveda/generador";
 import { cambiarClaveMaestra, copiarSeguro, exportar, importar } from "../lib/boveda/utilidades";
+import { activarApertura, aperturaRapida, quitarApertura } from "../lib/boveda/rapida";
+import { biometriaSoportada } from "../lib/biometria";
+import { esMovil } from "../lib/plataforma";
 import { confirmar } from "../lib/confirmar";
 import { usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
@@ -307,6 +310,7 @@ function Herramientas() {
         }}
       />
       <Boton tamano="sm" icono={KeyRound} onClick={() => setCambio(true)}>Cambiar clave maestra</Boton>
+      <AperturaRapidaBoton />
       <Modal abierto={importando !== null} titulo="Importar respaldo cifrado" alCerrar={() => setImportando(null)}>
         <form
           className="space-y-3"
@@ -355,6 +359,38 @@ function Herramientas() {
         </form>
       </Modal>
     </>
+  );
+}
+
+/** Activar o quitar «Abrir con huella» (celular) o «Abrir con mi PIN» (PC) en este dispositivo. */
+function AperturaRapidaBoton() {
+  const [activa, setActiva] = useState(() => aperturaRapida());
+  const [trabajando, setTrabajando] = useState(false);
+  const movil = esMovil();
+  const activar = async () => {
+    setTrabajando(true);
+    try {
+      const metodo = movil && (await biometriaSoportada()) ? "huella" : "pin";
+      await activarApertura(metodo);
+      setActiva(aperturaRapida());
+      avisar(metodo === "huella" ? "Listo: la próxima vez ábrela con tu huella" : "Listo: la próxima vez ábrela con tu PIN de Mi Setup");
+    } catch (err) {
+      avisarError(err);
+    } finally {
+      setTrabajando(false);
+    }
+  };
+  if (activa) {
+    return (
+      <Boton tamano="sm" icono={Lock} cargando={trabajando} onClick={() => void quitarApertura().then(() => setActiva(null))}>
+        Quitar {activa.metodo === "huella" ? "huella" : "PIN"}
+      </Boton>
+    );
+  }
+  return (
+    <Boton tamano="sm" icono={KeyRound} cargando={trabajando} onClick={() => void activar()} title="Para no escribir la clave maestra cada vez en este dispositivo">
+      {movil ? "Abrir con huella" : "Abrir con PIN"}
+    </Boton>
   );
 }
 

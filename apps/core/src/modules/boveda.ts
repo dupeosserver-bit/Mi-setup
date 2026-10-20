@@ -2,16 +2,26 @@
  * Bóveda (nivel A): contraseñas y 2FA cifrados de extremo a extremo. La clave
  * maestra se deriva en el cliente (Argon2id) y los datos se cifran allí con
  * XChaCha20-Poly1305: este módulo solo guarda y entrega texto cifrado, la sal
- * y los parámetros. Abrir (leer) la bóveda exige reautenticación fuerte.
+ * y los parámetros. Leer pide confirmar tu identidad (PIN, huella o contraseña):
+ * lo que sale sigue cifrado y solo tu clave lo abre.
+ *
+ * Apertura rápida (huella en el celular, PIN en la PC): el dispositivo guarda
+ * tu clave de la bóveda cifrada con una llave al azar; esa llave vive aquí
+ * (cifrada) y solo se entrega si confirmaste PIN o huella en los últimos 2
+ * minutos. Ni el servidor solo ni el dispositivo solo pueden abrir la bóveda.
  */
 import { can, type ModuleId } from "@mi-setup/shared";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, like } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { vault, vaultItems } from "../db/schema.js";
+import { appSettings, vault, vaultItems } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
-import { clientInfo, idParams, type ModuleDeps } from "./common.js";
+import { clientInfo, idParams, requireCipher, type ModuleDeps } from "./common.js";
+import { deleteSetting, getSetting, setSetting } from "./settings.js";
+
+const DISPOSITIVO = z.string().regex(/^[\w-]{8,64}$/, "Dispositivo inválido");
+const claveRapida = (userId: string, dispositivo: string) => `boveda-rapida:${userId}:${dispositivo}`;
 
 /** Formato de un dato cifrado por el cliente: v1.<nonce>.<cifrado> (base64url). */
 export const CIFRADO = /^v1\.[A-Za-z0-9_-]{24,64}\.[A-Za-z0-9_-]{16,}$/;
@@ -91,14 +101,46 @@ export function bovedaRoutes(deps: ModuleDeps) {
             await tx.update(vaultItems).set({ data: i.datos, updatedAt: ahora }).where(and(eq(vaultItems.id, i.id), eq(vaultItems.userId, user.id)));
           }
           await tx.update(vault).set({ salt: d.sal, kdf: d.kdf, verifier: d.verificador, updatedAt: ahora }).where(eq(vault.userId, user.id));
+          // Con la clave nueva, las aperturas rápidas viejas ya no sirven.
+          await tx.delete(appSettings).where(like(appSettings.key, `boveda-rapida:${user.id}:%`));
         });
         await auditar(request, "boveda", "clave_maestra_cambiada", { elementos: d.items.length });
         return { ok: true };
       },
     );
 
+    // ---- apertura rápida (huella o PIN en este dispositivo)
+    app.post("/api/boveda/rapida", { config: { acceso: { modulo: "boveda", nivel: "lectura", reauth: "fuerte" } } }, async (request) => {
+      const user = currentUser(request);
+      const d = z.object({ dispositivo: DISPOSITIVO, llave: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Llave inválida"), metodo: z.enum(["pin", "huella"]) }).parse(request.body);
+      await setSetting(db, claveRapida(user.id, d.dispositivo), { cifrado: requireCipher(deps).encrypt(d.llave), metodo: d.metodo }, deps.now());
+      await auditar(request, "boveda", "boveda_rapida_activada", { metodo: d.metodo });
+      return { ok: true };
+    });
+
+    app.post("/api/boveda/rapida/abrir", { config: { acceso: { modulo: "boveda", nivel: "lectura", reauth: "pin" } } }, async (request) => {
+      const user = currentUser(request);
+      const { dispositivo } = z.object({ dispositivo: DISPOSITIVO }).parse(request.body);
+      // Tiene que ser una confirmación reciente (no la de hace 5 minutos para otra cosa).
+      if (!user.reauthAt || deps.now().getTime() - user.reauthAt.getTime() > 2 * 60_000) {
+        throw new HttpError(403, "Confirma con tu PIN o huella", "reauth_requerida", { metodo: "pin" });
+      }
+      const g = await getSetting<{ cifrado: string }>(db, claveRapida(user.id, dispositivo));
+      if (!g) throw new HttpError(404, "La apertura rápida no está activada en este dispositivo");
+      await auditar(request, "boveda", "boveda_rapida_abierta");
+      return { llave: requireCipher(deps).decrypt(g.cifrado) };
+    });
+
+    app.delete("/api/boveda/rapida/:dispositivo", { config: { acceso: { autenticado: true } } }, async (request) => {
+      const user = currentUser(request);
+      const { dispositivo } = z.object({ dispositivo: DISPOSITIVO }).parse(request.params);
+      await deleteSetting(db, claveRapida(user.id, dispositivo));
+      return { ok: true };
+    });
+
     for (const col of COLECCIONES) {
-      const leer = { config: { acceso: { modulo: col.modulo, nivel: "lectura" as const, reauth: "fuerte" as const } } };
+      // El contenido sale cifrado: basta con confirmar tu identidad con PIN, huella o contraseña.
+      const leer = { config: { acceso: { modulo: col.modulo, nivel: "lectura" as const, reauth: "pin" as const } } };
       const escribir = { config: { acceso: { modulo: col.modulo, nivel: "escritura" as const } } };
       const tipoSchema = z.enum(col.tipos as [string, ...string[]]);
 

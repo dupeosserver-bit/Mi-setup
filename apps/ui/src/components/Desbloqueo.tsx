@@ -1,8 +1,9 @@
 /** Crear o abrir la bóveda con la clave maestra (nunca sale de este dispositivo). */
-import { KeyRound, Lock, ShieldAlert } from "lucide-react";
+import { Fingerprint, KeyRound, Lock, ShieldAlert } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { mensajeDeError } from "../lib/api";
 import { abrirBoveda, crearBoveda, useBoveda, useConfigBoveda } from "../lib/boveda/estado";
+import { abrirRapido, aperturaRapida } from "../lib/boveda/rapida";
 import { fortaleza } from "../lib/boveda/generador";
 import { usePuede } from "../lib/consultas";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, Tarjeta, cx } from "./ui";
@@ -32,6 +33,7 @@ export function Desbloqueo({ children }: { children: ReactNode }) {
   const [repetida, setRepetida] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+  const rapida = aperturaRapida();
 
   if (clave) return <>{children}</>;
   if (config.isLoading) return <Cargando />;
@@ -63,6 +65,30 @@ export function Desbloqueo({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto max-w-md py-6">
       <Tarjeta titulo={crear ? "Primer paso: crea tu bóveda" : "Bóveda bloqueada"} icono={crear ? KeyRound : Lock}>
+        {!crear && rapida ? (
+          <div className="mb-4 space-y-2">
+            <Boton
+              variante="primario"
+              className="w-full"
+              icono={Fingerprint}
+              cargando={trabajando}
+              onClick={async () => {
+                setError(null);
+                setTrabajando(true);
+                try {
+                  await abrirRapido(config.data!);
+                } catch (err) {
+                  setError(mensajeDeError(err));
+                } finally {
+                  setTrabajando(false);
+                }
+              }}
+            >
+              {rapida.metodo === "huella" ? "Abrir con huella" : "Abrir con mi PIN"}
+            </Boton>
+            <p className="text-center text-xs text-tenue">o escribe tu clave maestra:</p>
+          </div>
+        ) : null}
         <form onSubmit={enviar} className="space-y-3">
           <p className="text-sm text-tenue">
             {crear

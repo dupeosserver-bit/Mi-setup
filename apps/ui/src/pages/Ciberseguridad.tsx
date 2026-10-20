@@ -3,30 +3,11 @@
  * enviarla), lecciones cortas y un cuaderno de laboratorio en tus notas.
  */
 import { useMutation } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  FlaskConical,
-  Globe,
-  KeyRound,
-  XCircle,
-} from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Eye, EyeOff, FlaskConical, Globe, KeyRound, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CorreosGoogle, MiCuenta } from "../components/CiberExtra";
-import {
-  Boton,
-  Encabezado,
-  Entrada,
-  ErrorCaja,
-  Pestanas,
-  Tarjeta,
-  avisarError,
-  cx,
-} from "../components/ui";
+import { Boton, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 
 type Estado = "ok" | "aviso" | "mal";
@@ -45,10 +26,7 @@ const COLOR = {
 } as const;
 
 async function sha1Mayusculas(texto: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    "SHA-1",
-    new TextEncoder().encode(texto),
-  );
+  const hash = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(texto));
   return [...new Uint8Array(hash)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
@@ -56,10 +34,7 @@ async function sha1Mayusculas(texto: string): Promise<string> {
 }
 
 /** Cuántas veces aparece la contraseña en filtraciones. Solo se envían 5 caracteres del hash. */
-export async function vecesFiltrada(
-  contrasena: string,
-  consultar: (prefijo: string) => Promise<string>,
-): Promise<number> {
+export async function vecesFiltrada(contrasena: string, consultar: (prefijo: string) => Promise<string>): Promise<number> {
   const hash = await sha1Mayusculas(contrasena);
   const lista = await consultar(hash.slice(0, 5));
   for (const linea of lista.split(/\r?\n/)) {
@@ -72,11 +47,7 @@ export async function vecesFiltrada(
 function RevisarSitio() {
   const [sitio, setSitio] = useState("");
   const revisar = useMutation({
-    mutationFn: () =>
-      api<{ sitio: string; calificacion: number; revisiones: Revision[] }>(
-        "/api/ciberseguridad/sitio",
-        { cuerpo: { sitio } },
-      ),
+    mutationFn: () => api<{ sitio: string; calificacion: number; revisiones: Revision[] }>("/api/ciberseguridad/sitio", { cuerpo: { sitio } }),
     onError: avisarError,
   });
   const r = revisar.data;
@@ -89,35 +60,17 @@ function RevisarSitio() {
           if (sitio.trim()) revisar.mutate();
         }}
       >
-        <Entrada
-          value={sitio}
-          onChange={(e) => setSitio(e.target.value)}
-          placeholder="mexicanland.net"
-        />
+        <Entrada value={sitio} onChange={(e) => setSitio(e.target.value)} placeholder="mexicanland.net" />
         <Boton type="submit" variante="primario" cargando={revisar.isPending}>
           Revisar
         </Boton>
       </form>
-      <p className="mt-2 text-xs text-tenue">
-        Certificado HTTPS, cabeceras de seguridad y protección del correo
-        (SPF/DMARC). Revisa solo sitios tuyos o públicos.
-      </p>
+      <p className="mt-2 text-xs text-tenue">Certificado HTTPS, cabeceras de seguridad y protección del correo (SPF/DMARC). Revisa solo sitios tuyos o públicos.</p>
       <ErrorCaja error={revisar.error} />
       {r ? (
         <div className="mt-3 space-y-2">
           <p className="text-sm">
-            <span
-              className={cx(
-                "text-xl font-bold",
-                r.calificacion >= 80
-                  ? "text-ok"
-                  : r.calificacion >= 50
-                    ? "text-aviso"
-                    : "text-peligro",
-              )}
-            >
-              {r.calificacion}
-            </span>
+            <span className={cx("text-xl font-bold", r.calificacion >= 80 ? "text-ok" : r.calificacion >= 50 ? "text-aviso" : "text-peligro")}>{r.calificacion}</span>
             <span className="text-tenue"> / 100 · {r.sitio}</span>
           </p>
           <ul className="divide-y divide-borde">
@@ -125,14 +78,10 @@ function RevisarSitio() {
               const Icono = ICONO[x.estado];
               return (
                 <li key={x.id} className="flex items-start gap-2 py-2">
-                  <Icono
-                    className={cx("mt-0.5 h-4 w-4 shrink-0", COLOR[x.estado])}
-                  />
+                  <Icono className={cx("mt-0.5 h-4 w-4 shrink-0", COLOR[x.estado])} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{x.titulo}</p>
-                    <p className="break-words text-xs text-tenue">
-                      {x.detalle}
-                    </p>
+                    <p className="break-words text-xs text-tenue">{x.detalle}</p>
                   </div>
                 </li>
               );
@@ -153,17 +102,7 @@ function ContrasenaFiltrada() {
     setCargando(true);
     setResultado(null);
     try {
-      setResultado(
-        await vecesFiltrada(
-          clave,
-          async (p) =>
-            (
-              await api<{ lista: string }>(
-                `/api/ciberseguridad/contrasena/${p}`,
-              )
-            ).lista,
-        ),
-      );
+      setResultado(await vecesFiltrada(clave, async (p) => (await api<{ lista: string }>(`/api/ciberseguridad/contrasena/${p}`)).lista));
     } catch (err) {
       avisarError(err);
     } finally {
@@ -188,12 +127,7 @@ function ContrasenaFiltrada() {
             placeholder="Escribe una contraseña"
             className="pr-10"
           />
-          <button
-            type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-tenue"
-            aria-label={ver ? "Ocultar" : "Mostrar"}
-            onClick={() => setVer((v) => !v)}
-          >
+          <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-tenue" aria-label={ver ? "Ocultar" : "Mostrar"} onClick={() => setVer((v) => !v)}>
             {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
@@ -204,20 +138,13 @@ function ContrasenaFiltrada() {
       {resultado !== null ? (
         resultado > 0 ? (
           <p className="mt-3 rounded-xl bg-peligro/10 p-3 text-sm text-peligro">
-            Apareció {resultado.toLocaleString("es-MX")} veces en filtraciones.
-            No la uses: cámbiala donde la tengas.
+            Apareció {resultado.toLocaleString("es-MX")} veces en filtraciones. No la uses: cámbiala donde la tengas.
           </p>
         ) : (
-          <p className="mt-3 rounded-xl bg-ok/10 p-3 text-sm text-ok">
-            No aparece en filtraciones conocidas. Aun así, usa una distinta en
-            cada sitio.
-          </p>
+          <p className="mt-3 rounded-xl bg-ok/10 p-3 text-sm text-ok">No aparece en filtraciones conocidas. Aun así, usa una distinta en cada sitio.</p>
         )
       ) : null}
-      <p className="mt-2 text-xs text-tenue">
-        Tu contraseña no sale de tu equipo: solo se envían los primeros 5
-        caracteres de su huella (SHA-1) a Have I Been Pwned.
-      </p>
+      <p className="mt-2 text-xs text-tenue">Tu contraseña no sale de tu equipo: solo se envían los primeros 5 caracteres de su huella (SHA-1) a Have I Been Pwned.</p>
     </Tarjeta>
   );
 }
@@ -245,8 +172,7 @@ const LECCIONES: { titulo: string; texto: string }[] = [
   },
   {
     titulo: "Wi-Fi y casa",
-    texto:
-      "Cambia la contraseña de fábrica de tu módem, usa WPA2/WPA3, y pon las cámaras y bocinas en una red de invitados para que no vean tu PC.",
+    texto: "Cambia la contraseña de fábrica de tu módem, usa WPA2/WPA3, y pon las cámaras y bocinas en una red de invitados para que no vean tu PC.",
   },
   {
     titulo: "Para aprender hacking ético",
@@ -258,15 +184,10 @@ const LECCIONES: { titulo: string; texto: string }[] = [
 export default function Ciberseguridad() {
   const navegar = useNavigate();
   const [abierta, setAbierta] = useState<number | null>(0);
-  const [pestana, setPestana] = useState<"general" | "cuenta" | "correos">(
-    "general",
-  );
+  const [pestana, setPestana] = useState<"general" | "cuenta" | "correos">("general");
   return (
     <div className="space-y-4">
-      <Encabezado
-        titulo="Ciberseguridad"
-        descripcion="Tu cuenta, tus correos, tus contraseñas y tus sitios: revisa y protégete."
-      />
+      <Encabezado titulo="Ciberseguridad" descripcion="Tu cuenta, tus correos, tus contraseñas y tus sitios: revisa y protégete." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
@@ -282,16 +203,9 @@ export default function Ciberseguridad() {
         <>
           <Tarjeta titulo="Revisar todas mis contraseñas" icono={KeyRound}>
             <p className="text-sm text-tenue">
-              Busca en tu gestor las contraseñas filtradas, repetidas o débiles,
-              y los sitios que tuvieron filtraciones con tu correo. Te ayuda a
-              cambiarlas con una nueva y segura.
+              Busca en tu gestor las contraseñas filtradas, repetidas o débiles, y los sitios que tuvieron filtraciones con tu correo. Te ayuda a cambiarlas con una nueva y segura.
             </p>
-            <Boton
-              className="mt-3"
-              variante="primario"
-              icono={KeyRound}
-              onClick={() => navegar("/seguridad/boveda?pestana=revisar")}
-            >
+            <Boton className="mt-3" variante="primario" icono={KeyRound} onClick={() => navegar("/seguridad/boveda?pestana=revisar")}>
               Revisar mis contraseñas
             </Boton>
           </Tarjeta>
@@ -309,28 +223,16 @@ export default function Ciberseguridad() {
                     onClick={() => setAbierta(abierta === i ? null : i)}
                   >
                     {l.titulo}
-                    <span className="text-tenue">
-                      {abierta === i ? "−" : "+"}
-                    </span>
+                    <span className="text-tenue">{abierta === i ? "−" : "+"}</span>
                   </button>
-                  {abierta === i ? (
-                    <p className="pb-3 text-sm text-tenue">{l.texto}</p>
-                  ) : null}
+                  {abierta === i ? <p className="pb-3 text-sm text-tenue">{l.texto}</p> : null}
                 </li>
               ))}
             </ul>
           </Tarjeta>
           <Tarjeta titulo="Cuaderno de laboratorio" icono={FlaskConical}>
-            <p className="text-sm text-tenue">
-              Apunta tus prácticas (comandos, banderas de CTF, lo que
-              aprendiste) en una página de tus notas, con casillas y tablero de
-              tareas.
-            </p>
-            <Boton
-              className="mt-3"
-              icono={FlaskConical}
-              onClick={() => navegar("/notas")}
-            >
+            <p className="text-sm text-tenue">Apunta tus prácticas (comandos, banderas de CTF, lo que aprendiste) en una página de tus notas, con casillas y tablero de tareas.</p>
+            <Boton className="mt-3" icono={FlaskConical} onClick={() => navegar("/notas")}>
               Abrir mis notas
             </Boton>
           </Tarjeta>
