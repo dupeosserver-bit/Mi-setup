@@ -32,6 +32,7 @@ import {
   Scissors,
   Bell,
   Bot,
+  BrainCircuit,
   CalendarClock,
   FolderTree,
   Gamepad2,
@@ -102,6 +103,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   negocio: m("negocio", "/panel/negocio", Lightbulb, lazy(() => import("./pages/Negocio"))),
 
   respaldos: m("respaldos", "/respaldos", Archive, lazy(() => import("./pages/Respaldos"))),
+  vps_agentes: m("vps_agentes", "/vps/agentes", BrainCircuit, lazy(() => import("./pages/VpsAgentes"))),
 
   boveda: m("boveda", "/seguridad/boveda", KeyRound, lazy(() => import("./pages/Boveda"))),
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck, lazy(() => import("./pages/Autenticador"))),

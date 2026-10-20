@@ -4,7 +4,8 @@
  * huella y escribir el nombre del servidor.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Lock, Network, RefreshCw, ShieldAlert, ShieldCheck, Unlock, Wrench, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lock, Network, RefreshCw, ShieldAlert, ShieldCheck, Sparkles, Unlock, Wrench, XCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -20,7 +21,7 @@ interface Punto {
   detalle: string;
   accion?: Accion;
 }
-type Accion = "firewall_activar" | "fail2ban_instalar" | "actualizaciones_auto" | "actualizar";
+type Accion = "firewall_activar" | "fail2ban_instalar" | "actualizaciones_auto" | "actualizar" | "swap_crear" | "earlyoom_instalar" | "journald_limitar" | "docker_logs" | "alertas_ssh" | "ssh_solo_llave";
 interface Auditoria {
   sistema: string;
   calificacion: number;
@@ -38,11 +39,18 @@ const TEXTO_ACCION: Record<Accion, { boton: string; explica: string }> = {
   fail2ban_instalar: { boton: "Instalar fail2ban", explica: "Se instala y enciende fail2ban: bloquea por un rato las IP que fallan muchas contraseñas." },
   actualizaciones_auto: { boton: "Activar", explica: "Se instala unattended-upgrades para que los parches de seguridad se instalen solos cada día." },
   actualizar: { boton: "Actualizar ahora", explica: "Se ejecuta apt update y apt upgrade (puede tardar varios minutos). Conserva tus archivos de configuración." },
+  swap_crear: { boton: "Crear 2 GB de swap", explica: "Se crea /swapfile de 2 GB (si hay más de 6 GB libres) y se usa solo cuando la RAM se llena, para que el servidor no se caiga." },
+  earlyoom_instalar: { boton: "Activar protección", explica: "Se instala earlyoom: si la memoria se acaba, cierra el programa que más gasta antes de que se congele todo (nunca SSH, Docker, la base ni Caddy)." },
+  journald_limitar: { boton: "Limitar a 500 MB", explica: "Los registros del sistema se limitan a 500 MB y se borran los más viejos." },
+  docker_logs: { boton: "Limitar logs de Docker", explica: "Cada contenedor guardará como máximo 3 archivos de 20 MB. Se aplica a contenedores nuevos o al reiniciar Docker (no se reinicia nada ahora)." },
+  alertas_ssh: { boton: "Activar alertas", explica: "Se instala un aviso: cada vez que alguien entre por SSH te llega una notificación con el usuario y la IP. Las conexiones de Mi Setup no avisan." },
+  ssh_solo_llave: { boton: "Solo con llave", explica: "Se apaga la entrada con contraseña (y root solo con llave). Antes se prueba la configuración; si falla, no se cambia nada." },
 };
 
 export default function VpsSeguridad() {
   const [servidor, setServidor] = useState<string | null>(null);
   const puede = usePuede("vps_seguridad", "administrar");
+  const navegar = useNavigate();
   const servidores = useServidores();
   const nombre = servidores.data?.find((s) => s.id === servidor)?.nombre ?? "";
   const [puerto, setPuerto] = useState("");
@@ -115,6 +123,21 @@ export default function VpsSeguridad() {
                 </p>
                 {a.tailscale ? <p className="text-xs text-tenue">Tailscale activo: {a.tailscale}</p> : null}
               </div>
+              <Boton
+                variante="secundario"
+                icono={Sparkles}
+                onClick={() => {
+                  const pendientes = a.puntos.filter((p) => p.estado !== "ok").map((p) => `- ${p.titulo}: ${p.detalle}`).join("\n");
+                  try {
+                    sessionStorage.setItem("mi-setup.pregunta", `Revisé la seguridad de mi servidor (${a.sistema}, calificación ${a.calificacion}). Esto falta:\n${pendientes || "- Nada"}\nExplícame qué hacer primero y, si se puede, propón los comandos para que yo los apruebe.`);
+                  } catch {
+                    /* sin almacenamiento: se abre la IA vacía */
+                  }
+                  navegar("/ia?pregunta=@sesion");
+                }}
+              >
+                Pedir ayuda a la IA
+              </Boton>
             </div>
           </Tarjeta>
 

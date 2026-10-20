@@ -1,9 +1,11 @@
 /** Gestor de contraseñas (cifrado de extremo a extremo). */
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
+import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { AVISO_SIN_RECUPERACION, Desbloqueo, MedidorFortaleza } from "../components/Desbloqueo";
-import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { vecesFiltrada } from "./Ciberseguridad";
 import { api } from "../lib/api";
 import { cifrar, contextoDe } from "../lib/boveda/cripto";
 import { leerColeccion, recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
@@ -434,8 +436,102 @@ function Contenido() {
   );
 }
 
+interface Problema {
+  item: Item;
+  filtrada: number;
+  repetida: number;
+  debil: boolean;
+  sitioFiltrado: string | null;
+}
+
+/**
+ * Revisión de tus contraseñas (en tu dispositivo, sin mandarlas): filtradas
+ * (k-anonimato), repetidas, débiles y sitios que tuvieron una filtración con
+ * tu correo. Desde aquí generas una nueva y la guardas.
+ */
+function Revision() {
+  const { data: todos } = useElementos<Datos>("boveda");
+  const [problemas, setProblemas] = useState<Problema[] | null>(null);
+  const [revisando, setRevisando] = useState(false);
+  const [editando, setEditando] = useState<Item | null>(null);
+  const items = useMemo(() => (todos ?? []).filter((i) => i.tipo !== "generada" && i.tipo !== "nota" && i.valor.contrasena), [todos]);
+
+  const revisar = async () => {
+    setRevisando(true);
+    try {
+      const filtraciones = await api<{ email: string; fuentes: string[] }[]>("/api/ciberseguridad/filtraciones").catch(() => []);
+      const fuentes = filtraciones.flatMap((f) => f.fuentes.map((x) => x.toLowerCase()));
+      const cuenta = new Map<string, number>();
+      for (const i of items) cuenta.set(i.valor.contrasena!, (cuenta.get(i.valor.contrasena!) ?? 0) + 1);
+      const salida: Problema[] = [];
+      for (const i of items) {
+        const c = i.valor.contrasena!;
+        const filtrada = await vecesFiltrada(c, async (prefijo) => (await api<{ lista: string }>(`/api/ciberseguridad/contrasena/${prefijo}`)).lista).catch(() => 0);
+        const sitio = (() => {
+          try {
+            return new URL(i.valor.url?.startsWith("http") ? i.valor.url : `https://${i.valor.url}`).hostname.replace(/^www\./, "").split(".")[0]!.toLowerCase();
+          } catch {
+            return i.valor.nombre.toLowerCase().split(/\s+/)[0] ?? "";
+          }
+        })();
+        const sitioFiltrado = sitio && sitio.length > 2 ? (fuentes.find((f) => f.replace(/[^a-z0-9]/g, "").includes(sitio)) ?? null) : null;
+        const debil = c.length < 10 || /^(\d+|[a-z]+)$/i.test(c);
+        const p = { item: i, filtrada, repetida: (cuenta.get(c) ?? 1) - 1, debil, sitioFiltrado };
+        if (p.filtrada || p.repetida || p.debil || p.sitioFiltrado) salida.push(p);
+      }
+      setProblemas(salida.sort((a, b) => b.filtrada - a.filtrada || Number(Boolean(b.sitioFiltrado)) - Number(Boolean(a.sitioFiltrado))));
+    } finally {
+      setRevisando(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <Encabezado titulo="Revisar mis contraseñas" descripcion="Busca las que se filtraron, las repetidas y las débiles, y te ayuda a cambiarlas. Tus contraseñas no salen de este dispositivo." />
+      <Boton variante="primario" icono={ShieldCheck} cargando={revisando} onClick={() => void revisar()} disabled={!items.length}>
+        Revisar {items.length} contraseña(s)
+      </Boton>
+      {problemas && !problemas.length ? <Vacio icono={ShieldCheck} texto="¡Todo bien! Ninguna filtrada, repetida ni débil." /> : null}
+      <div className="space-y-2">
+        {problemas?.map((p) => (
+          <div key={p.item.id} className="rounded-tarjeta border border-borde bg-superficie p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">{p.item.valor.nombre}</p>
+              {p.filtrada ? <Insignia tono="peligro">Filtrada {p.filtrada.toLocaleString("es-MX")} veces</Insignia> : null}
+              {p.sitioFiltrado ? <Insignia tono="peligro">El sitio tuvo una filtración ({p.sitioFiltrado})</Insignia> : null}
+              {p.repetida ? <Insignia tono="aviso">Repetida en {p.repetida} más</Insignia> : null}
+              {p.debil ? <Insignia tono="aviso">Débil</Insignia> : null}
+            </div>
+            <p className="mt-1 text-xs text-tenue">{p.item.valor.usuario || p.item.valor.url}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {p.item.valor.url ? (
+                <Boton tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(p.item.valor.url!.startsWith("http") ? p.item.valor.url! : `https://${p.item.valor.url}`)}>
+                  Abrir el sitio para cambiarla
+                </Boton>
+              ) : null}
+              <Boton
+                tamano="sm"
+                variante="primario"
+                icono={Wand2}
+                onClick={() => setEditando({ ...p.item, valor: { ...p.item.valor, contrasena: generarContrasena({ ...OPCIONES_POR_DEFECTO, longitud: 20 }) } })}
+              >
+                Generar nueva y guardar
+              </Boton>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-tenue">Primero cambia la contraseña en el sitio y luego guárdala aquí. Las filtradas se revisan con k-anonimato: solo viajan 5 caracteres del hash.</p>
+      <Modal abierto={editando !== null} titulo="Nueva contraseña" alCerrar={() => setEditando(null)}>
+        {editando ? <Editor inicial={editando} carpetas={[]} alTerminar={() => setEditando(null)} /> : null}
+      </Modal>
+    </div>
+  );
+}
+
 export default function Boveda() {
-  const [pestana, setPestana] = useState<"contrasenas" | "generador" | "historial">("contrasenas");
+  const [params] = useSearchParams();
+  const [pestana, setPestana] = useState<"contrasenas" | "revisar" | "generador" | "historial">(params.get("pestana") === "revisar" ? "revisar" : "contrasenas");
   return (
     <>
       <Pestanas
@@ -443,6 +539,7 @@ export default function Boveda() {
         alCambiar={setPestana}
         opciones={[
           { id: "contrasenas", texto: "Mis contraseñas" },
+          { id: "revisar", texto: "Revisar" },
           { id: "generador", texto: "Generador" },
           { id: "historial", texto: "Historial (10)" },
         ]}
@@ -450,6 +547,11 @@ export default function Boveda() {
       {pestana === "contrasenas" ? (
         <Desbloqueo>
           <Contenido />
+        </Desbloqueo>
+      ) : null}
+      {pestana === "revisar" ? (
+        <Desbloqueo>
+          <Revision />
         </Desbloqueo>
       ) : null}
       {pestana === "generador" ? (

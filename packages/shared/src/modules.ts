@@ -50,6 +50,7 @@ export const MODULES = {
   vps_archivos: { label: "Archivos", category: "vps", masterOnly: true },
   vps_seguridad: { label: "Seguridad del servidor", category: "vps", masterOnly: true },
   respaldos: { label: "Respaldos", category: "vps", masterOnly: false },
+  vps_agentes: { label: "Agentes de IA", category: "vps", masterOnly: true },
 
   // Panel (hosting)
   pterodactyl: { label: "Pterodactyl", category: "panel", masterOnly: false },

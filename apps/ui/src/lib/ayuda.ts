@@ -27,6 +27,14 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   portapapeles: {
     pasos: ["Copia algo en la PC y toca 'Enviar lo que copié': aparece al momento en tu celular, y al revés.", "Toca un elemento para copiarlo; se guardan los últimos 50."],
   },
+  vps_agentes: {
+    pasos: [
+      "Elige tu servidor y toca «Instalar» en el agente que quieras (Claude Code, Gemini CLI, Aider, Llama o Qwen locales, Open WebUI, n8n…). Se pide tu contraseña o huella y escribir el nombre del servidor.",
+      "Los de terminal se usan en VPS → Terminal (ej. «claude»). Los paneles web quedan en 127.0.0.1: ábrelos con un túnel SSH o un subdominio.",
+      "Abajo buscas más en GitHub por páginas; «Instalar con ayuda de la IA» le pide a la IA que revise el proyecto y te proponga los comandos para aprobarlos.",
+    ],
+    nota: "Revisa la RAM antes de instalar varios; los modelos locales piden de 3 a 6 GB.",
+  },
   vps_seguridad: {
     pasos: [
       "Elige el servidor (tu VPS o tu home lab) y toca 'Revisar': te da una calificación y te explica cada punto.",
