@@ -1251,3 +1251,23 @@ export const noteShares = pgTable(
   },
   (t) => [uniqueIndex("note_shares_token").on(t.tokenHash), uniqueIndex("note_shares_nota").on(t.noteId)],
 );
+
+// ---------------------------------------------------------------- 0.11: cuentas de Google (Ciberseguridad)
+
+/** Cuentas de Gmail conectadas por cada persona (pueden ser varias). Tokens cifrados con SERVER_ENC_KEY. */
+export const googleAccounts = pgTable(
+  "google_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    accessTokenEnc: text("access_token_enc").notNull(),
+    refreshTokenEnc: text("refresh_token_enc"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    scopes: text("scopes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("google_accounts_correo").on(t.userId, t.email)],
+);

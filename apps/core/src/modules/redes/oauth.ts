@@ -215,7 +215,7 @@ export async function tokenVigente(deps: ModuleDeps, p: PlataformaId): Promise<{
   return { token: cipher.decrypt(cuenta.accessTokenEnc), externalId: cuenta.externalId, clientId };
 }
 
-function pagina(titulo: string, texto: string): string {
+export function pagina(titulo: string, texto: string): string {
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title></head><body style="font-family:system-ui;background:#1c1c1e;color:#f2f2f7;display:grid;place-items:center;min-height:100vh;margin:0"><main style="max-width:420px;padding:24px;text-align:center"><h1 style="font-size:20px">${esc(titulo)}</h1><p style="color:#a1a1aa">${esc(texto)}</p></main></body></html>`;
 }

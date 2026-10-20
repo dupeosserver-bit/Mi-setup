@@ -137,6 +137,40 @@ export class AuthService {
 
     await db.insert(loginAttempts).values({ email, ip: client.ip, success: true, createdAt: now });
 
+    // Alerta de entrada: si es la primera vez en 90 días desde esta IP y este dispositivo, se avisa.
+    const hace90 = new Date(now.getTime() - 90 * 86_400_000);
+    const [conocida] = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, user.id),
+          gt(sessions.createdAt, hace90),
+          or(client.ip ? eq(sessions.ip, client.ip) : sql`false`, input.dispositivo ? eq(sessions.deviceName, input.dispositivo) : sql`false`),
+        ),
+      )
+      .limit(1);
+    const [antes] = await db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, user.id)).limit(1);
+    if (!conocida && antes) {
+      await this.deps.audit.record({
+        actorType: "usuario",
+        actorUserId: user.id,
+        action: "login_nuevo_lugar",
+        outcome: "ok",
+        ip: client.ip,
+        userAgent: client.userAgent,
+        details: { dispositivo: input.dispositivo ?? null },
+      });
+      if (user.role === "maestra") {
+        await this.deps.notifier.send({
+          title: "Mi Setup: entraron desde un lugar nuevo",
+          message: `Cuenta: ${corto(email)}\nIP: ${corto(client.ip)}\nDispositivo: ${corto(input.dispositivo ?? client.userAgent)}\nSi no fuiste tú: Ciberseguridad → Mi cuenta → cerrar esa sesión y cambia tu contraseña.`,
+          priority: 4,
+          tags: ["rotating_light"],
+        });
+      }
+    }
+
     const sessionId = randomUUID();
     const secret = newRefreshSecret();
     await db.insert(sessions).values({

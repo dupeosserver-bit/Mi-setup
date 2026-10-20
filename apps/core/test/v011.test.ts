@@ -3,10 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { armarCorreo, clasificarCorreo, enlacesDe, revisarEnvio } from "../src/modules/correo-google.js";
 import { estadoCobro, fechasPendientes, siguienteFecha } from "../src/modules/finanzas-extra.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
 import { carpetaPara, planOrganizar, razonBasura } from "../src/modules/vps/archivos-extra.js";
 import { enZona, scriptRestaurar, sePuedeEnSuLugar, tocaRespaldo } from "../src/modules/respaldos-vps.js";
+import { comandosDeAccion, interpretarAuditoria, patronPropio, scriptAvisoEntrada } from "../src/modules/vps/seguridad.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -281,5 +283,102 @@ describe("notas: compartir con enlace", () => {
     expect((await app.inject({ method: "POST", url: `/api/chat/canales/${canal}/mensajes`, headers: h, payload: { texto: "Lista", nota: { enlace: c2.url, titulo: "Lista" } } })).json<{ tipo: string }>().tipo).toBe("nota");
     await app.inject({ method: "DELETE", url: `/api/notas/${nota.id}/compartir`, headers: h });
     expect((await app.inject({ method: "GET", url: `/api/notas-publicas/${token2}` })).statusCode).toBe(404);
+  });
+});
+
+describe("seguridad: VPS más protegido", () => {
+  it("las conexiones del propio Mi Setup no avisan; en red privada se ignora el rango", () => {
+    expect(patronPropio("172.18.0.5")).toBe('case "$PAM_RHOST" in 172.18.*) exit 0;; esac');
+    expect(patronPropio("203.0.113.9")).toBe("[ \"$PAM_RHOST\" = '203.0.113.9' ] && exit 0");
+    const s = scriptAvisoEntrada("https://x.test/api/alertas/entrada/1", "tok", "10.0.0.2");
+    expect(s).toContain('case "$PAM_RHOST" in 10.0.*) exit 0;; esac');
+    expect(s.startsWith("#!/bin/sh")).toBe(true);
+    expect(s).toContain("x-mi-setup-alerta: tok");
+  });
+
+  it("SSH solo con llave únicamente si Mi Setup entra con llave", () => {
+    expect(() => comandosDeAccion({ accion: "ssh_solo_llave", confirmacion: "x" }, true, 22, { conLlave: false })).toThrow();
+    expect(comandosDeAccion({ accion: "ssh_solo_llave", confirmacion: "x" }, true, 22, { conLlave: true }).join(" ")).toContain("01-mi-setup.conf");
+  });
+
+  it("revisa swap, disco, earlyoom, logs y alertas", () => {
+    const salida = ["##memoria", "4000000000", "0", "##disco", "92", "##earlyoom", "inactive", "##journald", "no", "##dockerlogs", "no", "##alertas", "no", "##fallidos", "120", "##fail2ban", "inactive"].join("\n");
+    const a = interpretarAuditoria(salida, 22);
+    const p = (id: string) => a.puntos.find((x) => x.id === id);
+    expect(p("swap")?.accion).toBe("swap_crear");
+    expect(p("disco")?.estado).toBe("mal");
+    expect(p("earlyoom")?.accion).toBe("earlyoom_instalar");
+    expect(p("dockerlogs")?.accion).toBe("docker_logs");
+    expect(p("alertas")?.accion).toBe("alertas_ssh");
+    expect(p("fallidos")?.estado).toBe("aviso");
+  });
+
+  it("la alerta de entrada sin token válido no hace nada", async () => {
+    await preparar();
+    const r = await ctx!.app.inject({ method: "POST", url: "/api/alertas/entrada/11111111-1111-4111-8111-111111111111", headers: { "x-mi-setup-alerta": "falso" }, payload: { usuario: "root", ip: "1.2.3.4" } });
+    expect(r.statusCode).toBe(404);
+  });
+});
+
+describe("seguridad: tu cuenta", () => {
+  it("lista tus sesiones, cierra las otras y avisa de un inicio desde un lugar nuevo", async () => {
+    const { h, login } = await preparar(undefined, { ciberseguridad: "lectura" });
+    const app = ctx!.app;
+    // Segunda sesión desde otra IP y otro dispositivo
+    const otra = await app.inject({ method: "POST", url: "/api/auth/login", remoteAddress: "203.0.113.7", payload: { email: "u@x.test", password: "clave-de-prueba-123", dispositivo: "Celular raro" } });
+    expect(otra.statusCode).toBe(200);
+    const sesiones = (await app.inject({ method: "GET", url: "/api/seguridad/sesiones", headers: h })).json<{ id: string; actual: boolean; dispositivo: string }[]>();
+    expect(sesiones.length).toBeGreaterThanOrEqual(2);
+    expect(sesiones.filter((x) => x.actual)).toHaveLength(1);
+    const inicios = (await app.inject({ method: "GET", url: "/api/seguridad/inicios", headers: h })).json<{ tipo: string }[]>();
+    expect(inicios.some((i) => i.tipo === "login_nuevo_lugar")).toBe(true);
+    const actual = sesiones.find((x) => x.actual)!;
+    expect((await app.inject({ method: "DELETE", url: `/api/seguridad/sesiones/${actual.id}`, headers: h })).statusCode).toBe(400);
+    const cerradas = await app.inject({ method: "POST", url: "/api/seguridad/sesiones/cerrar-otras", headers: h });
+    expect(cerradas.json<{ cerradas: number }>().cerradas).toBeGreaterThanOrEqual(1);
+    // El token de la otra sesión deja de servir al momento.
+    const tokenOtra = bearer(otra.json<{ accessToken: string }>().accessToken);
+    expect((await app.inject({ method: "GET", url: "/api/seguridad/sesiones", headers: tokenOtra })).statusCode).toBe(401);
+    void login;
+  });
+});
+
+describe("ciberseguridad: correos", () => {
+  const base = { de: "Ana <ana@ejemplo.mx>", asunto: "Hola", fragmento: "Nos vemos mañana", autenticacion: "spf=pass dkim=pass dmarc=pass", enlaces: [], adjuntos: [] };
+
+  it("un correo normal es seguro", () => {
+    expect(clasificarCorreo(base).riesgo).toBe("seguro");
+  });
+
+  it("detecta suplantación, enlaces engañosos y adjuntos peligrosos", () => {
+    const falso = { ...base, de: "BBVA Seguridad <alerta@bbva-soporte.xyz>", asunto: "Tu cuenta será bloqueada", autenticacion: "spf=fail dmarc=fail" };
+    const r = clasificarCorreo(falso);
+    expect(r.riesgo).toBe("peligroso");
+    expect(r.razones.join(" ")).toContain("bbva");
+    const enlace = clasificarCorreo({ ...base, enlaces: [{ texto: "https://www.mercadolibre.com.mx", url: "https://mercadolibre-pagos.ru/login" }] });
+    expect(enlace.riesgo).toBe("peligroso");
+    expect(clasificarCorreo({ ...base, adjuntos: ["factura.pdf.exe"] }).riesgo).toBe("peligroso");
+    expect(clasificarCorreo({ ...base, adjuntos: ["fotos.zip"] }).riesgo).toBe("cuidado");
+  });
+
+  it("saca los enlaces con su texto visible", () => {
+    const e = enlacesDe('<p><a href="https://evil.test/x">https://banco.mx</a></p>', "ver https://otro.test/y");
+    expect(e).toEqual([
+      { url: "https://evil.test/x", texto: "https://banco.mx" },
+      { url: "https://otro.test/y", texto: "" },
+    ]);
+  });
+
+  it("antes de enviar avisa de datos delicados y correos mal escritos", () => {
+    const r = revisarEnvio("ana@gmial.com", "Datos", "mi tarjeta 4111 1111 1111 1111 y contraseña: hola123");
+    expect(r.avisos.some((a) => a.includes("tarjeta"))).toBe(true);
+    expect(r.avisos.some((a) => a.includes("contraseña"))).toBe(true);
+    expect(r.avisos.some((a) => a.includes("gmail.com"))).toBe(true);
+    expect(revisarEnvio("ana@gmail.com", "Hola", "nos vemos").avisos).toHaveLength(0);
+  });
+
+  it("el correo armado no permite meter encabezados", () => {
+    const raw = Buffer.from(armarCorreo("yo@gmail.com", "ana@x.test\r\nBcc: espia@x.test", "Asunto\r\nBcc: otro@x.test", "Hola"), "base64url").toString();
+    expect(raw.split("\r\n").filter((l) => l.startsWith("Bcc:"))).toHaveLength(0);
   });
 });
