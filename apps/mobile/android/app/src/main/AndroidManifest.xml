@@ -34,6 +34,23 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mi_setup_info" />
         </receiver>
 
+        <!-- Autocompletar contraseñas en otras apps (como Samsung Pass) -->
+        <service
+            android:name=".MiSetupAutofillService"
+            android:label="Mi Setup"
+            android:exported="true"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+            <meta-data android:name="android.autofill" android:resource="@xml/autofill_service" />
+        </service>
+        <activity
+            android:name=".AutofillAuthActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/AppTheme.Transparente" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

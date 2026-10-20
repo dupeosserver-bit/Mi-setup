@@ -2,7 +2,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { registerPlugin } from "@capacitor/core";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AVISO_SIN_RECUPERACION, Desbloqueo, MedidorFortaleza } from "../components/Desbloqueo";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { vecesFiltrada } from "./Ciberseguridad";
@@ -394,6 +395,83 @@ function AperturaRapidaBoton() {
   );
 }
 
+interface PluginAutorrelleno {
+  estado(): Promise<{ soportado: boolean; activo: boolean; entradas: number }>;
+  abrirAjustes(): Promise<void>;
+  guardar(o: { entradas: { nombre: string; usuario: string; contrasena: string; url: string }[] }): Promise<{ guardadas: number }>;
+  borrar(): Promise<void>;
+}
+const Autorrelleno = registerPlugin<PluginAutorrelleno>("Autorrelleno");
+const CLAVE_AUTORRELLENO = "mi-setup.autorrelleno";
+
+/** Las contraseñas de la bóveda (ya descifradas aquí) pasan al autocompletado del celular, cifradas con el almacén seguro de Android. */
+async function llevarAlAutocompletado(items: Item[]): Promise<number> {
+  const entradas = items
+    .filter((i) => i.tipo !== "nota" && i.tipo !== "generada" && i.valor.contrasena)
+    .map((i) => ({ nombre: i.valor.nombre, usuario: i.valor.usuario ?? "", contrasena: i.valor.contrasena ?? "", url: i.valor.url ?? "" }));
+  return (await Autorrelleno.guardar({ entradas })).guardadas;
+}
+
+/** Autocompletar en otras apps (solo celular): como Samsung Pass, con tu huella. */
+function Autocompletar({ items }: { items: Item[] }) {
+  const [estado, setEstado] = useState<{ soportado: boolean; activo: boolean; entradas: number } | null>(null);
+  const [encendido, setEncendido] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_AUTORRELLENO) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const revisar = () => void Autorrelleno.estado().then(setEstado, () => setEstado({ soportado: false, activo: false, entradas: 0 }));
+  useEffect(() => {
+    revisar();
+    const alVolver = () => document.visibilityState === "visible" && revisar();
+    document.addEventListener("visibilitychange", alVolver);
+    return () => document.removeEventListener("visibilitychange", alVolver);
+  }, []);
+  // Con la bóveda abierta y el autocompletado encendido, se mantiene al día.
+  useEffect(() => {
+    if (encendido && items.length) void llevarAlAutocompletado(items).then(revisar, () => undefined);
+  }, [encendido, items]);
+  if (!estado?.soportado) return null;
+  return (
+    <Tarjeta titulo="Autocompletar en otras apps" icono={KeyRound}>
+      <p className="text-sm text-tenue">Como Samsung Pass: cuando una app o página pida tu usuario y contraseña, toca «Mi Setup», pon tu huella y se rellenan solas.</p>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+        <li className={estado.activo ? "text-ok" : ""}>
+          {estado.activo ? "Mi Setup ya puede autocompletar. " : "Elige Mi Setup como servicio de autocompletar. "}
+          <button type="button" className="underline" onClick={() => void Autorrelleno.abrirAjustes().catch(avisarError)}>
+            {estado.activo ? "Cambiar" : "Abrir ajustes"}
+          </button>
+        </li>
+        <li>
+          <Interruptor
+            activo={encendido}
+            alCambiar={async (v) => {
+              try {
+                if (v) {
+                  if (!(await confirmar({ titulo: "Llevar tus contraseñas al autocompletado", mensaje: "Se guardan en este celular, cifradas con el almacén seguro de Android, y solo se usan después de tu huella o tu bloqueo de pantalla. Puedes apagarlo cuando quieras.", boton: "Activar" }))) return;
+                  const n = await llevarAlAutocompletado(items);
+                  avisar(`Listo: ${n} contraseñas para autocompletar`);
+                } else {
+                  await Autorrelleno.borrar();
+                }
+                localStorage.setItem(CLAVE_AUTORRELLENO, v ? "1" : "0");
+                setEncendido(v);
+                revisar();
+              } catch (err) {
+                avisarError(err);
+              }
+            }}
+            etiqueta={encendido ? `Encendido (${estado.entradas} contraseñas)` : "Llevar mis contraseñas al autocompletado"}
+          />
+        </li>
+      </ol>
+      <p className="mt-2 text-xs text-tenue">Se rellena solo en el sitio o la app que coincide con la dirección que guardaste en cada contraseña.</p>
+    </Tarjeta>
+  );
+}
+
 function Contenido() {
   const puede = usePuede("boveda", "escritura");
   const bloquear = useBoveda((s) => s.bloquear);
@@ -468,6 +546,11 @@ function Contenido() {
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo elemento" : "Editar"} alCerrar={() => setEditando(null)}>
         {editando !== null ? <Editor inicial={editando === "nuevo" ? null : editando} carpetas={carpetas} alTerminar={() => setEditando(null)} /> : null}
       </Modal>
+      {esMovil() && data ? (
+        <div className="mt-4">
+          <Autocompletar items={data} />
+        </div>
+      ) : null}
     </>
   );
 }
