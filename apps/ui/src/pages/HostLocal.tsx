@@ -275,6 +275,11 @@ function Ajustes({ srv, s, alCambio }: { srv: ServidoresLocales; s: ServidorLoca
     onError: avisarError,
   });
   const valor = (k: string) => cambios[k] ?? props.data?.[k] ?? "";
+  const conocidas = new Set(PROPIEDADES.map((p) => p.clave));
+  const otras = Object.keys({ ...props.data, ...cambios })
+    .filter((k) => !conocidas.has(k))
+    .sort();
+  const [nueva, setNueva] = useState({ clave: "", valor: "" });
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -309,6 +314,49 @@ function Ajustes({ srv, s, alCambio }: { srv: ServidoresLocales; s: ServidorLoca
           ))}
         </div>
       ) : null}
+      {s.tipo !== "personalizado" && s.tipo !== "velocity" && props.data ? (
+        <details className="rounded-xl border border-borde p-3">
+          <summary className="cursor-pointer text-sm font-medium">Todos los ajustes de server.properties ({otras.length + PROPIEDADES.length})</summary>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {otras.map((k) => {
+              const v = valor(k);
+              const booleano = v === "true" || v === "false";
+              return (
+                <label key={k} className="flex min-w-0 items-center gap-2 text-xs">
+                  <span className="w-44 shrink-0 truncate font-mono" title={k}>
+                    {k}
+                  </span>
+                  {booleano ? (
+                    <Selector className="min-w-0 flex-1" value={v} onChange={(e) => setCambios({ ...cambios, [k]: e.target.value })}>
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </Selector>
+                  ) : (
+                    <Entrada className="min-w-0 flex-1" value={v} maxLength={200} onChange={(e) => setCambios({ ...cambios, [k]: e.target.value })} />
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          <form
+            className="mt-3 flex flex-wrap gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const clave = nueva.clave.trim().toLowerCase();
+              if (!/^[a-z0-9.-]{1,60}$/.test(clave)) return avisarError(new Error("La clave solo lleva letras, números, puntos y guiones"));
+              setCambios({ ...cambios, [clave]: nueva.valor });
+              setNueva({ clave: "", valor: "" });
+            }}
+          >
+            <Entrada className="w-48" value={nueva.clave} onChange={(e) => setNueva({ ...nueva, clave: e.target.value })} placeholder="nuevo-ajuste" />
+            <Entrada className="min-w-0 flex-1" value={nueva.valor} onChange={(e) => setNueva({ ...nueva, valor: e.target.value })} placeholder="valor" />
+            <Boton type="submit" tamano="sm">
+              Agregar
+            </Boton>
+          </form>
+          <p className="mt-2 text-[11px] text-tenue">Los cambios se escriben en server.properties al tocar «Guardar ajustes» y se aplican al reiniciar.</p>
+        </details>
+      ) : null}
       <Boton variante="primario" cargando={guardar.isPending} onClick={() => guardar.mutate()}>
         Guardar ajustes
       </Boton>
@@ -321,26 +369,43 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
   const [texto, setTexto] = useState("");
   const [buscado, setBuscado] = useState("");
   const [progreso] = useProgreso(srv);
-  const disponibles = clasesDe(s);
-  const [clase, setClase] = useState<ClaseAddon>(disponibles[0] ?? "mods");
+  const conPacks = ["fabric", "quilt", "forge", "neoforge"].includes(s.tipo) && Boolean(srv.modpackInstalar);
+  const disponibles: (ClaseAddon | "modpacks")[] = [...clasesDe(s), ...(conPacks ? (["modpacks"] as const) : [])];
+  const [clase, setClaseEstado] = useState<ClaseAddon | "modpacks">(disponibles[0] ?? "mods");
+  const [pagina, setPagina] = useState(0);
+  const setClase = (c: ClaseAddon | "modpacks") => {
+    setClaseEstado(c);
+    setPagina(0);
+    if (c === "modpacks") setFuente("modrinth");
+  };
   const mc = mcDe(s);
   // CurseForge: plugins de Bukkit, o mods del cargador del servidor (Folia y Velocity no están ahí).
   const cargador = s.cargadorMods ?? (["fabric", "quilt", "forge", "neoforge"].includes(s.tipo) ? s.tipo : null);
-  const tipoCf = clase === "plugins" ? (["folia", "velocity"].includes(s.tipo) ? null : "paper") : cargador;
-  const instalados = useQuery({ queryKey: ["host-local", "addons", s.id, clase], queryFn: () => srv.addons(s.id, clase) });
+  const esPack = clase === "modpacks";
+  const claseAddon: ClaseAddon = esPack ? "mods" : clase;
+  const tipoCf = esPack ? null : clase === "plugins" ? (["folia", "velocity"].includes(s.tipo) ? null : "paper") : cargador;
+  const instalados = useQuery({ queryKey: ["host-local", "addons", s.id, claseAddon], queryFn: () => srv.addons(s.id, claseAddon) });
   const resultados = useQuery({
-    queryKey: ["host-local", "buscar", s.id, clase, fuente, buscado],
+    queryKey: ["host-local", "buscar", s.id, clase, fuente, buscado, pagina],
     queryFn: () =>
       fuente === "modrinth"
-        ? srv.modrinthBuscar(s.id, buscado, clase)
-        : api<Addon[]>(`/api/hostlocal/curseforge/buscar?tipo=${tipoCf}&version=${encodeURIComponent(mc)}&q=${encodeURIComponent(buscado)}`),
+        ? srv.modrinthBuscar(s.id, buscado, clase, pagina)
+        : api<Addon[]>(`/api/hostlocal/curseforge/buscar?tipo=${tipoCf}&version=${encodeURIComponent(mc)}&q=${encodeURIComponent(buscado)}&pagina=${pagina}`),
     enabled: fuente === "modrinth" || !!tipoCf,
   });
   const instalar = useMutation({
     mutationFn: async (a: Addon) => {
-      if (fuente === "modrinth") return srv.modrinthInstalar(s.id, a.id, clase);
+      if (esPack) {
+        if (s.estado !== "detenido") throw new Error("Apaga el servidor antes de instalar el modpack");
+        if (!(await confirmar({ titulo: `Instalar ${a.titulo}`, mensaje: "Se bajan todos sus mods y archivos dentro de este servidor; los que tengan el mismo nombre se reemplazan. Te recomendamos usarlo en un servidor nuevo." }))) {
+          throw new Error("Cancelado");
+        }
+        const r = await srv.modpackInstalar!(s.id, a.id);
+        return `${r.nombre} (${r.archivos} archivos)`;
+      }
+      if (fuente === "modrinth") return srv.modrinthInstalar(s.id, a.id, claseAddon);
       const f = await api<{ url: string; nombre: string }>(`/api/hostlocal/curseforge/archivo?tipo=${tipoCf}&version=${encodeURIComponent(mc)}&modId=${a.id}`);
-      return srv.instalarDesdeUrl(s.id, f.url, f.nombre, clase);
+      return srv.instalarDesdeUrl(s.id, f.url, f.nombre, claseAddon);
     },
     onSuccess: (nombre) => {
       avisar(`Instalado: ${nombre}. Reinicia el servidor para usarlo.`);
@@ -348,17 +413,22 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
     },
     onError: avisarError,
   });
-  const palabra = clase;
+  const palabra = esPack ? "modpacks" : clase;
   return (
     <div className="space-y-4">
       {disponibles.length > 1 ? (
         <Pestanas
           valor={clase}
-          alCambiar={(c) => setClase(c as ClaseAddon)}
-          opciones={disponibles.map((c) => ({ id: c, texto: c === "mods" ? "Mods" : "Plugins" }))}
+          alCambiar={(c) => setClase(c)}
+          opciones={disponibles.map((c) => ({ id: c, texto: c === "mods" ? "Mods" : c === "plugins" ? "Plugins" : "Modpacks" }))}
         />
       ) : null}
-      <Tarjeta titulo={`Tus ${palabra} (${instalados.data?.length ?? 0})`} icono={Package}>
+      {esPack ? (
+        <p className="rounded-xl bg-fondo p-3 text-xs text-tenue">
+          Un modpack trae muchos mods y su configuración. Se instala dentro de este servidor (apágalo antes) y debe ser de la misma versión de Minecraft. Lo más limpio es crear un servidor nuevo para cada modpack.
+        </p>
+      ) : null}
+      <Tarjeta titulo={`Tus ${esPack ? "mods" : palabra} (${instalados.data?.length ?? 0})`} icono={Package}>
         {!instalados.data?.length ? <p className="text-sm text-tenue">Todavía no tienes {palabra}.</p> : null}
         <ul className="divide-y divide-borde">
           {instalados.data?.map((a) => (
@@ -372,7 +442,7 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
                 aria-label={`Quitar ${a.nombre}`}
                 onClick={async () => {
                   if (await confirmar({ titulo: "Quitar", mensaje: `${a.nombre} se va a la Papelera.` })) {
-                    await srv.quitarAddon(s.id, a.nombre, clase).catch(avisarError);
+                    await srv.quitarAddon(s.id, a.nombre, claseAddon).catch(avisarError);
                     void instalados.refetch();
                   }
                 }}
@@ -386,11 +456,12 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
         onSubmit={(e) => {
           e.preventDefault();
           setBuscado(texto.trim());
+          setPagina(0);
         }}
       >
         <Selector className="w-auto" value={fuente} onChange={(e) => setFuente(e.target.value as typeof fuente)}>
           <option value="modrinth">Modrinth</option>
-          {tipoCf ? <option value="curseforge">CurseForge</option> : null}
+          {tipoCf && !esPack ? <option value="curseforge">CurseForge</option> : null}
         </Selector>
         <Entrada className="min-w-0 flex-1" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={mc ? `Buscar ${palabra} para ${mc}…` : `Buscar ${palabra}…`} />
         <Boton type="submit" icono={Search}>
@@ -419,6 +490,24 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
           </div>
         ))}
       </div>
+      {resultados.data && (pagina > 0 || resultados.data.length >= 24) ? (
+        <div className="flex items-center justify-center gap-1">
+          <Boton tamano="sm" variante="secundario" disabled={pagina === 0} onClick={() => setPagina(pagina - 1)}>
+            Anterior
+          </Boton>
+          {Array.from({ length: 5 }, (_, i) => Math.max(0, pagina - 2) + i)
+            .filter((n) => n <= pagina || resultados.data.length >= 24)
+            .filter((n) => n <= pagina + (resultados.data.length >= 24 ? 2 : 0))
+            .map((n) => (
+              <Boton key={n} tamano="sm" variante={n === pagina ? "primario" : "fantasma"} onClick={() => setPagina(n)}>
+                {n + 1}
+              </Boton>
+            ))}
+          <Boton tamano="sm" variante="secundario" disabled={resultados.data.length < 24} onClick={() => setPagina(pagina + 1)}>
+            Siguiente
+          </Boton>
+        </div>
+      ) : null}
       <p className="text-xs text-tenue">Solo salen los compatibles con {TIPOS[s.tipo].nombre} {textoVersion(s.version)}. CurseForge necesita su clave (Ajustes → Servicios y claves).</p>
     </div>
   );

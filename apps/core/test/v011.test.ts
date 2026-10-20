@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { estadoCobro, fechasPendientes, siguienteFecha } from "../src/modules/finanzas-extra.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
+import { carpetaPara, planOrganizar, razonBasura } from "../src/modules/vps/archivos-extra.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -139,5 +140,41 @@ describe("finanzas: pagos divididos", () => {
     expect(
       (await app.inject({ method: "POST", url: "/api/finanzas-personales/divididos", headers: h, payload: { nombre: "Renta", total: 100, primerCobro: "2026-03-01", personas: [{ nombre: "Ana" }, { nombre: "ana" }] } })).statusCode,
     ).toBe(400);
+  });
+});
+
+describe("archivos del VPS: organizar y limpiar", () => {
+  it("agrupa por tipo y nunca mueve configuración ni ocultos", () => {
+    expect(carpetaPara("instalar.sh")).toBe("scripts");
+    expect(carpetaPara("tema.blueprint")).toBe("blueprints");
+    expect(carpetaPara("docker-compose.yml")).toBeNull();
+    expect(carpetaPara(".env")).toBeNull();
+    expect(carpetaPara("app.conf")).toBeNull();
+    expect(carpetaPara("sin-extension")).toBeNull();
+    const plan = planOrganizar([
+      { nombre: "a.sh", tipo: "archivo" },
+      { nombre: "b.SH", tipo: "archivo" },
+      { nombre: "Scripts", tipo: "carpeta" },
+      { nombre: "x.blueprint", tipo: "archivo" },
+      { nombre: "carpeta.sh", tipo: "carpeta" },
+      { nombre: "compose.yaml", tipo: "archivo" },
+    ]);
+    expect(plan).toEqual([
+      { archivo: "a.sh", carpeta: "Scripts", existe: true },
+      { archivo: "b.SH", carpeta: "Scripts", existe: true },
+      { archivo: "x.blueprint", carpeta: "blueprints", existe: false },
+    ]);
+  });
+
+  it("solo marca como basura lo que se puede borrar", () => {
+    expect(razonBasura("notas.txt~", "f", 1)).not.toBeNull();
+    expect(razonBasura("hs_err_pid123.log", "f", 0)).not.toBeNull();
+    expect(razonBasura("latest.log", "f", 3)).toBeNull();
+    expect(razonBasura("latest.log", "f", 30)).not.toBeNull();
+    expect(razonBasura("2026-01-01-1.log.gz", "f", 40)).not.toBeNull();
+    expect(razonBasura("__pycache__", "d", 0)).not.toBeNull();
+    expect(razonBasura("world", "d", 400)).toBeNull();
+    expect(razonBasura("server.jar", "f", 400)).toBeNull();
+    expect(razonBasura("respaldo.tar.gz", "f", 400)).toBeNull();
   });
 });

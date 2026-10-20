@@ -64,7 +64,7 @@ function nombreValido(n: unknown): string {
   return n.trim();
 }
 
-function tar(args: string[], cwd?: string): Promise<void> {
+export function tar(args: string[], cwd?: string): Promise<void> {
   return new Promise((ok, mal) =>
     // Siempre el tar de Windows (bsdtar): otro tar en el PATH (p. ej. el de Git) confunde "C:" con un servidor.
     execFile(join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "tar.exe"), args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024, timeout: 10 * 60_000 }, (err, _o, e) =>

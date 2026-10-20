@@ -331,6 +331,6 @@ export function archivosRoutes(deps: ModuleDeps, servidores: Servidores) {
 }
 
 /** Carpetas del sistema que nunca se borran ni se mueven desde la app. */
-const RUTAS_PROTEGIDAS = new Set(
+export const RUTAS_PROTEGIDAS = new Set(
   ["/", "/root", "/home", "/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/boot", "/var", "/opt", "/srv", "/proc", "/sys", "/dev", "/run", "/tmp", "/snap", "/var/lib", "/var/lib/docker", "/var/www", "/opt/mi-setup"],
 );

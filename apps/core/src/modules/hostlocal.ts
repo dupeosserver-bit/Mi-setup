@@ -7,6 +7,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { HttpError, missingConfig } from "../http-error.js";
+import { claveEfectiva } from "./claves-usuario.js";
+import type { AuthUser } from "../security/rbac.js";
 import { currentUser } from "../security/rbac.js";
 import type { ModuleDeps } from "./common.js";
 import { getSetting, setSetting } from "./settings.js";
@@ -56,8 +58,8 @@ const filtros = z.object({
 });
 
 export function hostLocalRoutes(deps: ModuleDeps) {
-  async function cf<T>(ruta: string): Promise<T> {
-    const clave = deps.config.env.CURSEFORGE_API_KEY;
+  async function cf<T>(ruta: string, usuario: Pick<AuthUser, "id" | "role">): Promise<T> {
+    const clave = (await claveEfectiva(deps, usuario, "CURSEFORGE_API_KEY"))?.valor;
     if (!clave) throw missingConfig("CURSEFORGE_API_KEY");
     const r = await fetch(`https://api.curseforge.com${ruta}`, { headers: { "x-api-key": clave, accept: "application/json" }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
     if (!r) throw new HttpError(502, "CurseForge no respondió");
@@ -114,9 +116,9 @@ export function hostLocalRoutes(deps: ModuleDeps) {
     });
 
     app.get("/api/hostlocal/curseforge/buscar", leer, async (request) => {
-      const d = filtros.extend({ q: z.string().max(100).default("") }).parse(request.query);
-      const p = new URLSearchParams({ gameId: String(MINECRAFT), gameVersion: d.version, searchFilter: d.q, sortField: "2", sortOrder: "desc", pageSize: "24", ...parametrosTipo(d.tipo) });
-      const r = await cf<{ data: { id: number; name: string; summary: string; logo?: { thumbnailUrl: string } | null; downloadCount: number; authors: { name: string }[]; links?: { websiteUrl?: string } }[] }>(`/v1/mods/search?${p}`);
+      const d = filtros.extend({ q: z.string().max(100).default(""), pagina: z.coerce.number().int().min(0).max(400).default(0) }).parse(request.query);
+      const p = new URLSearchParams({ gameId: String(MINECRAFT), gameVersion: d.version, searchFilter: d.q, sortField: "2", sortOrder: "desc", pageSize: "24", index: String(d.pagina * 24), ...parametrosTipo(d.tipo) });
+      const r = await cf<{ data: { id: number; name: string; summary: string; logo?: { thumbnailUrl: string } | null; downloadCount: number; authors: { name: string }[]; links?: { websiteUrl?: string } }[] }>(`/v1/mods/search?${p}`, currentUser(request));
       return r.data.map((m) => ({
         id: String(m.id),
         titulo: m.name,
@@ -132,7 +134,7 @@ export function hostLocalRoutes(deps: ModuleDeps) {
       const d = filtros.extend({ modId: z.coerce.number().int().positive() }).parse(request.query);
       const tipo = parametrosTipo(d.tipo);
       const p = new URLSearchParams({ gameVersion: d.version, pageSize: "10", ...(tipo["modLoaderType"] ? { modLoaderType: tipo["modLoaderType"] } : {}) });
-      const r = await cf<{ data: { fileName: string; downloadUrl: string | null; releaseType: number }[] }>(`/v1/mods/${d.modId}/files?${p}`);
+      const r = await cf<{ data: { fileName: string; downloadUrl: string | null; releaseType: number }[] }>(`/v1/mods/${d.modId}/files?${p}`, currentUser(request));
       const archivo = r.data.find((f) => f.downloadUrl && f.releaseType === 1) ?? r.data.find((f) => f.downloadUrl);
       if (!archivo) {
         throw new HttpError(

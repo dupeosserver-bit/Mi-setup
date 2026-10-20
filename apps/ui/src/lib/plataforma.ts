@@ -72,7 +72,9 @@ export interface ServidoresLocales {
   guardarPropiedades(id: string, cambios: Record<string, string>): Promise<Record<string, string>>;
   borrar(id: string): Promise<boolean>;
   addons(id: string, clase?: ClaseAddon): Promise<{ nombre: string; tamano: number }[]>;
-  modrinthBuscar(id: string, q: string, clase?: ClaseAddon): Promise<Addon[]>;
+  modrinthBuscar(id: string, q: string, clase?: ClaseAddon | "modpacks", pagina?: number): Promise<Addon[]>;
+  /** Modpack de Modrinth (.mrpack) en un servidor Fabric, Quilt, Forge o NeoForge. */
+  modpackInstalar?(id: string, proyecto: string): Promise<{ nombre: string; archivos: number }>;
   modrinthInstalar(id: string, proyecto: string, clase?: ClaseAddon): Promise<string>;
   instalarDesdeUrl(id: string, url: string, nombre: string, clase?: ClaseAddon): Promise<string>;
   quitarAddon(id: string, nombre: string, clase?: ClaseAddon): Promise<boolean>;

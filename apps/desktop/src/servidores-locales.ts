@@ -9,13 +9,14 @@
  * - Empaquetar y subir a tu Pterodactyl ("Pasar a mi VPS").
  */
 import { spawn, execFile, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { networkInterfaces, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
-import { agregarCarpeta, asegurarJava, descargar } from "./archivos-locales";
+import { agregarCarpeta, asegurarJava, descargar, tar } from "./archivos-locales";
 
 type Tipo = "paper" | "purpur" | "folia" | "fabric" | "quilt" | "forge" | "neoforge" | "mohist" | "arclight" | "vanilla" | "velocity" | "personalizado";
 type Estado = "detenido" | "iniciando" | "encendido" | "deteniendo";
@@ -540,16 +541,22 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     return Promise.all(nombres.map(async (n) => ({ nombre: n, tamano: (await stat(join(dir, n))).size })));
   });
 
-  manejar("srv:modrinthBuscar", async (id, q, clase) => {
+  /** Búsqueda en Modrinth con páginas de 24 (pagina 0, 1, 2…). clase "modpacks" busca modpacks del cargador del servidor. */
+  manejar("srv:modrinthBuscar", async (id, q, clase, pagina) => {
     const s = obtener(id);
-    const c = claseDe(s, clase);
-    const tipoProyecto = c === "plugins" ? "plugin" : "mod";
+    const esPack = clase === "modpacks";
+    const c = esPack ? "mods" : claseDe(s, clase);
+    const tipoProyecto = esPack ? "modpack" : c === "plugins" ? "plugin" : "mod";
     const mc = mcDe(s);
-    const facets = [[`project_type:${tipoProyecto}`], cargadores(s, c).map((x) => `categories:${x}`), ...(mc ? [[`versions:${mc}`]] : [])];
+    const cargs = esPack ? [MODS[s.tipo] ?? ""].filter(Boolean) : cargadores(s, c);
+    if (esPack && !cargs.length) throw new Error("Los modpacks son para servidores Fabric, Quilt, Forge o NeoForge");
+    const facets = [[`project_type:${tipoProyecto}`], cargs.map((x) => `categories:${x}`), ...(mc ? [[`versions:${mc}`]] : [])];
+    const n = typeof pagina === "number" && pagina >= 0 && pagina < 400 ? Math.floor(pagina) : 0;
     const url = new URL("https://api.modrinth.com/v2/search");
     url.searchParams.set("query", typeof q === "string" ? q.slice(0, 100) : "");
     url.searchParams.set("facets", JSON.stringify(facets));
     url.searchParams.set("limit", "24");
+    url.searchParams.set("offset", String(n * 24));
     url.searchParams.set("index", q ? "relevance" : "downloads");
     const d = await json<{ hits: { project_id: string; title: string; description: string; icon_url: string | null; downloads: number; author: string; slug: string }[] }>(url.toString());
     return d.hits.map((h) => ({ id: h.project_id, titulo: h.title, descripcion: h.description, icono: h.icon_url, descargas: h.downloads, autor: h.author, url: `https://modrinth.com/${tipoProyecto}/${h.slug}` }));
@@ -570,6 +577,75 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     await descargar(archivo.url, join(dir, nombre), (p) => progreso(`Bajando ${nombre}… ${p}%`));
     progreso("Listo");
     return nombre;
+  });
+
+  /**
+   * Modpack de Modrinth (.mrpack): baja los mods que usa el servidor (verifica
+   * su sha1) y copia overrides/ y server-overrides/. Solo descarga de los
+   * dominios que permite el formato .mrpack y nunca escribe fuera de la carpeta.
+   */
+  manejar("srv:modpackInstalar", async (id, proyecto) => {
+    const s = obtener(id);
+    if (typeof proyecto !== "string" || !/^[\w-]{4,40}$/.test(proyecto)) throw new Error("Modpack inválido");
+    const cargador = MODS[s.tipo];
+    if (!cargador) throw new Error("Los modpacks son para servidores Fabric, Quilt, Forge o NeoForge");
+    if (vivos.get(s.id)?.proceso.exitCode === null) throw new Error("Apaga el servidor antes de instalar el modpack");
+    const mc = mcDe(s);
+    const vers = await json<{ name: string; files: { url: string; filename: string; primary: boolean }[] }[]>(
+      `https://api.modrinth.com/v2/project/${proyecto}/version?loaders=${encodeURIComponent(JSON.stringify([cargador]))}${mc ? `&game_versions=${encodeURIComponent(JSON.stringify([mc]))}` : ""}`,
+    );
+    const version = vers[0];
+    const archivo = version?.files.find((f) => f.filename.endsWith(".mrpack")) ?? version?.files.find((f) => f.primary);
+    if (!version || !archivo) throw new Error(`Ese modpack no tiene versión para ${cargador} ${mc || s.version}. Crea un servidor con la versión que pide el modpack.`);
+    const tmp = join(tmpdir(), `misetup-pack-${s.id}`);
+    await rm(tmp, { recursive: true, force: true });
+    await mkdir(tmp, { recursive: true });
+    try {
+      const zip = join(tmp, "pack.zip");
+      await descargar(archivo.url, zip, (p) => progreso(`Bajando el modpack… ${p}%`));
+      const extraido = join(tmp, "x");
+      await mkdir(extraido);
+      await tar(["-x", "-f", zip, "-C", extraido]);
+      const indice = JSON.parse(await readFile(join(extraido, "modrinth.index.json"), "utf8")) as {
+        files?: { path: string; hashes?: { sha1?: string }; env?: { server?: string }; downloads?: string[] }[];
+        dependencies?: Record<string, string>;
+      };
+      const mcPack = indice.dependencies?.["minecraft"];
+      if (mcPack && mc && mcPack !== mc) throw new Error(`El modpack es para Minecraft ${mcPack} y tu servidor es ${mc}. Crea uno con esa versión.`);
+      const base = resolve(s.carpeta);
+      const destinoSeguro = (ruta: string): string => {
+        const final = resolve(base, normalize(ruta).replace(/^[/\\]+/, ""));
+        const rel = relative(base, final);
+        if (!rel || rel.startsWith("..") || isAbsolute(rel)) throw new Error(`Ruta no permitida en el modpack: ${ruta}`);
+        return final;
+      };
+      const archivos = (indice.files ?? []).filter((f) => f.env?.server !== "unsupported");
+      let hechos = 0;
+      for (const f of archivos) {
+        const url = (f.downloads ?? []).find((u) => /^https:\/\/(cdn\.modrinth\.com|github\.com|raw\.githubusercontent\.com|gitlab\.com)\//.test(u));
+        if (!url) continue;
+        const destino = destinoSeguro(f.path);
+        await mkdir(dirname(destino), { recursive: true });
+        await descargar(url, destino, () => undefined);
+        if (f.hashes?.sha1) {
+          const sha1 = createHash("sha1").update(await readFile(destino)).digest("hex");
+          if (sha1 !== f.hashes.sha1) {
+            await rm(destino, { force: true });
+            throw new Error(`El archivo ${f.path} no coincide con el del modpack (se canceló)`);
+          }
+        }
+        hechos++;
+        progreso(`Instalando el modpack… ${hechos}/${archivos.length}`);
+      }
+      for (const carpeta of ["overrides", "server-overrides"]) {
+        const origen = join(extraido, carpeta);
+        if (existsSync(origen)) await cp(origen, base, { recursive: true, force: true });
+      }
+      progreso("Listo");
+      return { nombre: version.name, archivos: hechos };
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 
   // CurseForge: la app consulta la API desde tu servidor (con su clave) y aquí solo se baja el archivo.
