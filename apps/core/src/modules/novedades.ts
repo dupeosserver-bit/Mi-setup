@@ -444,7 +444,8 @@ export function novedadesRoutes(deps: ModuleDeps) {
       type Spy = Record<string, { appid: number; name: string; positive: number; negative: number; ccu: number; price?: string; owners?: string }>;
       const spy = (url: string) => conCache(`steamspy:${url}`, 6 * 60 * 60_000, () => pedirJson<Spy>("SteamSpy", url));
       let lista: Spy[string][];
-      if (q.tipo === "populares") lista = Object.values(await spy("https://steamspy.com/api.php?request=top100in2weeks"));
+      // Ojo: las llaves numéricas hacen que Object.values salga ordenado por appid; hay que ordenar siempre.
+      if (q.tipo === "populares") lista = Object.values(await spy("https://steamspy.com/api.php?request=top100in2weeks")).sort((a, b) => b.positive + b.negative - (a.positive + a.negative));
       else if (q.tipo === "mas-jugados") lista = Object.values(await spy("https://steamspy.com/api.php?request=top100in2weeks")).sort((a, b) => b.ccu - a.ccu);
       else if (q.tipo === "mejor-valorados") {
         lista = Object.values(await spy("https://steamspy.com/api.php?request=top100forever"))

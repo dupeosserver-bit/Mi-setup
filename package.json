@@ -2,7 +2,7 @@
   "name": "mi-setup",
   "private": true,
   "type": "module",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "etapa": "b",
   "description": "Mi Setup — app personal PC + celular para operar MexicanLand",
   "packageManager": "pnpm@9.15.9",

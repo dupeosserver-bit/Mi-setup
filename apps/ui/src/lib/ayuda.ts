@@ -15,14 +15,13 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   finanzas_personales: {
     pasos: [
-      "Anota tus gastos e ingresos con categoría; arriba ves cuánto llevas en el mes y en qué se va.",
-      "En 'Presupuestos' pones un límite por categoría y la barra te avisa cuando te acercas.",
-      "En 'Suscripciones' anotas Netflix, Spotify, el VPS…: te avisa antes de que te cobren.",
-      "'Importar' sube tu archivo .xlsx o .csv y lo convierte en movimientos; 'Exportar' te da un Excel cuando quieras.",
-      "En el concepto escribe lo que quieras (ej. «Préstamo Coppel»): lo que ya usaste te sale como sugerencia.",
-      "En 'Tarjetas' guardas tus tarjetas (solo apodo y últimos 4 dígitos) y «Pagar» anota el gasto con esa tarjeta, después de avisarte lo que va a pasar. Ahí también creas tarjetas de prueba para probar tus páginas.",
+      "Anota tus gastos e ingresos; el concepto lo escribes como quieras (ej. «Préstamo Coppel»).",
+      "«Gasto con ticket»: tómale foto al ticket, la IA lee tienda, total e IVA; revisas y se guarda con la foto.",
+      "«Pagos divididos»: divide Netflix, la renta o lo que sea entre varias personas. Cada quien tiene su lista; marcas lo que pagan y lo vencido queda en «Debe». «Mandarle su lista» la comparte por WhatsApp y «Mensaje para cobrar» lo redacta la IA.",
+      "«Impuestos»: calculadora de IVA, ISR de sueldo y RESICO, y el IVA que pagaste este mes según tus tickets.",
+      "Suscripciones te avisa antes de cada cobro; Excel importa y exporta tus movimientos.",
     ],
-    nota: "Mi Setup no cobra dinero real: la billetera solo registra tus gastos y nunca guarda el número completo de una tarjeta.",
+    nota: "Los impuestos son una guía rápida: para declarar, confírmalo con el SAT o tu contador.",
   },
   portapapeles: {
     pasos: ["Copia algo en la PC y toca 'Enviar lo que copié': aparece al momento en tu celular, y al revés.", "Toca un elemento para copiarlo; se guardan los últimos 50."],
@@ -37,20 +36,20 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   vps_seguridad: {
     pasos: [
-      "Elige el servidor (tu VPS o tu home lab) y toca 'Revisar': te da una calificación y te explica cada punto.",
-      "Firewall: abre o cierra puertos con un botón (siempre deja abierto el de SSH para no quedarte fuera).",
-      "Fail2ban bloquea a quien intenta adivinar contraseñas; las actualizaciones automáticas instalan parches de seguridad solas.",
-      "Todo pide confirmar y tu contraseña o huella.",
+      "Elige el servidor y mira su calificación: firewall, fail2ban, actualizaciones, SSH, puertos, swap, disco, logs y alertas.",
+      "Cada punto en amarillo o rojo tiene su botón: crear swap, protección contra cuelgues (earlyoom), limitar logs, SSH solo con llave…",
+      "«Alertas de entrada por SSH»: te llega un aviso cada vez que alguien entra al servidor.",
+      "«Pedir ayuda a la IA» le pasa la revisión para que te explique y proponga comandos (que tú apruebas).",
     ],
-    nota: "Para tu home lab: agrégalo en Terminal como cualquier servidor (si está en tu casa, usa Tailscale para no abrir puertos del módem).",
+    nota: "Todo pide confirmar con el nombre del servidor y tu contraseña o huella.",
   },
   ciberseguridad: {
     pasos: [
-      "Revisa tu página web: certificado HTTPS, encabezados de seguridad y configuración del dominio.",
-      "'¿Se filtró mi contraseña?' revisa si apareció en filtraciones; tu contraseña nunca sale completa de tu equipo.",
-      "En 'Aprender' hay lecciones cortas y un cuaderno para tus prácticas.",
+      "Sitios y contraseñas: revisa tu página, si una contraseña se filtró, y «Revisar mis contraseñas» del gestor.",
+      "Mi cuenta: dónde tienes la sesión abierta (cierra las que no reconozcas) y tus entradas recientes; avisa si entran desde un lugar nuevo.",
+      "Correos de Google: conecta una o varias cuentas de Gmail; revisa si tus correos salieron en filtraciones, cuáles correos son peligrosos y escribe correos revisando antes si mandas algo delicado.",
     ],
-    nota: "Usa estas herramientas solo con tus propios servidores y páginas: revisar los de otros sin permiso es ilegal.",
+    nota: "Usa estas herramientas solo con tus propias cuentas y páginas.",
   },
   streamer: {
     pasos: ["Escribe tu canal de Twitch y de Kick: ves los dos chats juntos en una sola pantalla.", "Arriba tienes accesos rápidos a cambiar título y categoría (en Streams)."],
@@ -112,10 +111,9 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   ia_creativa: {
     pasos: [
-      "Prompts: guarda tus prompts favoritos como plantillas con espacios {así} para rellenar, y úsalos con un toque.",
-      "Crear imágenes (Nano Banana): describe la imagen o sube hasta 3 fotos para editarlas o combinarlas. Necesita la clave GEMINI_API_KEY.",
-      "Quitar fondo: sube una foto y te deja solo la persona u objeto (en tu equipo, gratis).",
-      "Resumir y traducir: pega un texto, sube un PDF o pon un enlace.",
+      "Prompts guardados, crear imágenes (Gemini), quitar fondo y resumir o traducir.",
+      "«Detector de IA»: pega un texto y te dice qué tan probable es que lo haya escrito una IA y qué frases lo delatan.",
+      "«Hacer más natural»: reescribe tu texto para que suene como lo dirías tú, sin cambiar lo que dice.",
     ],
   },
   codigo: {
@@ -132,7 +130,8 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     pasos: [
       "En la app de Windows toca «Crear servidor»: elige Paper, Purpur o Folia (plugins); Fabric, Quilt, Forge o NeoForge (mods); Mohist o Arclight (mods y plugins juntos); Vanilla, Velocity (proxy) u «Otro juego». Mi Setup baja el servidor y el Java correcto.",
       "Enciende y mira la consola en vivo; escribe comandos abajo (op TuNombre, gamemode…). Apagar guarda el mundo.",
-      "Mods/Plugins: búscalos en Modrinth (o CurseForge si pusiste su clave) e instálalos con un toque.",
+      "Mods/Plugins: búscalos en Modrinth (o CurseForge si pusiste su clave) con páginas 1, 2, 3… e instálalos con un toque. En servidores Fabric, Quilt, Forge o NeoForge la pestaña «Modpacks» instala un modpack completo (apaga el servidor antes).",
+      "Ajustes: además de lo principal, «Todos los ajustes de server.properties» te deja cambiar o agregar cualquiera.",
       "Compartir: playit.gg te da una dirección para que tus amigos entren sin abrir puertos del módem. En tu casa entran con la IP local.",
       "Pasar a mi VPS: comprime el servidor (o solo el mundo) y lo sube a un servidor de tu Pterodactyl.",
     ],
@@ -197,10 +196,11 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   notas: {
     pasos: [
-      "Toca 'Nueva nota', escribe y se guarda sola. Fija las importantes y usa la búsqueda.",
-      "Escribe con estilo de Discord: **negrita**, *cursiva*, __subrayado__, ~~tachado~~, ||spoiler|| (se esconde hasta tocarlo), # título, > cita, -# letra pequeña.",
-      "Arriba del texto: foto (o pégala o arrástrala), archivo, dibujo a mano y el color de la nota.",
-      "Se sincronizan al momento entre PC y celular.",
+      "Toca 'Nueva', escribe y se guarda sola. Estilo Discord: **negrita**, __subrayado__, ||spoiler||, # título, -# pequeño.",
+      "Arriba del texto: foto, archivo, dibujo, nota de voz (micrófono) y dictado (las ondas): lo que dices se va escribiendo.",
+      "«Compartir»: mándala por el chat, compártela con otras apps (Claude, Gemini, WhatsApp… con sus fotos) o crea un enlace para verla sin cuenta.",
+      "En «Adjuntos» guardas cada foto o archivo en este dispositivo (o todos de una vez).",
+      "«Tablero de tareas»: toca una tarea para editarla, moverla o borrarla; la casilla la marca como hecha.",
     ],
   },
   equipos: {
@@ -213,10 +213,10 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   chat: {
     pasos: [
-      "'Mis dispositivos' es un chat contigo mismo para pasar textos y enlaces entre PC y celular.",
-      "Privado: toca 'Privado' y elige otra cuenta para hablar solo con ella.",
-      "Grupo: toca 'Grupo', ponle nombre y elige quién entra. En 'Opciones del grupo' puedes renombrarlo, agregar personas o salirte.",
-      "Escribe y presiona Enter; también puedes convertir un mensaje en recordatorio.",
+      "'Mis dispositivos' es un chat contigo mismo para pasar cosas entre PC y celular; también hay privados y grupos.",
+      "El clip manda fotos y archivos; el botón de código manda código con letra de código y botón de copiar.",
+      "Con la caja vacía, el micrófono graba una nota de voz: tócalo otra vez para enviarla.",
+      "En la PC pasa el mouse sobre tu mensaje para borrarlo. Las notas compartidas llegan con su enlace.",
     ],
   },
   vps_terminal: {
@@ -247,11 +247,12 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   vps_archivos: {
     pasos: [
-      "Elige un servidor para navegar sus carpetas por SFTP.",
-      "'Subir aquí' sube uno o varios archivos a la carpeta abierta; 'Carpeta' crea una nueva.",
-      "En cada fila: descargar, renombrar (lápiz) o borrar (bote). Borrar una carpeta pide escribir su nombre y tu contraseña o huella.",
+      "Elige un servidor para navegar sus carpetas. La lupa busca archivos y carpetas por nombre debajo de donde estás.",
+      "«Organizar» propone mover cada archivo suelto a una carpeta por tipo (.sh → scripts, .blueprint → blueprints…); usa la carpeta si existe o la crea. Tú eliges cuáles.",
+      "«Limpiar basura» busca temporales, respaldos de editores, logs viejos y cachés; borras solo lo que marques.",
+      "Subir, descargar, renombrar, borrar y enviar a otro servidor como siempre.",
     ],
-    nota: "Las carpetas del sistema (/, /root, /etc, /var, /opt/mi-setup…) no se pueden borrar ni mover desde aquí.",
+    nota: "Nunca se mueven archivos de configuración ni ocultos, y las carpetas del sistema no se tocan.",
   },
   vps_bots: {
     pasos: ["Registra cada bot de Discord que corre en tu VPS (servicio, proceso o contenedor).", "Ves si está encendido y puedes reiniciarlo con un toque."],
@@ -277,18 +278,18 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   respaldos: {
     pasos: [
-      "Arriba, «Crear respaldo» (solo cuenta maestra): elige una carpeta del VPS, todo Pterodactyl, la base de Mi Setup, el VPS completo o un servidor de juego.",
-      "Los respaldos del VPS siguen en segundo plano aunque cierres la app; los ves aparecer abajo con su tamaño y puedes descargarlos o borrarlos.",
-      "También ves la base de datos que respalda el script cada día y puedes descargar tus datos personales.",
+      "«Crear respaldo» (cuenta maestra): una carpeta, todo Pterodactyl, la base de Mi Setup, el VPS completo o un servidor de juego.",
+      "Restaurar (flecha circular): «aparte» lo saca en /opt/mi-setup/restaurados sin tocar nada; «en su lugar» lo pone donde estaba (escribe RESTAURAR). La base guarda antes un respaldo de cómo está.",
+      "«Respaldos automáticos»: elige qué, cada día o cada semana, la hora y cuántos guardar; los viejos se borran solos.",
     ],
     nota: "Un respaldo en el mismo VPS no te salva si el VPS se pierde: descarga los importantes a tu PC.",
   },
   boveda: {
     pasos: [
       "La primera vez crea tu bóveda con UNA clave maestra (no se puede recuperar si la olvidas).",
-      "Dentro, 'Nuevo' guarda usuario, contraseña y sitio; todo se cifra en tu dispositivo.",
-      "La pestaña Generador crea contraseñas con letras, números y símbolos (no necesitas abrir la bóveda).",
-      "Historial guarda cifradas las últimas 10 contraseñas que copiaste o usaste del generador.",
+      "«Abrir con huella» (celular) o «Abrir con PIN» (PC): actívalo una vez y ya no escribes la clave maestra en ese dispositivo.",
+      "«Revisar» busca contraseñas filtradas, repetidas o débiles y te ayuda a cambiarlas.",
+      "En el celular, «Autocompletar en otras apps»: elige Mi Setup en Android y tus contraseñas se rellenan con tu huella, como Samsung Pass.",
     ],
     nota: "Exporta un respaldo cifrado de vez en cuando (botón Exportar).",
   },
@@ -310,8 +311,8 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   cuentas: {
     pasos: [
-      "Crea cuentas para otras personas y dales permisos por apartado (Ver, Editar, Administrar).",
-      "En Roles crea grupos tipo Discord (Fundador, Dev…) con color y permisos, y asígnalos.",
+      "Crea cuentas para otras personas y dales permisos por apartado (Ver, Editar, Administrar) o con roles.",
+      "«Claves de los servicios»: decide si la persona usa tus claves (IA, Gemini…) o las suyas, y si puede ver Servicios y claves (sin secretos).",
       "Desactivar una cuenta la saca al momento de todos sus dispositivos.",
     ],
   },
@@ -337,9 +338,11 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   novedades: {
     pasos: [
-      "Clima: toca 'Usar mi ubicación' o busca tu ciudad; activa 'tiempo real' para que la detecte cada vez.",
-      "Ofertas: busca un juego en tiendas oficiales y de claves; Juegos gratis muestra regalos de Epic, Steam y más.",
-      "Precios (RAM): pega la URL del producto y el selector del precio que pagas; te avisa si cambia.",
+      "Clima: hora por hora, mañana contra hoy, sol y UV.",
+      "Noticias: «Populares» primero (por tema) y «Mis fuentes» con sugeridas para agregar con un toque.",
+      "Compras: escribe o tómale foto a algo y ves dónde comprarlo (Mercado Libre aquí mismo y muchas tiendas).",
+      "Ofertas en tu moneda y Steam por región; Steam con populares, con más gente, mejor valorados y «Para ti» según tus géneros.",
+      "Vigilar precios funciona con Mercado Libre, Amazon, Coppel, Liverpool, Walmart y casi cualquier tienda.",
     ],
   },
   noticias: {
@@ -358,23 +361,24 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   control_remoto: {
     pasos: [
-      "Configura RustDesk en cada equipo con tu servidor (pasos abajo en la página).",
-      "Agrega tu PC con su ID y contraseña permanente.",
-      "'Conectar' pide tu huella o contraseña, copia la contraseña y abre RustDesk.",
+      "Lo más fácil: Escritorio remoto de Chrome (oficial de Google). Prepara tu PC, instala la app en el celular y entra con tu PIN.",
+      "Con tu propio servidor: configura RustDesk en cada equipo, agrega tu PC con su ID y toca «Conectar».",
     ],
   },
   ia: {
     pasos: [
-      "Escribe o dicta (micrófono) lo que necesitas; puedes adjuntar fotos, PDF o archivos de texto.",
-      "La IA solo propone acciones: nada se hace hasta que tocas Aprobar.",
-      "Elige el modelo abajo del chat; en Ajustes → Voz e IA eliges la voz y si lee las respuestas.",
+      "Escribe o dicta lo que necesitas; puedes adjuntar fotos, PDF o archivos. La IA solo propone: nada se hace hasta que tocas Aprobar.",
+      "«Deudas y negociaciones»: cuéntale qué pasa (debes, te deben o quieres negociar) y te da tus derechos, un plan y el mensaje listo para mandar.",
+      "Elige el modelo abajo del chat; en Ajustes → Mis claves puedes usar tu propia clave de Claude.",
     ],
+    nota: "Lo legal es orientación de la IA: confírmalo con CONDUSEF, PROFECO o un abogado.",
   },
   ajustes: {
     pasos: [
-      "Cuenta: tu nombre, foto y contraseña. Apariencia: tema, fuente y zoom.",
-      "Terminal: tema y letra de la terminal. Voz e IA: modelo y voz del asistente.",
-      "Servicios y claves (cuenta maestra): pon aquí las claves de API sin tocar el servidor.",
+      "Cuenta: nombre, foto, contraseña y tus servidores de Mi Setup (cambia entre ellos sin volver a entrar).",
+      "Apariencia: tema, fondo (y uno para la PC), cómo se acomoda la imagen y los botones flotantes del celular.",
+      "Mis claves: pon tus propias claves de IA, Gemini, TMDB o CurseForge y decide si las compartes (con aviso).",
+      "Servicios y claves (cuenta maestra o con permiso): las claves de API del servidor.",
     ],
   },
 };

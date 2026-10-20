@@ -27,13 +27,13 @@ const SCRIPT_AUDITORIA = [
   'echo "##upgrades"; grep -c "Unattended-Upgrade \\"1\\"" /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || echo 0',
   'echo "##pendientes"; apt list --upgradable 2>/dev/null | grep -c upgradable',
   'echo "##reinicio"; if [ -f /var/run/reboot-required ]; then echo si; else echo no; fi',
-  "echo \"##puertos\"; ss -tulnH 2>/dev/null | awk '{print $1\" \"$5}'",
+  'echo "##puertos"; ss -tulnH 2>/dev/null | awk \'{print $1" "$5}\'',
   'echo "##tailscale"; if command -v tailscale >/dev/null; then tailscale ip -4 2>/dev/null | head -1; else echo no; fi',
   "echo \"##memoria\"; free -b | awk '/^Mem:/{print $2} /^Swap:/{print $2}'",
   "echo \"##disco\"; df -P / | tail -1 | awk '{print $5}' | tr -d %",
   'echo "##earlyoom"; systemctl is-active earlyoom 2>/dev/null || echo inactive',
   'echo "##journald"; if [ -f /etc/systemd/journald.conf.d/mi-setup.conf ]; then echo si; else echo no; fi',
-  "echo \"##dockerlogs\"; if ! command -v docker >/dev/null; then echo sin-docker; elif grep -q max-size /etc/docker/daemon.json 2>/dev/null; then echo si; else echo no; fi",
+  'echo "##dockerlogs"; if ! command -v docker >/dev/null; then echo sin-docker; elif grep -q max-size /etc/docker/daemon.json 2>/dev/null; then echo si; else echo no; fi',
   'echo "##alertas"; if grep -q mi-setup-aviso-entrada /etc/pam.d/sshd 2>/dev/null; then echo si; else echo no; fi',
   'echo "##fallidos"; ($S journalctl -u ssh -u sshd --since "24 hours ago" --no-pager 2>/dev/null || $S cat /var/log/auth.log 2>/dev/null) | grep -cE "Failed password|Invalid user"',
 ].join("\n");
@@ -44,7 +44,17 @@ export interface Punto {
   titulo: string;
   estado: Estado;
   detalle: string;
-  accion?: "firewall_activar" | "fail2ban_instalar" | "actualizaciones_auto" | "actualizar" | "swap_crear" | "earlyoom_instalar" | "journald_limitar" | "docker_logs" | "alertas_ssh" | "ssh_solo_llave";
+  accion?:
+    | "firewall_activar"
+    | "fail2ban_instalar"
+    | "actualizaciones_auto"
+    | "actualizar"
+    | "swap_crear"
+    | "earlyoom_instalar"
+    | "journald_limitar"
+    | "docker_logs"
+    | "alertas_ssh"
+    | "ssh_solo_llave";
 }
 export interface Auditoria {
   sistema: string;
@@ -108,13 +118,25 @@ export function interpretarAuditoria(salida: string, puertoConexion: number, con
 
   const puntos: Punto[] = [
     !instalado
-      ? { id: "firewall", titulo: "Firewall (ufw)", estado: "mal", detalle: "No está instalado. El botón lo instala y lo enciende dejando abierto SSH.", accion: "firewall_activar" }
+      ? {
+          id: "firewall",
+          titulo: "Firewall (ufw)",
+          estado: "mal",
+          detalle: "No está instalado. El botón lo instala y lo enciende dejando abierto SSH.",
+          accion: "firewall_activar",
+        }
       : activo
         ? { id: "firewall", titulo: "Firewall (ufw)", estado: "ok", detalle: `Activo con ${reglas.length} regla(s).` }
         : { id: "firewall", titulo: "Firewall (ufw)", estado: "mal", detalle: "Está apagado: cualquier puerto abierto queda expuesto a internet.", accion: "firewall_activar" },
     f2bActivo
       ? { id: "fail2ban", titulo: "Fail2ban (bloquea a quien adivina contraseñas)", estado: "ok", detalle: baneados ? `Activo. Ha bloqueado ${baneados} IP(s).` : "Activo." }
-      : { id: "fail2ban", titulo: "Fail2ban (bloquea a quien adivina contraseñas)", estado: "aviso", detalle: "No está activo. Bots de todo el mundo intentan entrar por SSH a diario.", accion: "fail2ban_instalar" },
+      : {
+          id: "fail2ban",
+          titulo: "Fail2ban (bloquea a quien adivina contraseñas)",
+          estado: "aviso",
+          detalle: "No está activo. Bots de todo el mundo intentan entrar por SSH a diario.",
+          accion: "fail2ban_instalar",
+        },
     {
       id: "root",
       titulo: "Entrar como root por SSH",
@@ -128,54 +150,135 @@ export function interpretarAuditoria(salida: string, puertoConexion: number, con
       id: "password",
       titulo: "Entrar con contraseña",
       estado: conPassword === "yes" ? "aviso" : "ok",
-      detalle: conPassword === "yes" ? "Se puede entrar con contraseña. Más seguro: solo llaves SSH (PasswordAuthentication no), después de probar que tu llave funciona." : "Solo con llave SSH. ¡Bien!",
+      detalle:
+        conPassword === "yes"
+          ? "Se puede entrar con contraseña. Más seguro: solo llaves SSH (PasswordAuthentication no), después de probar que tu llave funciona."
+          : "Solo con llave SSH. ¡Bien!",
     },
     autoUpd
       ? { id: "auto", titulo: "Actualizaciones de seguridad automáticas", estado: "ok", detalle: "Activadas." }
-      : { id: "auto", titulo: "Actualizaciones de seguridad automáticas", estado: "aviso", detalle: "Apagadas: los parches de seguridad no se instalan solos.", accion: "actualizaciones_auto" },
+      : {
+          id: "auto",
+          titulo: "Actualizaciones de seguridad automáticas",
+          estado: "aviso",
+          detalle: "Apagadas: los parches de seguridad no se instalan solos.",
+          accion: "actualizaciones_auto",
+        },
     pendientes > 0
-      ? { id: "pendientes", titulo: "Actualizaciones pendientes", estado: pendientes > 20 ? "mal" : "aviso", detalle: `${pendientes} paquete(s) por actualizar.`, accion: "actualizar" }
+      ? {
+          id: "pendientes",
+          titulo: "Actualizaciones pendientes",
+          estado: pendientes > 20 ? "mal" : "aviso",
+          detalle: `${pendientes} paquete(s) por actualizar.`,
+          accion: "actualizar",
+        }
       : { id: "pendientes", titulo: "Actualizaciones pendientes", estado: "ok", detalle: "Todo al día." },
-    { id: "reinicio", titulo: "Reinicio pendiente", estado: reinicio ? "aviso" : "ok", detalle: reinicio ? "Hay actualizaciones que necesitan reiniciar el servidor (hazlo cuando no haya nadie jugando)." : "No hace falta." },
+    {
+      id: "reinicio",
+      titulo: "Reinicio pendiente",
+      estado: reinicio ? "aviso" : "ok",
+      detalle: reinicio ? "Hay actualizaciones que necesitan reiniciar el servidor (hazlo cuando no haya nadie jugando)." : "No hace falta.",
+    },
     {
       id: "puertos",
       titulo: "Puertos abiertos a internet",
       estado: publicos.length > 12 ? "aviso" : "ok",
       detalle: publicos.length ? `${publicos.length}: ${publicos.map((p) => `${p.puerto}/${p.proto}`).join(", ")}` : "Ninguno además de lo básico.",
     },
-    swap > 0
-      ? { id: "swap", titulo: "Memoria de respaldo (swap)", estado: "ok", detalle: `${gb(swap)} de swap con ${gb(ram)} de RAM.` }
-      : { id: "swap", titulo: "Memoria de respaldo (swap)", estado: "aviso", detalle: `Sin swap: si la RAM (${gb(ram)}) se llena, el servidor se congela o se reinician tus servicios. El botón crea 2 GB.`, accion: "swap_crear" },
-    earlyoom
-      ? { id: "earlyoom", titulo: "Protección contra cuelgues (earlyoom)", estado: "ok", detalle: "Activa: si la memoria se acaba, cierra el programa que más gasta antes de que se congele todo (nunca SSH, Docker ni la base)." }
-      : { id: "earlyoom", titulo: "Protección contra cuelgues (earlyoom)", estado: "aviso", detalle: "Sin ella, un servidor de juego que se coma la RAM puede tumbar todo el VPS.", accion: "earlyoom_instalar" },
-    {
-      id: "disco",
-      titulo: "Espacio en disco",
-      estado: disco >= 90 ? "mal" : disco >= 80 ? "aviso" : "ok",
-      detalle: disco >= 80 ? `Usado al ${disco} %. Limpia basura (Archivos → Limpiar basura) o respaldos viejos.` : `Usado al ${disco} %.`,
-    },
-    journald
-      ? { id: "journald", titulo: "Tamaño de los registros del sistema", estado: "ok", detalle: "Limitados a 500 MB." }
-      : { id: "journald", titulo: "Tamaño de los registros del sistema", estado: "aviso", detalle: "Sin límite: con el tiempo llenan el disco.", accion: "journald_limitar" },
+    ...(s["memoria"]
+      ? ([
+          swap > 0
+            ? { id: "swap", titulo: "Memoria de respaldo (swap)", estado: "ok", detalle: `${gb(swap)} de swap con ${gb(ram)} de RAM.` }
+            : {
+                id: "swap",
+                titulo: "Memoria de respaldo (swap)",
+                estado: "aviso",
+                detalle: `Sin swap: si la RAM (${gb(ram)}) se llena, el servidor se congela o se reinician tus servicios. El botón crea 2 GB.`,
+                accion: "swap_crear",
+              },
+        ] as Punto[])
+      : []),
+    ...(s["earlyoom"]
+      ? ([
+          earlyoom
+            ? {
+                id: "earlyoom",
+                titulo: "Protección contra cuelgues (earlyoom)",
+                estado: "ok",
+                detalle: "Activa: si la memoria se acaba, cierra el programa que más gasta antes de que se congele todo (nunca SSH, Docker ni la base).",
+              }
+            : {
+                id: "earlyoom",
+                titulo: "Protección contra cuelgues (earlyoom)",
+                estado: "aviso",
+                detalle: "Sin ella, un servidor de juego que se coma la RAM puede tumbar todo el VPS.",
+                accion: "earlyoom_instalar",
+              },
+        ] as Punto[])
+      : []),
+    ...(s["disco"]
+      ? ([
+          {
+            id: "disco",
+            titulo: "Espacio en disco",
+            estado: disco >= 90 ? "mal" : disco >= 80 ? "aviso" : "ok",
+            detalle: disco >= 80 ? `Usado al ${disco} %. Limpia basura (Archivos → Limpiar basura) o respaldos viejos.` : `Usado al ${disco} %.`,
+          },
+        ] as Punto[])
+      : []),
+    ...(s["journald"]
+      ? ([
+          journald
+            ? { id: "journald", titulo: "Tamaño de los registros del sistema", estado: "ok", detalle: "Limitados a 500 MB." }
+            : { id: "journald", titulo: "Tamaño de los registros del sistema", estado: "aviso", detalle: "Sin límite: con el tiempo llenan el disco.", accion: "journald_limitar" },
+        ] as Punto[])
+      : []),
     ...(dockerLogs === "sin-docker"
       ? []
       : [
           dockerLogs === "si"
             ? ({ id: "dockerlogs", titulo: "Registros de Docker", estado: "ok", detalle: "Con tamaño máximo." } as Punto)
-            : ({ id: "dockerlogs", titulo: "Registros de Docker", estado: "aviso", detalle: "Los contenedores guardan registros sin límite y pueden llenar el disco.", accion: "docker_logs" } as Punto),
+            : ({
+                id: "dockerlogs",
+                titulo: "Registros de Docker",
+                estado: "aviso",
+                detalle: "Los contenedores guardan registros sin límite y pueden llenar el disco.",
+                accion: "docker_logs",
+              } as Punto),
         ]),
-    alertas
-      ? { id: "alertas", titulo: "Alertas de entrada por SSH", estado: "ok", detalle: "Te llega un aviso cada vez que alguien entra a este servidor." }
-      : { id: "alertas", titulo: "Alertas de entrada por SSH", estado: "aviso", detalle: "Activa el aviso para enterarte al momento si alguien entra (aunque tenga tu contraseña).", accion: "alertas_ssh" },
-    {
-      id: "fallidos",
-      titulo: "Intentos de entrar (últimas 24 h)",
-      estado: fallidos > 50 && !f2bActivo ? "aviso" : "ok",
-      detalle: fallidos ? `${fallidos} intento(s) fallido(s) por SSH.${f2bActivo ? " Fail2ban los va bloqueando." : " Activa fail2ban."}` : "Ninguno.",
-    },
+    ...(s["alertas"]
+      ? ([
+          alertas
+            ? { id: "alertas", titulo: "Alertas de entrada por SSH", estado: "ok", detalle: "Te llega un aviso cada vez que alguien entra a este servidor." }
+            : {
+                id: "alertas",
+                titulo: "Alertas de entrada por SSH",
+                estado: "aviso",
+                detalle: "Activa el aviso para enterarte al momento si alguien entra (aunque tenga tu contraseña).",
+                accion: "alertas_ssh",
+              },
+        ] as Punto[])
+      : []),
+    ...(s["fallidos"]
+      ? ([
+          {
+            id: "fallidos",
+            titulo: "Intentos de entrar (últimas 24 h)",
+            estado: fallidos > 50 && !f2bActivo ? "aviso" : "ok",
+            detalle: fallidos ? `${fallidos} intento(s) fallido(s) por SSH.${f2bActivo ? " Fail2ban los va bloqueando." : " Activa fail2ban."}` : "Ninguno.",
+          },
+        ] as Punto[])
+      : []),
     ...(conLlave && (conPassword === "yes" || rootLogin === "yes")
-      ? [{ id: "solollave", titulo: "SSH solo con llave", estado: "aviso", detalle: "Mi Setup entra con llave: puedes apagar la entrada con contraseña sin quedarte fuera.", accion: "ssh_solo_llave" } as Punto]
+      ? [
+          {
+            id: "solollave",
+            titulo: "SSH solo con llave",
+            estado: "aviso",
+            detalle: "Mi Setup entra con llave: puedes apagar la entrada con contraseña sin quedarte fuera.",
+            accion: "ssh_solo_llave",
+          } as Punto,
+        ]
       : []),
   ];
   const peso = { ok: 1, aviso: 0.5, mal: 0 } as const;
@@ -316,51 +419,47 @@ export function seguridadRoutes(deps: ModuleDeps, servidores: Servidores) {
       });
     });
 
-    app.post(
-      "/api/vps/servidores/:id/seguridad/accion",
-      { config: { acceso: { modulo: "vps_seguridad", nivel: "administrar", reauth: "fuerte" } } },
-      async (request) => {
-        const { id } = idParams.parse(request.params);
-        const d = accionSchema.parse(request.body);
-        const servidor = await servidores.obtener(id);
-        if (d.confirmacion !== servidor.name) throw new HttpError(400, `Escribe "${servidor.name}" para confirmar`, "doble_confirmacion");
-        const user = currentUser(request);
-        return servidores.usar(id, async (c) => {
-          const conLlave = servidor.authType === "llave";
-          const auditoria = interpretarAuditoria((await ejecutar(c, SCRIPT_AUDITORIA, { timeoutMs: 60_000 })).salida, servidor.port, conLlave);
-          let avisoEntrada: string | undefined;
-          if (d.accion === "alertas_ssh") {
-            // La IP con la que Mi Setup llega a este servidor (sus propias conexiones no avisan).
-            const propia = (await ejecutar(c, "echo $SSH_CLIENT", { timeoutMs: 10_000 })).salida.trim().split(/\s+/)[0] || null;
-            const token = randomBytes(24).toString("base64url");
-            await setSetting(deps.db, `alerta-entrada:${servidor.id}`, { hash: hashAlerta(token) }, deps.now());
-            avisoEntrada = scriptAvisoEntrada(`https://${deps.config.env.APP_HOST}/api/alertas/entrada/${servidor.id}`, token, propia);
-          }
-          const comandos = comandosDeAccion(d, servidor.username === "root", auditoria.puertoSsh, { conLlave, ...(avisoEntrada ? { avisoEntrada } : {}) });
-          const r = await ejecutar(c, comandos.join(" && "), { timeoutMs: d.accion === "actualizar" ? 15 * 60_000 : 5 * 60_000 });
-          await deps.audit.record({
-            actorType: "usuario",
-            actorUserId: user.id,
-            action: "seguridad_vps",
-            module: "vps_seguridad",
-            target: servidor.name,
-            outcome: r.codigo === 0 ? "ok" : "error",
-            details: { accion: d.accion, ...("puerto" in d ? { puerto: d.puerto, proto: d.proto } : {}), codigo: r.codigo },
-            ...clientInfo(request),
-          });
-          const sinSudo = /sudo: (a terminal|a password) is required/i.test(r.error);
-          return {
-            ok: r.codigo === 0,
-            salida: `${r.salida}\n${r.error}`.trim().slice(-4000),
-            aviso: sinSudo
-              ? "Tu usuario necesita sudo sin contraseña para esto (o conéctate como root)."
-              : d.accion === "docker_logs" && r.codigo === 0
-                ? "Se aplica a los contenedores nuevos o la próxima vez que reinicies Docker."
-                : null,
-          };
+    app.post("/api/vps/servidores/:id/seguridad/accion", { config: { acceso: { modulo: "vps_seguridad", nivel: "administrar", reauth: "fuerte" } } }, async (request) => {
+      const { id } = idParams.parse(request.params);
+      const d = accionSchema.parse(request.body);
+      const servidor = await servidores.obtener(id);
+      if (d.confirmacion !== servidor.name) throw new HttpError(400, `Escribe "${servidor.name}" para confirmar`, "doble_confirmacion");
+      const user = currentUser(request);
+      return servidores.usar(id, async (c) => {
+        const conLlave = servidor.authType === "llave";
+        const auditoria = interpretarAuditoria((await ejecutar(c, SCRIPT_AUDITORIA, { timeoutMs: 60_000 })).salida, servidor.port, conLlave);
+        let avisoEntrada: string | undefined;
+        if (d.accion === "alertas_ssh") {
+          // La IP con la que Mi Setup llega a este servidor (sus propias conexiones no avisan).
+          const propia = (await ejecutar(c, "echo $SSH_CLIENT", { timeoutMs: 10_000 })).salida.trim().split(/\s+/)[0] || null;
+          const token = randomBytes(24).toString("base64url");
+          await setSetting(deps.db, `alerta-entrada:${servidor.id}`, { hash: hashAlerta(token) }, deps.now());
+          avisoEntrada = scriptAvisoEntrada(`https://${deps.config.env.APP_HOST}/api/alertas/entrada/${servidor.id}`, token, propia);
+        }
+        const comandos = comandosDeAccion(d, servidor.username === "root", auditoria.puertoSsh, { conLlave, ...(avisoEntrada ? { avisoEntrada } : {}) });
+        const r = await ejecutar(c, comandos.join(" && "), { timeoutMs: d.accion === "actualizar" ? 15 * 60_000 : 5 * 60_000 });
+        await deps.audit.record({
+          actorType: "usuario",
+          actorUserId: user.id,
+          action: "seguridad_vps",
+          module: "vps_seguridad",
+          target: servidor.name,
+          outcome: r.codigo === 0 ? "ok" : "error",
+          details: { accion: d.accion, ...("puerto" in d ? { puerto: d.puerto, proto: d.proto } : {}), codigo: r.codigo },
+          ...clientInfo(request),
         });
-      },
-    );
+        const sinSudo = /sudo: (a terminal|a password) is required/i.test(r.error);
+        return {
+          ok: r.codigo === 0,
+          salida: `${r.salida}\n${r.error}`.trim().slice(-4000),
+          aviso: sinSudo
+            ? "Tu usuario necesita sudo sin contraseña para esto (o conéctate como root)."
+            : d.accion === "docker_logs" && r.codigo === 0
+              ? "Se aplica a los contenedores nuevos o la próxima vez que reinicies Docker."
+              : null,
+        };
+      });
+    });
 
     /** El servidor avisa que alguien entró por SSH (lo manda el script instalado con «alertas_ssh»). */
     const ultimos = new Map<string, number>();
@@ -380,7 +479,16 @@ export function seguridadRoutes(deps: ModuleDeps, servidores: Servidores) {
       if ((ultimos.get(clave) ?? 0) > ahora - 10 * 60_000) return { ok: true };
       ultimos.set(clave, ahora);
       const [maestra] = await deps.db.select({ id: users.id }).from(users).where(eq(users.role, "maestra")).limit(1);
-      await deps.audit.record({ actorType: "sistema", actorUserId: maestra?.id ?? null, action: "entrada_ssh", module: "vps_seguridad", target: servidor.name, outcome: "ok", ip: d.ip, details: { servidor: servidor.name, usuario: d.usuario } });
+      await deps.audit.record({
+        actorType: "sistema",
+        actorUserId: maestra?.id ?? null,
+        action: "entrada_ssh",
+        module: "vps_seguridad",
+        target: servidor.name,
+        outcome: "ok",
+        ip: d.ip,
+        details: { servidor: servidor.name, usuario: d.usuario },
+      });
       await deps.notifier.send({
         title: `Entraron a ${servidor.name} por SSH`,
         message: `Usuario: ${d.usuario}\nDesde: ${d.ip}\nSi no fuiste tú, cambia la contraseña y revisa Seguridad del servidor.`,

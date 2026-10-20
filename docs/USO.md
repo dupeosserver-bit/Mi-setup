@@ -460,3 +460,67 @@ Plantilla «Tienda de hosting»: planes editables, botón «Contratar», instruc
 ```bash
 tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans && docker compose --env-file /opt/mi-setup/.env restart caddy
 ```
+
+
+## Versión 0.11.0b
+
+### Menú más ordenado
+
+- **Bots de Discord**: «Crear y vender bots» y «Bots en mi VPS» son una sola entrada con pestañas.
+- **Negocio y cobros** (en Panel): clientes y cobros, vencimientos, gastos e ingresos e ideas de mejoras, en pestañas.
+- **Contraseñas y 2FA** (en Seguridad): gestor de contraseñas, autenticador y correos temporales.
+- **Respaldos** pasó a la sección VPS. Nuevo en VPS: **Agentes de IA**.
+- Se quitaron la **VPN** y las **tarjetas** de Mis finanzas. Si instalaste la VPN en el VPS, puedes quitarla con `systemctl disable --now wg-quick@wg0 mi-setup-wg-agent` (no afecta a nada más).
+
+### Mis finanzas
+
+- **Gasto con ticket**: foto del ticket → la IA lee tienda, total e IVA → revisas y se guarda con la foto.
+- **Pagos divididos**: Netflix, renta… entre varias personas, con su lista, «pagado», «debe» y mensaje para cobrar.
+- **Impuestos**: IVA (16 %, 8 %, 0 %), ISR de sueldo (tarifa del art. 96, 2025) y RESICO; IVA del mes según tus tickets. Es orientativo.
+
+### Notas y chat
+
+- Notas de voz, **dictado en vivo** (celular: reconocimiento de Android; navegador: Web Speech; PC: trozos de audio pasados a texto con Gemini, `GEMINI_API_KEY`).
+- **Compartir** una nota por el chat, con otras apps (con sus fotos) o con un enlace de solo lectura (`/n/…`, puede vencer).
+- Guardar adjuntos en el dispositivo (celular: Documentos/MiSetup).
+- **Chat**: fotos, archivos (hasta 25 MB), bloques de código y notas de voz; borrar tus mensajes.
+
+### Servidores, archivos y respaldos
+
+- Mods y plugins con **páginas**; **modpacks de Modrinth** (.mrpack) en Fabric/Quilt/Forge/NeoForge; editar **todo server.properties**. Reinstala el EXE para tenerlo.
+- Archivos del VPS: **buscar** por nombre, **organizar** por tipo y **limpiar basura**.
+- Respaldos: **restaurar** (aparte o en su lugar) y **automáticos** (diario o semanal, guarda los últimos N).
+
+### Seguridad
+
+- **Alertas de entrada**: aviso cuando entras desde un lugar nuevo (cuenta maestra) y, si lo activas por servidor, cada vez que alguien entra por SSH.
+- Seguridad del servidor: swap, earlyoom (contra cuelgues), límites de logs, SSH solo con llave y «Pedir ayuda a la IA».
+- Ciberseguridad: sesiones abiertas, entradas recientes, **cuentas de Gmail** (varias): filtraciones, correos peligrosos y enviar revisando antes.
+  - Activa la **Gmail API** en tu proyecto de Google (el mismo de YouTube) y agrega la URL de retorno `https://TU-DOMINIO/api/google/correo/callback`. Mientras la app esté en «Prueba», agrega tu correo como usuario de prueba (Google pide volver a conectar cada 7 días en ese modo).
+- Gestor de contraseñas: **abrir con huella (celular) o PIN (PC)**, **revisar** contraseñas filtradas/repetidas/débiles y **autocompletar** en otras apps de Android (como Samsung Pass).
+- **Agentes de IA** en el VPS: Claude Code, Gemini CLI, Aider, Llama/Qwen locales, Open WebUI, n8n, Flowise, AnythingLLM y Langflow con un botón; más en GitHub con ayuda de la IA.
+
+### Novedades e IA
+
+- Clima hora por hora; noticias **Populares** y fuentes sugeridas; compras con **foto** y muchas tiendas; ofertas en tu **moneda** y **Steam por región**; Steam populares/con más gente/mejor valorados/para ti; vigilar precios en más tiendas; **explorar** cripto y acciones por páginas (con la calificación de analistas, sin ser recomendación).
+- IA: **Deudas y negociaciones** (derechos en México, plan y mensaje humano), **detector de texto de IA** y **hacer más natural**.
+
+### Cuentas, claves y código abierto
+
+- Cada persona puede poner **sus propias claves** (Ajustes → Mis claves) y compartirlas con aviso. La cuenta maestra decide por persona si usa las del servidor y si puede ver Servicios y claves.
+- Las apps recuerdan **varios servidores** de Mi Setup con su sesión.
+- El proyecto queda listo para publicarse como **código abierto** (licencia MIT, `README.md`, `CONTRIBUTING.md`, `.env.example` completo). Nadie recibe tus claves: cada instalación pone las suyas.
+
+### Arreglos
+
+- El fondo de pantalla se **adapta** (en PC ya no se corta) y puedes poner uno para la PC.
+- Los botones flotantes del celular se **esconden al escribir**, se pueden **mover** y apagar (Ajustes → Apariencia).
+- Tablero de tareas: tocar una tarea abre sus opciones; en PC se arrastra entre columnas.
+- Control remoto: opción oficial **Escritorio remoto de Chrome**.
+- Sitios: se acomodan solos en el celular; al **borrar** un sitio se borra su DNS en Cloudflare (solo lo que creó Mi Setup).
+
+### Actualizar el VPS
+
+```bash
+tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans && docker compose --env-file /opt/mi-setup/.env restart caddy
+```
