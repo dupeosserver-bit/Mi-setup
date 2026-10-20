@@ -1,8 +1,8 @@
 /** Respaldos: crear copias (carpetas, Pterodactyl, VPS completo), base de datos de Mi Setup y servidores de juego. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Archive, Boxes, Database, Download, FileJson, FolderArchive, Gamepad2, HardDrive, Loader2, Server, Trash2, TriangleAlert } from "lucide-react";
+import { Archive, Boxes, CalendarClock, Database, Download, FileJson, FolderArchive, Gamepad2, HardDrive, Loader2, Plus, RotateCcw, Server, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { copiarSeguro } from "../lib/boveda/utilidades";
@@ -23,7 +23,7 @@ interface ServidorVps {
 interface EstadoVps {
   carpeta: string;
   disco: { total: number; usado: number; libre: number };
-  archivos: { nombre: string; bytes: number; fecha: string; estado: "listo" | "en_curso" | "error" }[];
+  archivos: { nombre: string; bytes: number; fecha: string; estado: "listo" | "en_curso" | "error" | "restaurando" | "error_restaurar" }[];
   errores: Record<string, string>;
 }
 type TipoRespaldo = "carpeta" | "vps" | "base" | "pterodactyl";
@@ -88,11 +88,160 @@ function Opcion({ icono: Icono, titulo, texto, onClick, cargando }: { icono: typ
   );
 }
 
+/** Restaurar un respaldo: aparte (para sacar lo que necesites) o en su lugar. */
+function Restaurar({ servidorId, nombre, alCerrar, alTerminar }: { servidorId: string; nombre: string; alCerrar: () => void; alTerminar: () => void }) {
+  const soloAparte = /^(auto-)?vps-completo-/.test(nombre);
+  const esBase = nombre.endsWith(".sql.gz");
+  const [modo, setModo] = useState<"aparte" | "lugar">("aparte");
+  const [texto, setTexto] = useState("");
+  const restaurar = useMutation({
+    mutationFn: () => api<{ destino: string | null }>("/api/respaldos/vps/restaurar", { cuerpo: { servidorId, nombre, modo, ...(modo === "lugar" ? { confirmacion: texto } : {}) } }),
+    onSuccess: (r) => {
+      avisar(r.destino ? `Restaurando en ${r.destino}` : esBase ? "Restaurando la base: Mi Setup se reiniciará al terminar" : "Restaurando en su lugar…");
+      alTerminar();
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <Modal abierto titulo={`Restaurar ${nombre}`} alCerrar={alCerrar}>
+      <div className="space-y-3 text-sm">
+        <label className="flex items-start gap-2 rounded-xl border border-borde p-3">
+          <input type="radio" checked={modo === "aparte"} onChange={() => setModo("aparte")} className="mt-1" />
+          <span>
+            <b>En una carpeta aparte</b>
+            <span className="block text-xs text-tenue">Se saca en /opt/mi-setup/restaurados/ sin tocar nada. Luego copias lo que necesites (en Archivos).</span>
+          </span>
+        </label>
+        <label className={cx("flex items-start gap-2 rounded-xl border border-borde p-3", soloAparte && "opacity-50")}>
+          <input type="radio" disabled={soloAparte} checked={modo === "lugar"} onChange={() => setModo("lugar")} className="mt-1" />
+          <span>
+            <b>En su lugar</b>
+            <span className="block text-xs text-tenue">
+              {soloAparte
+                ? "El VPS completo solo se restaura aparte (ponerlo encima del sistema encendido lo rompería)."
+                : esBase
+                  ? "Cambia TODA la base de Mi Setup por la del respaldo. Antes se guarda un respaldo de cómo está ahora y al final Mi Setup se reinicia."
+                  : "Los archivos vuelven a donde estaban y reemplazan a los actuales con el mismo nombre. Apaga antes los servidores que usen esa carpeta."}
+            </span>
+          </span>
+        </label>
+        {modo === "lugar" ? (
+          <Campo etiqueta="Escribe RESTAURAR para confirmar">
+            <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="RESTAURAR" />
+          </Campo>
+        ) : null}
+        <Boton variante={modo === "lugar" ? "peligro" : "primario"} icono={RotateCcw} cargando={restaurar.isPending} disabled={modo === "lugar" && texto !== "RESTAURAR"} onClick={() => restaurar.mutate()}>
+          Restaurar
+        </Boton>
+      </div>
+    </Modal>
+  );
+}
+
+interface Programacion {
+  id: string;
+  servidorId: string;
+  tipo: TipoRespaldo;
+  ruta?: string;
+  frecuencia: "diario" | "semanal";
+  dia: number;
+  hora: number;
+  conservar: number;
+  activo: boolean;
+  ultimo: string | null;
+  ultimoError: string | null;
+}
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const NOMBRE_TIPO: Record<TipoRespaldo, string> = { carpeta: "Carpeta", vps: "VPS completo", base: "Base de Mi Setup", pterodactyl: "Todo Pterodactyl" };
+
+/** Respaldos automáticos: diarios o semanales; se guardan los últimos N. */
+function Automaticos({ servidorId }: { servidorId: string }) {
+  const q = useQuery({ queryKey: ["respaldos", "automaticos"], queryFn: () => api<Programacion[]>("/api/respaldos/automaticos"), retry: false });
+  const [f, setF] = useState({ tipo: "base" as TipoRespaldo, ruta: "/opt/mi-setup", frecuencia: "diario" as "diario" | "semanal", dia: 0, hora: 3, conservar: 7 });
+  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["respaldos", "automaticos"] });
+  const crear = useMutation({
+    mutationFn: () =>
+      api("/api/respaldos/automaticos", {
+        cuerpo: { servidorId, tipo: f.tipo, ...(f.tipo === "carpeta" ? { ruta: f.ruta } : {}), frecuencia: f.frecuencia, dia: f.dia, hora: f.hora, conservar: f.conservar, zona: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      }),
+    onSuccess: () => {
+      avisar("Respaldo automático programado");
+      refrescar();
+    },
+    onError: avisarError,
+  });
+  const cambiar = useMutation({ mutationFn: (p: Programacion) => api(`/api/respaldos/automaticos/${p.id}`, { metodo: "PATCH", cuerpo: { activo: !p.activo } }), onSuccess: refrescar, onError: avisarError });
+  const borrar = useMutation({ mutationFn: (id: string) => api(`/api/respaldos/automaticos/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
+  return (
+    <Tarjeta titulo="Respaldos automáticos" icono={CalendarClock}>
+      <ErrorCaja error={q.error} />
+      <div className="space-y-1">
+        {q.data?.map((p) => (
+          <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-fondo px-3 py-2 text-xs">
+            <span className="min-w-0 flex-1">
+              <b>{NOMBRE_TIPO[p.tipo]}</b>
+              {p.ruta ? ` ${p.ruta}` : ""} · {p.frecuencia === "diario" ? "cada día" : `cada ${DIAS[p.dia]}`} a las {String(p.hora).padStart(2, "0")}:00 · guarda {p.conservar}
+              <span className="block text-tenue">{p.ultimo ? `Último: ${haceCuanto(p.ultimo)}` : "Todavía no corre"}</span>
+              {p.ultimoError ? <span className="block text-peligro">{p.ultimoError}</span> : null}
+            </span>
+            <Interruptor activo={p.activo} alCambiar={() => cambiar.mutate(p)} etiqueta={p.activo ? "Activo" : "Pausado"} />
+            <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar" onClick={() => borrar.mutate(p.id)} />
+          </div>
+        ))}
+        {q.data?.length === 0 ? <p className="text-sm text-tenue">Ninguno todavía.</p> : null}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <Selector value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoRespaldo })} className="h-9 text-sm sm:col-span-2">
+          {Object.entries(NOMBRE_TIPO).map(([id, t]) => (
+            <option key={id} value={id}>
+              {t}
+            </option>
+          ))}
+        </Selector>
+        {f.tipo === "carpeta" ? <Entrada value={f.ruta} onChange={(e) => setF({ ...f, ruta: e.target.value })} className="h-9 text-sm sm:col-span-2" /> : null}
+        <Selector value={f.frecuencia} onChange={(e) => setF({ ...f, frecuencia: e.target.value as "diario" | "semanal" })} className="h-9 text-sm">
+          <option value="diario">Cada día</option>
+          <option value="semanal">Cada semana</option>
+        </Selector>
+        {f.frecuencia === "semanal" ? (
+          <Selector value={f.dia} onChange={(e) => setF({ ...f, dia: Number(e.target.value) })} className="h-9 text-sm">
+            {DIAS.map((d, i) => (
+              <option key={d} value={i}>
+                {d}
+              </option>
+            ))}
+          </Selector>
+        ) : null}
+        <Selector value={f.hora} onChange={(e) => setF({ ...f, hora: Number(e.target.value) })} className="h-9 text-sm" aria-label="Hora">
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h} value={h}>
+              {String(h).padStart(2, "0")}:00
+            </option>
+          ))}
+        </Selector>
+        <Selector value={f.conservar} onChange={(e) => setF({ ...f, conservar: Number(e.target.value) })} className="h-9 text-sm" aria-label="Cuántos guardar">
+          {[3, 5, 7, 14, 30].map((n) => (
+            <option key={n} value={n}>
+              Guardar {n}
+            </option>
+          ))}
+        </Selector>
+        <Boton variante="primario" icono={Plus} cargando={crear.isPending} onClick={() => crear.mutate()} disabled={!servidorId}>
+          Programar
+        </Boton>
+      </div>
+      <p className="mt-2 text-xs text-tenue">Se guardan en el mismo VPS con el nombre «auto-…»; al pasar del número elegido se borran los más viejos. Si falla, te llega un aviso.</p>
+    </Tarjeta>
+  );
+}
+
 /** Crear respaldos en el VPS: carpeta, Pterodactyl, base de Mi Setup o el VPS completo. */
 function CrearRespaldo() {
   const servidores = useQuery({ queryKey: ["vps", "servidores"], queryFn: () => api<ServidorVps[]>("/api/vps/servidores"), retry: false });
   const [sid, setSid] = useState("");
   const [ruta, setRuta] = useState("/opt/mi-setup");
+  const [restaurar, setRestaurar] = useState<string | null>(null);
   const actual = sid || servidores.data?.[0]?.id || "";
   const estado = useQuery({
     queryKey: ["respaldos", "vps", actual],
@@ -100,7 +249,7 @@ function CrearRespaldo() {
     enabled: Boolean(actual),
     retry: false,
     // Mientras haya un respaldo en curso se revisa seguido.
-    refetchInterval: (q) => (q.state.data?.archivos.some((a) => a.estado === "en_curso") ? 4000 : 30_000),
+    refetchInterval: (q) => (q.state.data?.archivos.some((a) => a.estado === "en_curso" || a.estado === "restaurando") ? 4000 : 30_000),
   });
   const crear = useMutation({
     mutationFn: (b: { tipo: TipoRespaldo; ruta?: string }) => api<{ nombre: string }>("/api/respaldos/vps", { cuerpo: { servidorId: actual, ...b } }),
@@ -189,12 +338,19 @@ function CrearRespaldo() {
                 {d.archivos.map((a) => (
                   <li key={a.nombre} className="rounded-lg bg-fondo px-3 py-1.5 text-xs">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate">{a.nombre.replace(/\.(parte|error)$/, "")}</span>
+                      <span className="min-w-0 flex-1 truncate">{a.nombre.replace(/\.(parte|error|restaurando|restaurar-error)$/, "")}</span>
                       {a.estado === "en_curso" ? (
                         <Insignia tono="aviso">
                           <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
                           Creando… {fmtBytes(a.bytes)}
                         </Insignia>
+                      ) : a.estado === "restaurando" ? (
+                        <Insignia tono="aviso">
+                          <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                          Restaurando…
+                        </Insignia>
+                      ) : a.estado === "error_restaurar" ? (
+                        <Insignia tono="peligro">No se pudo restaurar</Insignia>
                       ) : a.estado === "error" ? (
                         <Insignia tono="peligro">Falló</Insignia>
                       ) : (
@@ -212,7 +368,12 @@ function CrearRespaldo() {
                           <Download className="h-3.5 w-3.5" />
                         </button>
                       ) : null}
-                      {a.estado !== "en_curso" ? (
+                      {a.estado === "listo" ? (
+                        <button type="button" aria-label={`Restaurar ${a.nombre}`} title="Restaurar" className="text-tenue hover:text-texto" onClick={() => setRestaurar(a.nombre)}>
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                      {a.estado !== "en_curso" && a.estado !== "restaurando" ? (
                         <button
                           type="button"
                           aria-label={`Borrar ${a.nombre}`}
@@ -225,7 +386,7 @@ function CrearRespaldo() {
                         </button>
                       ) : null}
                     </div>
-                    {a.estado === "error" && d.errores[a.nombre] ? <p className="mt-1 text-[11px] text-peligro">{d.errores[a.nombre]}</p> : null}
+                    {(a.estado === "error" || a.estado === "error_restaurar") && d.errores[a.nombre] ? <p className="mt-1 text-[11px] text-peligro">{d.errores[a.nombre]}</p> : null}
                     {a.estado === "listo" && a.bytes > LIMITE_DESCARGA ? (
                       <button type="button" className="mt-1 text-[11px] text-acento underline" onClick={() => void copiarSeguro(`scp root@${host}:${d.carpeta}/${a.nombre} .`, "Comando copiado")}>
                         Muy grande para bajarlo aquí: copiar comando scp
@@ -238,8 +399,16 @@ function CrearRespaldo() {
           ) : null}
         </div>
       ) : null}
+      {restaurar ? <Restaurar servidorId={actual} nombre={restaurar} alCerrar={() => setRestaurar(null)} alTerminar={() => void estado.refetch()} /> : null}
     </Tarjeta>
   );
+}
+
+/** Los automáticos usan el primer VPS (o el que elijas en «Crear respaldo»). */
+function AutomaticosDelVps() {
+  const servidores = useQuery({ queryKey: ["vps", "servidores"], queryFn: () => api<ServidorVps[]>("/api/vps/servidores"), retry: false });
+  const id = servidores.data?.[0]?.id;
+  return id ? <Automaticos servidorId={id} /> : null;
 }
 
 function ServidoresJuego() {
@@ -278,6 +447,7 @@ export default function Respaldos() {
         {maestra ? (
           <div className="lg:col-span-2">
             <CrearRespaldo />
+            <AutomaticosDelVps />
           </div>
         ) : null}
         <Tarjeta

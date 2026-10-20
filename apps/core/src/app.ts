@@ -52,7 +52,7 @@ import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordator
 import { negocioRoutes, recordarCobros } from "./modules/negocio.js";
 import { pteroRoutes } from "./modules/ptero.js";
 import { respaldosRoutes } from "./modules/respaldos.js";
-import { respaldosVpsRoutes } from "./modules/respaldos-vps.js";
+import { respaldosAutomaticos, respaldosVpsRoutes } from "./modules/respaldos-vps.js";
 import { revisarVencimientos, vencimientosRoutes } from "./modules/vencimientos.js";
 import { vpsModule } from "./modules/vps/index.js";
 import { createNtfyNotifier, type Notifier } from "./notify/notifier.js";
@@ -235,6 +235,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   jobs.push(...vps.jobs);
   await app.register(vps.routes);
   await app.register(respaldosVpsRoutes(deps, vps.servidores));
+  jobs.push({ nombre: "respaldos-automaticos", cadaMs: 15 * 60_000, alInicio: false, run: () => respaldosAutomaticos(deps, vps.servidores) });
 
   const ptero = pteroRoutes(deps);
   await app.register(ptero.routes);

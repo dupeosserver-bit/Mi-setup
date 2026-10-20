@@ -6,6 +6,7 @@ import { loadConfig } from "../src/config.js";
 import { estadoCobro, fechasPendientes, siguienteFecha } from "../src/modules/finanzas-extra.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
 import { carpetaPara, planOrganizar, razonBasura } from "../src/modules/vps/archivos-extra.js";
+import { enZona, scriptRestaurar, sePuedeEnSuLugar, tocaRespaldo } from "../src/modules/respaldos-vps.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -176,5 +177,33 @@ describe("archivos del VPS: organizar y limpiar", () => {
     expect(razonBasura("world", "d", 400)).toBeNull();
     expect(razonBasura("server.jar", "f", 400)).toBeNull();
     expect(razonBasura("respaldo.tar.gz", "f", 400)).toBeNull();
+  });
+});
+
+describe("respaldos: restaurar y automáticos", () => {
+  it("el VPS completo solo se restaura aparte; la base hace respaldo de seguridad antes", () => {
+    expect(sePuedeEnSuLugar("vps-completo-20260301-120000.tar.gz")).toBe(false);
+    expect(sePuedeEnSuLugar("auto-vps-completo-20260301-120000.tar.gz")).toBe(false);
+    expect(sePuedeEnSuLugar("pterodactyl-20260301-120000.tar.gz")).toBe(true);
+    expect(() => scriptRestaurar("vps-completo-20260301-120000.tar.gz", "lugar", new Date())).toThrow();
+    expect(() => scriptRestaurar("../etc/passwd", "aparte", new Date())).toThrow();
+    const base = scriptRestaurar("base-mi-setup-20260301-120000.sql.gz", "lugar", new Date("2026-03-02T00:00:00Z"));
+    expect(base.indexOf("antes-de-restaurar-")).toBeGreaterThan(-1);
+    expect(base.indexOf("antes-de-restaurar-")).toBeLessThan(base.indexOf("DROP SCHEMA"));
+    expect(scriptRestaurar("web-20260301-120000.tar.gz", "aparte", new Date())).toContain("/opt/mi-setup/restaurados/web-20260301-120000");
+  });
+
+  it("toca una vez al día a partir de la hora, en la zona de quien lo programó", () => {
+    const p = { frecuencia: "diario" as const, dia: 0, hora: 3, zona: "America/Mexico_City", activo: true, ultimo: null as string | null };
+    // 08:00 UTC = 02:00 en CDMX (UTC-6): todavía no.
+    expect(tocaRespaldo(p, new Date("2026-03-02T08:00:00Z"))).toBe(false);
+    expect(tocaRespaldo(p, new Date("2026-03-02T09:30:00Z"))).toBe(true);
+    expect(tocaRespaldo({ ...p, ultimo: "2026-03-02T09:30:00Z" }, new Date("2026-03-02T20:00:00Z"))).toBe(false);
+    expect(tocaRespaldo({ ...p, ultimo: "2026-03-02T09:30:00Z" }, new Date("2026-03-03T10:00:00Z"))).toBe(true);
+    expect(tocaRespaldo({ ...p, activo: false }, new Date("2026-03-03T10:00:00Z"))).toBe(false);
+    // Semanal: solo el día elegido (2026-03-01 es domingo).
+    expect(enZona(new Date("2026-03-01T18:00:00Z"), "America/Mexico_City").semana).toBe(0);
+    expect(tocaRespaldo({ ...p, frecuencia: "semanal", dia: 1 }, new Date("2026-03-01T18:00:00Z"))).toBe(false);
+    expect(tocaRespaldo({ ...p, frecuencia: "semanal", dia: 0 }, new Date("2026-03-01T18:00:00Z"))).toBe(true);
   });
 });
