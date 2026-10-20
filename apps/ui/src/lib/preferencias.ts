@@ -7,7 +7,8 @@
 import { FUENTES_APP, FUENTES_TERMINAL, PREFERENCIAS_INICIALES, preferenciasSchema, type Preferencias, type TemaTerminal } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ITheme } from "@xterm/xterm";
-import { useEffect } from "react";
+import { useEffect, useRef, useState, type PointerEvent as EventoPuntero } from "react";
+import { create } from "zustand";
 import { api } from "./api";
 import { queryClient } from "./consultas";
 import { useSesion } from "./sesion";
@@ -191,5 +192,99 @@ export function opcionesTerminal(p: Preferencias) {
     fontFamily: FUENTES_TERMINAL[p.terminal.fuente].css,
     fontSize: p.terminal.tamano,
     theme: TEMAS_XTERM[p.terminal.tema],
+  };
+}
+
+// ---------------------------------------------------------------- botones flotantes (+ y la IA)
+
+export type ModoFlotantes = "auto" | "siempre" | "ocultos";
+interface EstadoFlotantes {
+  modo: ModoFlotantes;
+  dx: number;
+  dy: number;
+  escribiendo: boolean;
+  cambiar(p: Partial<Pick<EstadoFlotantes, "modo" | "dx" | "dy">>): void;
+}
+const CLAVE_FLOTANTES = "mi-setup.flotantes";
+
+function leerFlotantes(): Pick<EstadoFlotantes, "modo" | "dx" | "dy"> {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_FLOTANTES) ?? "{}") as Partial<EstadoFlotantes>;
+    return { modo: v.modo === "siempre" || v.modo === "ocultos" ? v.modo : "auto", dx: Number(v.dx) || 0, dy: Number(v.dy) || 0 };
+  } catch {
+    return { modo: "auto", dx: 0, dy: 0 };
+  }
+}
+
+/** Dónde están los botones flotantes y si se ven (se guarda en este dispositivo). */
+export const useFlotantes = create<EstadoFlotantes>()((set, get) => ({
+  ...leerFlotantes(),
+  escribiendo: false,
+  cambiar: (p) => {
+    set(p);
+    const { modo, dx, dy } = get();
+    try {
+      localStorage.setItem(CLAVE_FLOTANTES, JSON.stringify({ modo, dx, dy }));
+    } catch {
+      /* sin almacenamiento */
+    }
+  },
+}));
+
+if (typeof window !== "undefined") {
+  // Mientras escribes (teclado abierto) los botones se esconden para no tapar.
+  const editable = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["checkbox", "radio", "button", "range", "file", "submit"].includes((el as HTMLInputElement).type)));
+  window.addEventListener("focusin", (e) => useFlotantes.setState({ escribiendo: editable(e.target) }));
+  window.addEventListener("focusout", () => setTimeout(() => useFlotantes.setState({ escribiendo: editable(document.activeElement) }), 50));
+}
+
+/**
+ * Para cada botón flotante: si se ve, su desplazamiento y cómo arrastrarlo
+ * (mantén presionado medio segundo y muévelo; se queda donde lo sueltes).
+ */
+export function useBotonFlotante() {
+  const { modo, dx, dy, escribiendo, cambiar } = useFlotantes();
+  const [moviendo, setMoviendo] = useState(false);
+  const datos = useRef<{ x: number; y: number; dx: number; dy: number; timer: ReturnType<typeof setTimeout> | null; activo: boolean; movido: boolean }>({ x: 0, y: 0, dx: 0, dy: 0, timer: null, activo: false, movido: false });
+  const oculto = modo === "ocultos" || (modo === "auto" && escribiendo);
+  const limitar = (v: number, max: number) => Math.max(-max, Math.min(max, v));
+  return {
+    oculto,
+    moviendo,
+    estilo: { transform: `translate(${dx}px, ${dy}px)`, touchAction: moviendo ? "none" : undefined } as const,
+    eventos: {
+      onPointerDown: (e: EventoPuntero<HTMLElement>) => {
+        const d = datos.current;
+        Object.assign(d, { x: e.clientX, y: e.clientY, dx, dy, activo: false, movido: false });
+        d.timer = setTimeout(() => {
+          d.activo = true;
+          setMoviendo(true);
+        }, 450);
+      },
+      onPointerMove: (e: EventoPuntero<HTMLElement>) => {
+        const d = datos.current;
+        if (!d.activo) {
+          // Si se mueve antes de tiempo es un desplazamiento normal de la página.
+          if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 && d.timer) clearTimeout(d.timer);
+          return;
+        }
+        d.movido = true;
+        cambiar({ dx: limitar(d.dx + e.clientX - d.x, window.innerWidth - 80), dy: limitar(d.dy + e.clientY - d.y, window.innerHeight - 120) });
+      },
+      onPointerUp: () => {
+        const d = datos.current;
+        if (d.timer) clearTimeout(d.timer);
+        d.activo = false;
+        setMoviendo(false);
+      },
+      /** Después de arrastrar no cuenta como toque. */
+      onClickCapture: (e: EventoPuntero<HTMLElement> | React.MouseEvent<HTMLElement>) => {
+        if (datos.current.movido) {
+          e.preventDefault();
+          e.stopPropagation();
+          datos.current.movido = false;
+        }
+      },
+    },
   };
 }

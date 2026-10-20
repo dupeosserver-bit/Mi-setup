@@ -17,7 +17,7 @@ import { queryClient, useApariencia, useMe } from "../lib/consultas";
 import { olvidarDispositivo } from "../lib/dispositivo";
 import { mostrarNotificacion, prepararNotificaciones } from "../lib/notificaciones";
 import { escritorio } from "../lib/plataforma";
-import { usePreferencias } from "../lib/preferencias";
+import { useBotonFlotante, usePreferencias } from "../lib/preferencias";
 import { useSesion } from "../lib/sesion";
 import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
 import { CATEGORIAS, MODULOS_UI, grupoDe, moduloPorRuta } from "../modulos";
@@ -37,6 +37,41 @@ export async function cerrarSesion(): Promise<void> {
   tiempoReal.detener();
   useSesion.getState().salir();
   queryClient.clear();
+}
+
+/**
+ * Fondo de pantalla que se adapta: en PC usa el «fondo para PC» si hay. Si la
+ * imagen no tiene la forma de la pantalla (ej. una foto vertical en una
+ * pantalla ancha) se muestra completa y el resto se rellena con la misma
+ * imagen oscurecida, en lugar de recortarla.
+ */
+function useFondo(fondo: string | null, fondoPc: string | null, ajuste: "auto" | "llenar" | "completo") {
+  const [ancho, setAncho] = useState(() => (typeof window === "undefined" ? 1 : window.innerWidth / Math.max(1, window.innerHeight)));
+  const pc = ancho > 1.2 && typeof window !== "undefined" && window.innerWidth >= 768;
+  const url = (pc && fondoPc) || fondo;
+  const [forma, setForma] = useState<number | null>(null);
+  useEffect(() => {
+    const alCambiar = () => setAncho(window.innerWidth / Math.max(1, window.innerHeight));
+    window.addEventListener("resize", alCambiar);
+    return () => window.removeEventListener("resize", alCambiar);
+  }, []);
+  useEffect(() => {
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => setForma(img.naturalWidth / Math.max(1, img.naturalHeight));
+    img.src = url;
+  }, [url]);
+  if (!url) return undefined;
+  const velo = "linear-gradient(color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent), color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent))";
+  const completo = ajuste === "completo" || (ajuste === "auto" && forma !== null && Math.abs(Math.log(forma / ancho)) > Math.log(1.4));
+  if (!completo) return { backgroundImage: `${velo}, url(${url})`, backgroundSize: "cover", backgroundPosition: "center" };
+  // Imagen completa al centro y, detrás, la misma imagen llenando la pantalla pero oscurecida.
+  return {
+    backgroundImage: `${velo}, url(${url}), linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url(${url})`,
+    backgroundSize: "cover, contain, cover, cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+  };
 }
 
 function useVisibles(): Set<ModuleId> {
@@ -261,9 +296,10 @@ function BotonMas({ visibles }: { visibles: Set<ModuleId> }) {
     { id: "recordatorios" as const, texto: "Recordatorio", icono: Bell, ruta: "/recordatorios?nuevo=1" },
     { id: "chat" as const, texto: "Mensaje", icono: MessagesSquare, ruta: "/chat" },
   ].filter((a) => visibles.has(a.id));
-  if (acciones.length === 0) return null;
+  const flotante = useBotonFlotante();
+  if (acciones.length === 0 || flotante.oculto) return null;
   return (
-    <div className="safe-bottom fixed bottom-5 right-5 z-30 flex flex-col items-end gap-2 md:hidden">
+    <div className="safe-bottom fixed bottom-5 right-5 z-30 flex flex-col items-end gap-2 md:hidden" style={flotante.estilo} {...flotante.eventos}>
       {abierto
         ? acciones.map((a) => (
             <button
@@ -280,7 +316,7 @@ function BotonMas({ visibles }: { visibles: Set<ModuleId> }) {
         type="button"
         aria-label="Crear"
         onClick={() => setAbierto((v) => !v)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-acento text-black shadow-xl"
+        className={cx("flex h-14 w-14 items-center justify-center rounded-full bg-acento text-black shadow-xl", flotante.moviendo && "scale-110 ring-4 ring-acento/40")}
       >
         <Plus className={cx("h-6 w-6 transition-transform", abierto && "rotate-45")} />
       </button>
@@ -318,7 +354,7 @@ export function Layout() {
   const navegar = useNavigate();
   const { data: me } = useMe();
   const { data: apariencia } = useApariencia();
-  usePreferencias();
+  const prefs = usePreferencias();
   const conexion = useEstadoConexion();
   const visibles = useVisibles();
   const grupos = useMemo(() => agruparVisibles(visibles), [visibles]);
@@ -378,13 +414,7 @@ export function Layout() {
     });
   };
 
-  const fondo = apariencia?.fondo
-    ? {
-        backgroundImage: `linear-gradient(color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent), color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent)), url(${apariencia.fondo})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
-    : undefined;
+  const fondo = useFondo(apariencia?.fondo ?? null, apariencia?.fondoPc ?? null, prefs.vidrio.ajuste);
 
   return (
     <div className="flex h-full flex-col" style={fondo}>

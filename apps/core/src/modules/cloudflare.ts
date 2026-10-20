@@ -40,6 +40,35 @@ export function zonaDe(dominio: string, zonas: readonly Zona[]): Zona | null {
   return [...zonas].filter((z) => d === z.name || d.endsWith(`.${z.name}`)).sort((a, b) => b.name.length - a.name.length)[0] ?? null;
 }
 
+const COMENTARIO = "Mi Setup (sitios)";
+
+/**
+ * Al borrar un sitio: quita de Cloudflare solo los registros que creó Mi Setup
+ * para él (su dominio propio o nombre.DOMINIO, con el comentario «Mi Setup»).
+ * Nunca toca el comodín «*» ni registros hechos a mano. Sin token no hace nada.
+ */
+export async function borrarDnsDeSitio(deps: Pick<ModuleDeps, "config">, hosts: readonly string[]): Promise<string[]> {
+  const token = deps.config.env.CLOUDFLARE_API_TOKEN;
+  if (!token || !hosts.length) return [];
+  const pedir = async <T>(ruta: string, metodo = "GET"): Promise<T | null> => {
+    const r = await fetch(`${API}${ruta}`, { method: metodo, headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+    const d = r ? ((await r.json().catch(() => null)) as Respuesta<T> | null) : null;
+    return d?.success ? d.result : null;
+  };
+  const zonas = (await pedir<Zona[]>("/zones?per_page=50&status=active")) ?? [];
+  const borrados: string[] = [];
+  for (const host of hosts.map((h) => h.toLowerCase())) {
+    const zona = zonaDe(host, zonas);
+    if (!zona || host.startsWith("*.")) continue;
+    const lista = (await pedir<(Registro & { comment?: string | null })[]>(`/zones/${zona.id}/dns_records?per_page=100&name=${encodeURIComponent(host)}`)) ?? [];
+    for (const r of lista) {
+      if (r.name.toLowerCase() !== host || r.comment !== COMENTARIO) continue;
+      if (await pedir(`/zones/${zona.id}/dns_records/${r.id}`, "DELETE")) borrados.push(`${r.type} ${r.name}`);
+    }
+  }
+  return borrados;
+}
+
 export function cloudflareRoutes(deps: ModuleDeps) {
   async function cf<T>(ruta: string, init: { metodo?: string; cuerpo?: unknown } = {}): Promise<T> {
     const token = deps.config.env.CLOUDFLARE_API_TOKEN;
@@ -78,7 +107,7 @@ export function cloudflareRoutes(deps: ModuleDeps) {
       if (previo.type === "A" && previo.content === ip) return "existia";
       throw new HttpError(409, `${completo} ya apunta a otro lado (${previo.type} ${previo.content}). Cámbialo o bórralo en Cloudflare.`);
     }
-    await cf(`/zones/${zona.id}/dns_records`, { metodo: "POST", cuerpo: { type: "A", name: completo, content: ip, ttl: 1, proxied: false, comment: "Mi Setup (sitios)" } });
+    await cf(`/zones/${zona.id}/dns_records`, { metodo: "POST", cuerpo: { type: "A", name: completo, content: ip, ttl: 1, proxied: false, comment: COMENTARIO } });
     return "creado";
   }
 

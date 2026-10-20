@@ -43,8 +43,9 @@ export function validarImagen(buf: Buffer): ImagenValida {
   throw new HttpError(415, "Formato no permitido. Usa PNG, JPG, WEBP o SVG");
 }
 
-const tipoGlobal = z.object({ tipo: z.enum(["logo", "fondo"]) });
-const CLAVE = (tipo: "logo" | "fondo") => `apariencia.${tipo}`;
+const tipoGlobal = z.object({ tipo: z.enum(["logo", "fondo", "fondo-pc"]) });
+/** «fondo» es el de todos (y el del celular); «fondo-pc» uno opcional para pantallas anchas. */
+const CLAVE = (tipo: "logo" | "fondo" | "fondo-pc") => `apariencia.${tipo}`;
 const CLAVE_NOMBRE = "apariencia.nombre";
 const url = (archivo: string | null | undefined) => (archivo ? `/uploads/${archivo}` : null);
 
@@ -75,6 +76,7 @@ export function aparienciaRoutes(deps: ModuleDeps) {
     app.get("/api/apariencia/publica", { config: { acceso: { publico: true } } }, async () => ({
       logo: url(await getSetting<string>(deps.db, CLAVE("logo"))),
       fondo: url(await getSetting<string>(deps.db, CLAVE("fondo"))),
+      fondoPc: url(await getSetting<string>(deps.db, CLAVE("fondo-pc"))),
       nombre: (await getSetting<string>(deps.db, CLAVE_NOMBRE)) ?? null,
     }));
 
@@ -94,6 +96,7 @@ export function aparienciaRoutes(deps: ModuleDeps) {
       return {
         logo: url(await getSetting<string>(deps.db, CLAVE("logo"))),
         fondo: url(await getSetting<string>(deps.db, CLAVE("fondo"))),
+        fondoPc: url(await getSetting<string>(deps.db, CLAVE("fondo-pc"))),
         avatar: url(fila?.avatar),
       };
     });

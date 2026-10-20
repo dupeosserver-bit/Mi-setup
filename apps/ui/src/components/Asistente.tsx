@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { HERRAMIENTAS_DIAGNOSTICO, mensajeAnalizar, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
-import { usePreferencias } from "../lib/preferencias";
+import { useBotonFlotante, usePreferencias } from "../lib/preferencias";
 import { hablar } from "../lib/voz";
 import { EntradaIa, type AdjuntoIa } from "./EntradaIa";
 import { Boton, ErrorCaja, FaltaConfigurar, avisar, avisarError, cx } from "./ui";
@@ -27,6 +27,7 @@ export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
   const uso = useUsoIa();
   const prefs = usePreferencias();
   const cantidad = (propuestas.data ?? []).filter((p) => p.estado === "pendiente").length;
+  const flotante = useBotonFlotante();
 
   const enviar = useMutation({
     mutationFn: ({ mensaje, adjuntos }: { mensaje: string; adjuntos: AdjuntoIa[] }) =>
@@ -53,15 +54,19 @@ export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
 
   return (
     <>
+      {flotante.oculto && !abierto ? null : (
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
         aria-label="IA asistente"
-        className="fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-acento text-black shadow-lg md:bottom-6"
+        style={flotante.estilo}
+        {...flotante.eventos}
+        className={cx("fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-acento text-black shadow-lg md:bottom-6", flotante.moviendo && "scale-110 ring-4 ring-acento/40")}
       >
         {abierto ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         {cantidad > 0 && !abierto ? <span className="absolute -right-1 -top-1 rounded-full bg-peligro px-1.5 text-xs font-bold text-white">{cantidad}</span> : null}
       </button>
+      )}
 
       {abierto ? (
         <div className="fixed inset-x-2 bottom-36 z-40 flex max-h-[75vh] flex-col rounded-tarjeta border border-borde bg-superficie shadow-2xl sm:inset-x-auto sm:right-4 sm:w-[26rem] md:bottom-24">

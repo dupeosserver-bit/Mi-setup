@@ -2,6 +2,7 @@
  * Creador de sitios y apps: administración (solo con sesión de Mi Setup).
  * Cada sitio es de su dueño; puede invitar a otras cuentas a editarlo.
  */
+import { borrarDnsDeSitio } from "../cloudflare.js";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -231,8 +232,10 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       await db.delete(sites).where(eq(sites.id, s.id));
       await rm(dirSitio(s.id), { recursive: true, force: true });
       await refrescarDominios();
-      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "sitio_borrado", module: "sitios", target: s.slug, outcome: "ok", ...clientInfo(request) });
-      return { ok: true };
+      // También su DNS en Cloudflare (solo lo que creó Mi Setup; el comodín «*» se queda).
+      const dns = await borrarDnsDeSitio(deps, [`${s.slug}.${deps.config.env.DOMAIN}`, ...(s.customDomain ? [s.customDomain] : [])]).catch(() => []);
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "sitio_borrado", module: "sitios", target: s.slug, outcome: "ok", details: { dns }, ...clientInfo(request) });
+      return { ok: true, dns };
     });
 
     // ---------------------------------------------------------- imágenes y archivos

@@ -69,10 +69,17 @@ export function armarPagina(sitio: Pick<FilaSitio, "name" | "settings">, pagina:
 <meta property="og:title" content="${esc(titulo)}"><meta property="og:type" content="website"><meta property="og:url" content="${esc(origen + pagina.ruta)}">${descripcion ? `<meta property="og:description" content="${esc(descripcion)}">` : ""}${imagen ? `<meta property="og:image" content="${esc(imagen.startsWith("/") ? origen + imagen : imagen)}"><meta name="twitter:card" content="summary_large_image">` : ""}
 ${icono ? `<link rel="icon" href="${esc(icono)}"><link rel="apple-touch-icon" href="${esc(icono)}">` : ""}${a.app ? `<link rel="manifest" href="/manifest.webmanifest">` : ""}${a.color ? `<meta name="theme-color" content="${esc(a.color)}">` : ""}
 ${fuentes.length ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fuentes.map((f) => `family=${encodeURIComponent(f)}:wght@400;600;700`).join("&")}&display=swap">` : ""}
-<style>html{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111}img{max-width:100%}.ms-tarjeta{display:inline-block;vertical-align:top;width:220px;margin:8px;padding:12px;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);background:#fff;color:#111}.ms-tarjeta img{width:100%;border-radius:10px}.ms-agregar{margin-top:8px;padding:8px 14px;border:0;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;font-weight:600;cursor:pointer}</style>
+<style>html{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111}img,video,iframe{max-width:100%}img,video{height:auto}@media (max-width:760px){html,body{overflow-x:hidden}table{display:block;overflow-x:auto}}.ms-tarjeta{display:inline-block;vertical-align:top;width:220px;margin:8px;padding:12px;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);background:#fff;color:#111}.ms-tarjeta img{width:100%;border-radius:10px}.ms-agregar{margin-top:8px;padding:8px 14px;border:0;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;font-weight:600;cursor:pointer}</style>
 <style>${pagina.css.replace(/<\/style/gi, "<\\/style")}</style></head><body>${pagina.html}
-<script>window.__MS=${jsonSeguro(cfg)}</script><script src="/_ms/runtime.js" defer></script></body></html>`;
+<script>${ADAPTAR}</script><script>window.__MS=${jsonSeguro(cfg)}</script><script src="/_ms/runtime.js" defer></script></body></html>`;
 }
+
+/**
+ * En el celular los bloques que en «modo libre» quedaron en una posición fija
+ * (pensada para la PC) se acomodan uno debajo de otro, sin salirse de la pantalla.
+ */
+export const ADAPTAR =
+  "(function(){var c=[].slice.call(document.body.children).filter(function(e){return getComputedStyle(e).position==='absolute'});if(!c.length)return;function a(){var m=window.innerWidth<=760;c.forEach(function(e){var s=e.style;if(m){s.position='relative';s.left='auto';s.top='auto';s.right='auto';s.margin='0 auto 12px';s.maxWidth='100%';if(e.offsetWidth>window.innerWidth)s.width='100%'}else{s.position='';s.left='';s.top='';s.right='';s.margin='';s.maxWidth='';s.width=''}})}a();addEventListener('resize',a)})();";
 
 function paginaSimple(titulo: string, cuerpo: string): string {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title>

@@ -999,9 +999,10 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
             icono={Trash2}
             className="text-peligro"
             onClick={async () => {
-              if (await confirmar({ titulo: "Borrar sitio", mensaje: "Se borra el sitio con sus imágenes, mensajes, tablas y cuentas.", peligroso: true, textoExacto: sitio.slug, boton: "Borrar" })) {
+              if (await confirmar({ titulo: "Borrar sitio", mensaje: "Se borra el sitio con sus imágenes, mensajes, tablas y cuentas, y su registro DNS en Cloudflare (si lo creó Mi Setup).", peligroso: true, textoExacto: sitio.slug, boton: "Borrar" })) {
                 try {
-                  await api(`/api/sitios/${sitio.id}`, { metodo: "DELETE" });
+                  const r = await api<{ dns?: string[] }>(`/api/sitios/${sitio.id}`, { metodo: "DELETE" });
+                  avisar(r.dns?.length ? `Sitio borrado. También se quitó su DNS: ${r.dns.join(", ")}` : "Sitio borrado");
                   alBorrar();
                 } catch (err) {
                   avisarError(err);

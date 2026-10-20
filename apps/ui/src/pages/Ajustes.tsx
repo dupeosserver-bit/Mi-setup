@@ -32,7 +32,7 @@ import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiom
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
 import { tipoDispositivo } from "../lib/plataforma";
-import { TEMAS_XTERM, useGuardarPreferencias, usePreferencias } from "../lib/preferencias";
+import { TEMAS_XTERM, useFlotantes, useGuardarPreferencias, usePreferencias, type ModoFlotantes } from "../lib/preferencias";
 import { hablar, vocesEspanol } from "../lib/voz";
 
 const ACEPTA = "image/png,image/jpeg,image/webp,image/svg+xml";
@@ -339,16 +339,24 @@ function Apariencia() {
                 className="w-full accent-acento"
               />
             </Campo>
+            <Campo etiqueta="Cómo se acomoda la imagen" ayuda="Automático: si la foto no tiene la forma de la pantalla (ej. una foto del celular en la PC) se ve completa, sin cortarse.">
+              <Selector value={prefs.vidrio.ajuste} onChange={(e) => guardar((p) => ({ ...p, vidrio: { ...p.vidrio, ajuste: e.target.value as "auto" | "llenar" | "completo" } }))}>
+                <option value="auto">Automático</option>
+                <option value="llenar">Llenar la pantalla (puede cortarse)</option>
+                <option value="completo">Completa (sin cortar)</option>
+              </Selector>
+            </Campo>
             <div className="flex flex-wrap gap-2">
-              <Boton tamano="sm" onClick={() => guardar((p) => ({ ...p, vidrio: { paneles: 60, velo: 35 } }))}>
+              <Boton tamano="sm" onClick={() => guardar((p) => ({ ...p, vidrio: { ...p.vidrio, paneles: 60, velo: 35 } }))}>
                 Ver el fondo
               </Boton>
-              <Boton tamano="sm" variante="fantasma" onClick={() => guardar((p) => ({ ...p, vidrio: { paneles: 0, velo: 90 } }))}>
+              <Boton tamano="sm" variante="fantasma" onClick={() => guardar((p) => ({ ...p, vidrio: { paneles: 0, velo: 90, ajuste: "auto" } }))}>
                 Restablecer
               </Boton>
             </div>
           </div>
         </Tarjeta>
+        <BotonesFlotantes />
         <Tarjeta titulo="Imágenes">
           <div className="mb-3 flex items-center gap-3 rounded-xl bg-fondo p-3">
             <Logo />
@@ -359,7 +367,8 @@ function Apariencia() {
               <>
                 <NombreApp />
                 <SubirImagen ruta="/api/apariencia/global/logo" etiqueta="Logo de la app" actual={apariencia?.logo ?? null} />
-                <SubirImagen ruta="/api/apariencia/global/fondo" etiqueta="Fondo de pantalla" actual={apariencia?.fondo ?? null} />
+                <SubirImagen ruta="/api/apariencia/global/fondo" etiqueta="Fondo de pantalla (celular y general)" actual={apariencia?.fondo ?? null} />
+                <SubirImagen ruta="/api/apariencia/global/fondo-pc" etiqueta="Fondo para la PC (opcional, horizontal)" actual={apariencia?.fondoPc ?? null} />
               </>
             ) : (
               <p className="text-xs text-tenue">El logo y el fondo los cambia la cuenta maestra.</p>
@@ -974,6 +983,26 @@ function MisClaves() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Los botones flotantes del celular (+ y la IA): se esconden al escribir, se mueven o se apagan. */
+function BotonesFlotantes() {
+  const { modo, dx, dy, cambiar } = useFlotantes();
+  return (
+    <Tarjeta titulo="Botones flotantes (+ y la IA)">
+      <Selector value={modo} onChange={(e) => cambiar({ modo: e.target.value as ModoFlotantes })}>
+        <option value="auto">Esconderlos mientras escribo</option>
+        <option value="siempre">Mostrarlos siempre</option>
+        <option value="ocultos">No mostrarlos</option>
+      </Selector>
+      <p className="mt-2 text-xs text-tenue">Para moverlos, mantén presionado un botón medio segundo y arrástralo a donde no estorbe.</p>
+      {dx || dy ? (
+        <Boton className="mt-2" tamano="sm" variante="fantasma" onClick={() => cambiar({ dx: 0, dy: 0 })}>
+          Regresarlos a su lugar
+        </Boton>
+      ) : null}
+    </Tarjeta>
   );
 }
 

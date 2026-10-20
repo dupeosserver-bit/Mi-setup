@@ -74,6 +74,8 @@ export const preferenciasSchema = z.object({
     .object({
       paneles: z.number().int().min(0).max(85).default(0),
       velo: z.number().int().min(0).max(100).default(90),
+      /** Cómo se acomoda la imagen: auto (completa si no cabe bien), llenar (recorta) o completo (se ve entera). */
+      ajuste: z.enum(["auto", "llenar", "completo"]).default("auto"),
     })
     .default({}),
   terminal: z

@@ -118,6 +118,25 @@ export default function ControlRemoto() {
           ) : null
         }
       />
+      <Tarjeta titulo="La forma más fácil: Escritorio remoto de Chrome (oficial de Google, gratis)" icono={MonitorUp}>
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>En tu PC abre «Preparar esta PC», entra con tu cuenta de Google, instala lo que pide y elige un PIN de 6 números.</li>
+          <li>En el celular instala «Escritorio remoto de Chrome» y entra con la misma cuenta de Google.</li>
+          <li>Toca tu PC en la lista y escribe el PIN: ya la controlas desde el celular (también funciona desde otra PC en el navegador).</li>
+        </ol>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Boton variante="primario" onClick={() => abrirExterno("https://remotedesktop.google.com/access")}>
+            Preparar esta PC
+          </Boton>
+          <Boton onClick={() => abrirExterno("https://play.google.com/store/apps/details?id=com.google.chromeremotedesktop")}>
+            App para Android
+          </Boton>
+          <Boton variante="fantasma" onClick={() => abrirExterno("https://remotedesktop.google.com/access")}>
+            Conectarme ahora
+          </Boton>
+        </div>
+        <p className="mt-2 text-xs text-tenue">Funciona aunque estés fuera de casa y sin abrir puertos. RustDesk (abajo) es la opción con tu propio servidor.</p>
+      </Tarjeta>
       {datos.isLoading ? <Cargando /> : null}
       <ErrorCaja error={datos.error} />
       {datos.data?.equipos.length === 0 ? <Vacio icono={MonitorUp} texto="Agrega tu PC con su ID de RustDesk." /> : null}

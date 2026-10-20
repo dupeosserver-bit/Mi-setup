@@ -70,6 +70,15 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
     onError: avisarError,
   });
   const borrar = useMutation({ mutationFn: (id: string) => api(`/api/tareas/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
+  const renombrar = useMutation({
+    mutationFn: ({ id, titulo }: { id: string; titulo: string }) => api(`/api/tareas/${id}`, { metodo: "PATCH", cuerpo: { titulo } }),
+    onSuccess: refrescar,
+    onError: avisarError,
+  });
+  // Tocar una tarea abre sus opciones (antes solo respondían las flechas pequeñas).
+  const [abierta, setAbierta] = useState<Tarea | null>(null);
+  const [titulo, setTitulo] = useState("");
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -93,14 +102,51 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
         {COLUMNAS.map((col, i) => {
           const tareas = (q.data ?? []).filter((t) => t.estado === col.id);
           return (
-            <div key={col.id} className="min-w-0 rounded-tarjeta border border-borde bg-superficie p-3">
+            <div
+              key={col.id}
+              className={cx("min-w-0 rounded-tarjeta border bg-superficie p-3", arrastrando ? "border-dashed border-acento/60" : "border-borde")}
+              onDragOver={(e) => puedeEditar && e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/plain");
+                setArrastrando(null);
+                if (id && puedeEditar) mover.mutate({ id, estado: col.id });
+              }}
+            >
               <p className="mb-2 text-sm font-semibold">
                 {col.titulo} <span className="text-tenue">({tareas.length})</span>
               </p>
               <div className="space-y-2">
                 {tareas.map((t) => (
-                  <div key={t.id} className="flex items-center gap-1 rounded-xl bg-fondo p-2 text-sm">
-                    <span className={cx("min-w-0 flex-1 break-words", col.id === "hecho" && "text-tenue line-through")}>{t.titulo}</span>
+                  <div
+                    key={t.id}
+                    draggable={puedeEditar}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", t.id);
+                      setArrastrando(t.id);
+                    }}
+                    onDragEnd={() => setArrastrando(null)}
+                    className="flex items-center gap-1 rounded-xl bg-fondo p-2 text-sm"
+                  >
+                    {puedeEditar ? (
+                      <input
+                        type="checkbox"
+                        aria-label={col.id === "hecho" ? "Marcar como pendiente" : "Marcar como hecha"}
+                        checked={col.id === "hecho"}
+                        onChange={() => mover.mutate({ id: t.id, estado: col.id === "hecho" ? "pendiente" : "hecho" })}
+                        className="h-4 w-4 shrink-0 accent-acento"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAbierta(t);
+                        setTitulo(t.titulo);
+                      }}
+                      className={cx("min-w-0 flex-1 break-words text-left", col.id === "hecho" && "text-tenue line-through")}
+                    >
+                      {t.titulo}
+                    </button>
                     {puedeEditar ? (
                       <>
                         {i > 0 ? <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} aria-label="Mover a la izquierda" onClick={() => mover.mutate({ id: t.id, estado: COLUMNAS[i - 1]!.id })} /> : null}
@@ -118,6 +164,61 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
           );
         })}
       </div>
+      <p className="text-xs text-tenue">Toca una tarea para editarla o moverla. En la PC también puedes arrastrarla a otra columna.</p>
+      <Modal abierto={abierta !== null} titulo="Tarea" alCerrar={() => setAbierta(null)}>
+        {abierta ? (
+          <div className="space-y-3">
+            {puedeEditar ? (
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (titulo.trim() && titulo.trim() !== abierta.titulo) renombrar.mutate({ id: abierta.id, titulo: titulo.trim() });
+                  setAbierta(null);
+                }}
+              >
+                <Entrada value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={300} autoFocus />
+                <Boton type="submit" variante="primario">
+                  Guardar
+                </Boton>
+              </form>
+            ) : (
+              <p className="text-sm">{abierta.titulo}</p>
+            )}
+            {puedeEditar ? (
+              <>
+                <p className="text-xs text-tenue">Mover a:</p>
+                <div className="flex flex-wrap gap-2">
+                  {COLUMNAS.map((c) => (
+                    <Boton
+                      key={c.id}
+                      tamano="sm"
+                      variante={abierta.estado === c.id ? "primario" : "secundario"}
+                      onClick={() => {
+                        mover.mutate({ id: abierta.id, estado: c.id });
+                        setAbierta(null);
+                      }}
+                    >
+                      {c.titulo}
+                    </Boton>
+                  ))}
+                </div>
+                <Boton
+                  tamano="sm"
+                  variante="peligro"
+                  icono={Trash2}
+                  onClick={() => {
+                    borrar.mutate(abierta.id);
+                    setAbierta(null);
+                  }}
+                >
+                  Borrar tarea
+                </Boton>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

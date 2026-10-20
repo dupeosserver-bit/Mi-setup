@@ -32,6 +32,8 @@ export function usePuede(modulo: ModuleId, nivel: Exclude<PermissionLevel, "ning
 export interface Apariencia {
   logo: string | null;
   fondo: string | null;
+  /** Fondo opcional para pantallas anchas (PC). */
+  fondoPc?: string | null;
   avatar: string | null;
 }
 
@@ -42,7 +44,7 @@ export function useApariencia() {
     // En el celular /uploads/… no existe en la app: se completa con la dirección del servidor.
     queryFn: async (): Promise<Apariencia> => {
       const a = await api<Apariencia>("/api/apariencia");
-      return { logo: urlServidor(a.logo), fondo: urlServidor(a.fondo), avatar: urlServidor(a.avatar) };
+      return { logo: urlServidor(a.logo), fondo: urlServidor(a.fondo), fondoPc: urlServidor(a.fondoPc ?? null), avatar: urlServidor(a.avatar) };
     },
     enabled: hay,
   });
