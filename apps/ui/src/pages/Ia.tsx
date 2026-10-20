@@ -1,4 +1,5 @@
 /** Apartado IA: conversaciones, cola de propuestas pendientes, historial y gasto del mes. */
+import { Negociar } from "../components/IaExtras";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessagesSquare, Paperclip, Trash2, Volume2 } from "lucide-react";
 import { useState } from "react";
@@ -192,7 +193,7 @@ function Cola({ soloPendientes }: { soloPendientes: boolean }) {
 }
 
 export default function Ia() {
-  const [pestana, setPestana] = useState<"chat" | "pendientes" | "historial">("chat");
+  const [pestana, setPestana] = useState<"chat" | "pendientes" | "historial" | "deudas">("chat");
   const uso = useUsoIa();
   const pendientes = (usePropuestas().data ?? []).filter((p) => p.estado === "pendiente").length;
   return (
@@ -207,9 +208,10 @@ export default function Ia() {
           { id: "chat", texto: "Chat" },
           { id: "pendientes", texto: `Pendientes${pendientes ? ` (${pendientes})` : ""}` },
           { id: "historial", texto: "Historial" },
+          { id: "deudas", texto: "Deudas y negociaciones" },
         ]}
       />
-      {pestana === "chat" ? <Chat /> : <Cola soloPendientes={pestana === "pendientes"} />}
+      {pestana === "chat" ? <Chat /> : pestana === "deudas" ? <Negociar /> : <Cola soloPendientes={pestana === "pendientes"} />}
     </div>
   );
 }

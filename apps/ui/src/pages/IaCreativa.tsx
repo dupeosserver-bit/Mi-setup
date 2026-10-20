@@ -2,6 +2,7 @@
  * IA creativa: plantillas de prompts con espacios {así}, quitar el fondo de una
  * foto (en tu equipo, gratis) y resumir o traducir textos, páginas y PDFs.
  */
+import { DetectorIa, HacerNatural } from "../components/IaExtras";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, Download, Eraser, FileText, Globe, ImagePlus, Languages, Pencil, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -374,10 +375,10 @@ function CrearImagenes() {
 }
 
 export default function IaCreativa() {
-  const [pestana, setPestana] = useState<"prompts" | "imagenes" | "fondo" | "texto">("prompts");
+  const [pestana, setPestana] = useState<"prompts" | "imagenes" | "fondo" | "texto" | "detector" | "natural">("prompts");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="IA creativa" descripcion="Tus prompts, crear imágenes, quitar fondos y resumir o traducir." />
+      <Encabezado titulo="IA creativa" descripcion="Tus prompts, crear imágenes, quitar fondos, resumir o traducir, detectar textos de IA y hacerlos más naturales." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
@@ -386,9 +387,16 @@ export default function IaCreativa() {
           { id: "imagenes", texto: "Crear imágenes" },
           { id: "fondo", texto: "Quitar fondo" },
           { id: "texto", texto: "Resumir y traducir" },
+          { id: "detector", texto: "Detector de IA" },
+          { id: "natural", texto: "Hacer más natural" },
         ]}
       />
-      {pestana === "prompts" ? <Prompts /> : pestana === "imagenes" ? <CrearImagenes /> : pestana === "fondo" ? <QuitarFondo /> : <ResumirTraducir />}
+      {pestana === "prompts" ? <Prompts /> : null}
+      {pestana === "imagenes" ? <CrearImagenes /> : null}
+      {pestana === "fondo" ? <QuitarFondo /> : null}
+      {pestana === "texto" ? <ResumirTraducir /> : null}
+      {pestana === "detector" ? <DetectorIa /> : null}
+      {pestana === "natural" ? <HacerNatural /> : null}
     </div>
   );
 }

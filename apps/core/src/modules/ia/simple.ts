@@ -24,7 +24,7 @@ export interface PreguntaIa {
 export interface IaSimple {
   disponible(usuario: Pick<AuthUser, "id" | "role">): Promise<boolean>;
   pedir(usuario: Pick<AuthUser, "id" | "role">, p: PreguntaIa): Promise<string>;
-  pedirJson<T>(usuario: Pick<AuthUser, "id" | "role">, p: PreguntaIa, esquema: z.ZodType<T>): Promise<T>;
+  pedirJson<T>(usuario: Pick<AuthUser, "id" | "role">, p: PreguntaIa, esquema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T>;
 }
 
 function inicioDeMes(d: Date): Date {

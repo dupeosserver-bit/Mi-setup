@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { senalesIa } from "../src/modules/ia/extras.js";
 import { detectarPrecio, precioEnDatosDePagina } from "../src/modules/novedades.js";
 import { armarCorreo, clasificarCorreo, enlacesDe, revisarEnvio } from "../src/modules/correo-google.js";
 import { estadoCobro, fechasPendientes, siguienteFecha } from "../src/modules/finanzas-extra.js";
@@ -391,5 +392,26 @@ describe("vigilar precios en más tiendas", () => {
     expect(detectarPrecio(next).precio).toBe(7499);
     const vtex = '<script>__STATE__ = {"Product:1":{"items":[{"sellers":[{"commertialOffer":{"Price":12999.5,"ListPrice":15999}}]}]}}</script>';
     expect(detectarPrecio(vtex).precio).toBe(12999.5);
+  });
+});
+
+describe("IA: deudas, detector y texto natural", () => {
+  it("las señales locales distinguen un texto de chatbot de uno de persona", () => {
+    const ia = "Es importante destacar que la tecnología juega un papel crucial en el mundo actual. Además, cabe destacar que optimizar procesos es fundamental. En conclusión, la innovación es integral para el éxito. Por otro lado, el aprendizaje es crucial para todos. Sin embargo, el cambio es constante en la era digital.";
+    const persona = "jaja no manches, ayer se me fue la luz y perdí todo el avance. Neta. Mañana le vuelvo a dar, a ver si ahora sí termino el mapa antes de que llegue mi carnal.";
+    expect(senalesIa(ia).puntaje).toBeGreaterThan(senalesIa(persona).puntaje);
+    expect(senalesIa(ia).frases.length).toBeGreaterThan(0);
+  });
+
+  it("negociar devuelve plan, mensaje y el aviso de confirmar con CONDUSEF o PROFECO", async () => {
+    const respuesta = JSON.stringify({ resumen: "Debes 5 mil", derechos: [{ texto: "No pueden amenazarte", fuente: "CONDUSEF" }], plan: ["Pide el estado de cuenta"], mensaje: "Hola, quiero ponerme al corriente", siResponde: [], cuidado: [] });
+    const ia = iaFija(respuesta);
+    const { h } = await preparar(ia.cliente, { ia: "escritura", ia_creativa: "escritura" });
+    const r = await ctx!.app.inject({ method: "POST", url: "/api/ia/negociar", headers: h, payload: { tipo: "debo", situacion: "Debo 5000 pesos de una tarjeta y me llaman a diario", tono: "amable" } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json<{ mensaje: string; aviso: string }>().aviso).toContain("CONDUSEF");
+    expect(ia.vistos[0]?.sistema).toContain("Nunca prometas");
+    const h2 = await ctx!.app.inject({ method: "POST", url: "/api/ia/detectar", headers: h, payload: { texto: "x".repeat(10) } });
+    expect(h2.statusCode).toBe(400);
   });
 });

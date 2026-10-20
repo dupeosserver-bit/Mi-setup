@@ -4,11 +4,12 @@
  */
 import { ANIO_TARIFA_ISR, agregarIva, isrMensual, isrResico, quitarIva, repartir } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Camera, Check, Copy, HandCoins, Plus, Receipt, Share2, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Camera, Check, Copy, HandCoins, Plus, Receipt, Share2, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
+import { ResultadoNegociacion } from "./IaExtras";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "./ui";
 
 const dinero = (n: number, moneda = "MXN") => `${moneda === "MXN" ? "$" : `${moneda} `}${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -422,6 +423,24 @@ export function PagosDivididos() {
     },
     onError: avisarError,
   });
+  const puedeIa = usePuede("ia", "escritura");
+  const cobrar = useMutation({
+    mutationFn: (p: Persona) =>
+      api<Parameters<typeof ResultadoNegociacion>[0]["r"]>("/api/ia/negociar", {
+        cuerpo: {
+          tipo: "me_deben",
+          situacion: `${p.nombre} me debe ${dinero(p.debe)} de pagos compartidos: ${p.cobros
+            .filter((c) => c.estado === "debe")
+            .map((c) => `${c.pago} (${fechaCorta(c.fecha)}, ${dinero(c.monto)})`)
+            .join(", ")}. Quiero recordárselo sin pelear.`,
+          con: p.nombre,
+          monto: dinero(p.debe),
+          tono: "amable",
+          medio: "whatsapp",
+        },
+      }),
+    onError: avisarError,
+  });
   const pausar = useMutation({
     mutationFn: (p: PagoDividido) => api(`/api/finanzas-personales/divididos/${p.id}`, { metodo: "PATCH", cuerpo: { activo: !p.activo } }),
     onSuccess: refrescar,
@@ -497,9 +516,16 @@ export function PagosDivididos() {
                 ))}
               </div>
               {puede && p.debe > 0 ? (
-                <Boton className="mt-2" tamano="sm" variante="secundario" icono={HandCoins} onClick={() => saldar.mutate(p.id)}>
-                  Me pagó todo lo vencido
-                </Boton>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Boton tamano="sm" variante="secundario" icono={HandCoins} onClick={() => saldar.mutate(p.id)}>
+                    Me pagó todo lo vencido
+                  </Boton>
+                  {puedeIa ? (
+                    <Boton tamano="sm" variante="fantasma" icono={Sparkles} cargando={cobrar.isPending && cobrar.variables?.id === p.id} onClick={() => cobrar.mutate(p)}>
+                      Mensaje para cobrar
+                    </Boton>
+                  ) : null}
+                </div>
               ) : null}
             </Tarjeta>
           ))}
@@ -541,6 +567,9 @@ export function PagosDivididos() {
         </div>
       )}
       {nuevo ? <NuevoPagoDividido alCerrar={() => setNuevo(false)} /> : null}
+      <Modal abierto={Boolean(cobrar.data)} titulo="Mensaje para cobrar" alCerrar={() => cobrar.reset()}>
+        {cobrar.data ? <ResultadoNegociacion r={cobrar.data} /> : null}
+      </Modal>
     </div>
   );
 }

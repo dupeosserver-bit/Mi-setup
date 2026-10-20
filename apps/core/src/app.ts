@@ -24,6 +24,7 @@ import { personalRoutes, revisarSuscripciones } from "./modules/personal.js";
 import { finanzasExtraRoutes, limpiarTickets } from "./modules/finanzas-extra.js";
 import { clavesUsuarioRoutes } from "./modules/claves-usuario.js";
 import { crearIaSimple } from "./modules/ia/simple.js";
+import { iaExtrasRoutes } from "./modules/ia/extras.js";
 import { extrasRoutes } from "./modules/extras.js";
 import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
@@ -207,6 +208,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(notasCompartirRoutes(deps));
   await app.register(seguridadCuentaRoutes(deps));
   await app.register(correoGoogleRoutes(deps, iaSimple));
+  await app.register(iaExtrasRoutes(deps, iaSimple));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
   await app.register(descargasRoutes(deps));
