@@ -16,7 +16,7 @@ import {
   type TemaTerminal,
 } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, ShieldCheck, Volume2 } from "lucide-react";
+import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Server, ShieldCheck, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
@@ -27,7 +27,7 @@ import { CodigoQr } from "../components/CodigoQr";
 import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { confirmar } from "../lib/confirmar";
-import { api } from "../lib/api";
+import { PUEDE_CAMBIAR_SERVIDOR, api, cambiarServidor, olvidarServidor, servidoresRecordados } from "../lib/api";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
@@ -977,6 +977,66 @@ function MisClaves() {
   );
 }
 
+// ---------------------------------------------------------------- servidores de Mi Setup
+
+/** Cambiar entre tu Mi Setup y otros (de tu familia, de un cliente) sin volver a iniciar sesión. */
+function ServidoresMiSetup() {
+  const [lista, setLista] = useState(() => servidoresRecordados());
+  const [nuevo, setNuevo] = useState("");
+  if (!PUEDE_CAMBIAR_SERVIDOR) return null;
+  return (
+    <Tarjeta titulo="Servidores de Mi Setup" icono={Server}>
+      <ul className="space-y-1">
+        {lista.map((s) => (
+          <li key={s.url} className="flex flex-wrap items-center gap-2 rounded-xl bg-fondo px-3 py-2 text-sm">
+            <span className="min-w-0 flex-1 truncate">
+              {new URL(s.url).host}
+              {s.nombre ? <span className="text-xs text-tenue"> · {s.nombre}</span> : null}
+            </span>
+            {s.actual ? (
+              <Insignia tono="ok">En uso</Insignia>
+            ) : (
+              <>
+                <Boton tamano="sm" onClick={() => cambiarServidor(s.url)}>
+                  Cambiar
+                </Boton>
+                <Boton
+                  tamano="icono"
+                  variante="fantasma"
+                  icono={RotateCcw}
+                  aria-label="Olvidar"
+                  title="Olvidar este servidor"
+                  onClick={() => {
+                    olvidarServidor(s.url);
+                    setLista(servidoresRecordados());
+                  }}
+                />
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          try {
+            const u = new URL(nuevo.trim());
+            if (u.protocol !== "https:") throw new Error();
+            cambiarServidor(u.origin);
+          } catch {
+            avisarError(new Error("Escribe la dirección completa con https://"));
+          }
+        }}
+      >
+        <Entrada value={nuevo} onChange={(e) => setNuevo(e.target.value)} inputMode="url" placeholder="https://setup.otrodominio.com" />
+        <Boton type="submit">Agregar</Boton>
+      </form>
+      <p className="mt-2 text-xs text-tenue">Cada servidor guarda su propia sesión en este dispositivo: cambias con un toque sin volver a escribir tu contraseña.</p>
+    </Tarjeta>
+  );
+}
+
 // ---------------------------------------------------------------- página
 
 type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad" | "apps" | "claves" | "servicios";
@@ -1008,7 +1068,14 @@ export default function Ajustes() {
           ...(verServicios ? [{ id: "servicios" as const, texto: "Servicios y claves" }] : []),
         ]}
       />
-      {pestana === "cuenta" ? <Cuenta /> : null}
+      {pestana === "cuenta" ? (
+        <>
+          <Cuenta />
+          <div className="mt-4">
+            <ServidoresMiSetup />
+          </div>
+        </>
+      ) : null}
       {pestana === "apariencia" ? <Apariencia /> : null}
       {pestana === "terminal" ? <TerminalAjustes /> : null}
       {pestana === "voz" ? <VozIa /> : null}

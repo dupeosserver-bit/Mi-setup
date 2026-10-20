@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo, useAparienciaPublica } from "../components/Logo";
 import { Boton, Campo, Entrada, ErrorCaja } from "../components/ui";
-import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, api, cambiarServidor } from "../lib/api";
+import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, api, cambiarServidor, servidoresRecordados } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { nombrePorDefecto } from "../lib/plataforma";
 import { useSesion } from "../lib/sesion";
@@ -23,8 +23,20 @@ function Servidor() {
       setError("Escribe la dirección completa con https://, p. ej. https://setup.tudominio.com");
     }
   };
+  const otros = servidoresRecordados().filter((s) => !s.actual);
   if (!editando) {
     return (
+      <div className="space-y-1">
+      {otros.length ? (
+        <div className="flex flex-wrap justify-center gap-1">
+          {otros.map((s) => (
+            <button key={s.url} type="button" onClick={() => cambiarServidor(s.url)} className="rounded-full border border-borde px-2 py-0.5 text-[11px] text-tenue hover:text-texto">
+              {new URL(s.url).host}
+              {s.nombre ? ` · ${s.nombre}` : ""}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p className="flex items-center justify-center gap-1 text-center text-xs text-tenue">
         <Server className="h-3.5 w-3.5" />
         <span className="truncate">{new URL(API_BASE).host}</span>
@@ -32,11 +44,12 @@ function Servidor() {
           Cambiar servidor
         </button>
       </p>
+      </div>
     );
   }
   return (
     <div className="space-y-2 rounded-xl border border-borde p-3">
-      <Campo etiqueta="Servidor de Mi Setup" ayuda="Para entrar a otra instalación (por ejemplo, la de un familiar). Se cierra la sesión actual.">
+      <Campo etiqueta="Servidor de Mi Setup" ayuda="Para entrar a otra instalación (la tuya, la de un familiar o la de un cliente). Tu sesión de aquí se guarda para volver con un toque.">
         <Entrada value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" placeholder="https://setup.tudominio.com" />
       </Campo>
       {error ? <p className="text-xs text-peligro">{error}</p> : null}

@@ -25,15 +25,64 @@ export const API_BASE = ((PUEDE_CAMBIAR_SERVIDOR && servidorGuardado()) || SERVI
 /** Ruta del servidor (/uploads/…) como dirección completa: en el celular la app no vive en el mismo sitio que el servidor. */
 export const urlServidor = <T extends string | null | undefined>(ruta: T): T => (typeof ruta === "string" && ruta.startsWith("/") ? (`${API_BASE}${ruta}` as T) : ruta);
 
-/** Cambia el servidor (null = el predeterminado), cierra la sesión y recarga la app. */
-export function cambiarServidor(url: string | null): void {
+const CLAVE_SESIONES = "mi-setup.sesiones-por-servidor";
+const CLAVE_SESION = "mi-setup.sesion";
+
+interface SesionGuardada {
+  refreshToken: string;
+  usuario: { displayName?: string; email?: string } | null;
+  usado: string;
+}
+
+function sesionesGuardadas(): Record<string, SesionGuardada> {
   try {
-    if (url && url.replace(/\/$/, "") !== SERVIDOR_PREDETERMINADO) localStorage.setItem(CLAVE_SERVIDOR, url.replace(/\/$/, ""));
+    return JSON.parse(localStorage.getItem(CLAVE_SESIONES) ?? "{}") as Record<string, SesionGuardada>;
+  } catch {
+    return {};
+  }
+}
+
+/** Servidores de Mi Setup que usaste en este dispositivo (con su sesión, para cambiar sin volver a entrar). */
+export function servidoresRecordados(): { url: string; nombre: string | null; actual: boolean }[] {
+  const s = sesionesGuardadas();
+  const lista = new Map<string, string | null>();
+  lista.set(API_BASE, useSesion.getState().usuario?.displayName ?? null);
+  for (const [url, g] of Object.entries(s)) if (!lista.has(url)) lista.set(url, g.usuario?.displayName ?? g.usuario?.email ?? null);
+  if (SERVIDOR_PREDETERMINADO && !lista.has(SERVIDOR_PREDETERMINADO)) lista.set(SERVIDOR_PREDETERMINADO, null);
+  return [...lista.entries()].map(([url, nombre]) => ({ url, nombre, actual: url === API_BASE }));
+}
+
+export function olvidarServidor(url: string): void {
+  const s = sesionesGuardadas();
+  delete s[url];
+  try {
+    localStorage.setItem(CLAVE_SESIONES, JSON.stringify(s));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/**
+ * Cambia el servidor (null = el predeterminado) y recarga la app. La sesión de
+ * este servidor se guarda y, si ya habías entrado al otro, se recupera la suya.
+ */
+export function cambiarServidor(url: string | null): void {
+  const destino = (url ?? SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
+  try {
+    const sesiones = sesionesGuardadas();
+    const { refreshToken, usuario } = useSesion.getState();
+    if (refreshToken) sesiones[API_BASE] = { refreshToken, usuario, usado: new Date().toISOString() };
+    const guardada = sesiones[destino];
+    delete sesiones[destino];
+    localStorage.setItem(CLAVE_SESIONES, JSON.stringify(sesiones));
+    if (destino !== SERVIDOR_PREDETERMINADO) localStorage.setItem(CLAVE_SERVIDOR, destino);
     else localStorage.removeItem(CLAVE_SERVIDOR);
+    // La sesión del otro servidor (si la había) queda lista para cuando recargue.
+    localStorage.setItem(CLAVE_SESION, JSON.stringify({ state: { refreshToken: guardada?.refreshToken ?? null, usuario: guardada?.usuario ?? null }, version: 0 }));
   } catch {
     // Sin almacenamiento local no se puede recordar otro servidor.
+    useSesion.getState().salir();
   }
-  useSesion.getState().salir();
   window.location.reload();
 }
 
