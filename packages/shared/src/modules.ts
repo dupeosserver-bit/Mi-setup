@@ -7,7 +7,6 @@ export const MODULE_CATEGORIES = [
   "principal",
   "vps",
   "panel",
-  "respaldos",
   "seguridad",
   "redes",
   "novedades",
@@ -49,8 +48,8 @@ export const MODULES = {
   vps_alertas: { label: "Alertas de caída", category: "vps", masterOnly: false },
   vps_comandos: { label: "Comandos guardados", category: "vps", masterOnly: true },
   vps_archivos: { label: "Archivos", category: "vps", masterOnly: true },
-  vps_bots: { label: "Bots de Discord", category: "vps", masterOnly: false },
   vps_seguridad: { label: "Seguridad del servidor", category: "vps", masterOnly: true },
+  respaldos: { label: "Respaldos", category: "vps", masterOnly: false },
 
   // Panel (hosting)
   pterodactyl: { label: "Pterodactyl", category: "panel", masterOnly: false },
@@ -59,14 +58,10 @@ export const MODULES = {
   finanzas: { label: "Gastos e ingresos", category: "panel", masterOnly: false },
   negocio: { label: "Mejoras del negocio", category: "panel", masterOnly: false },
 
-  // Respaldos
-  respaldos: { label: "Respaldos", category: "respaldos", masterOnly: false },
-
   // Seguridad
   boveda: { label: "Gestor de contraseñas", category: "seguridad", masterOnly: true },
   autenticador: { label: "Autenticador 2FA", category: "seguridad", masterOnly: true },
   correos_temporales: { label: "Correos temporales", category: "seguridad", masterOnly: false },
-  vpn: { label: "VPN", category: "seguridad", masterOnly: false },
   navegador_privado: { label: "Navegador privado", category: "seguridad", masterOnly: false },
   ciberseguridad: { label: "Ciberseguridad", category: "seguridad", masterOnly: false },
   auditoria: { label: "Registro de actividad", category: "seguridad", masterOnly: true },
@@ -76,7 +71,8 @@ export const MODULES = {
   streams: { label: "Streams", category: "redes", masterOnly: false },
   x: { label: "X (Twitter)", category: "redes", masterOnly: false },
   discord: { label: "Discord", category: "redes", masterOnly: false },
-  bots_discord: { label: "Bots de Discord (creador)", category: "redes", masterOnly: false },
+  bots_discord: { label: "Crear bots de Discord", category: "redes", masterOnly: false },
+  vps_bots: { label: "Bots en mi VPS", category: "redes", masterOnly: false },
   streamer: { label: "Modo streamer", category: "redes", masterOnly: false },
 
   // Novedades

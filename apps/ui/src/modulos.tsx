@@ -106,7 +106,6 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   boveda: m("boveda", "/seguridad/boveda", KeyRound, lazy(() => import("./pages/Boveda"))),
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck, lazy(() => import("./pages/Autenticador"))),
   correos_temporales: m("correos_temporales", "/seguridad/correos", Mail, lazy(() => import("./pages/Correos"))),
-  vpn: m("vpn", "/seguridad/vpn", Shield, lazy(() => import("./pages/Vpn"))),
   navegador_privado: m("navegador_privado", "/seguridad/navegador", Globe, lazy(() => import("./pages/NavegadorPrivado"))),
   ciberseguridad: m("ciberseguridad", "/seguridad/ciberseguridad", Cpu, lazy(() => import("./pages/Ciberseguridad"))),
   auditoria: m("auditoria", "/seguridad/actividad", ScrollText, lazy(() => import("./pages/Auditoria"))),
@@ -149,7 +148,6 @@ export const CATEGORIAS: readonly { id: ModuleCategory; titulo: string; icono: L
   { id: "principal", titulo: "Menú principal", icono: Home },
   { id: "vps", titulo: "VPS", icono: TerminalSquare },
   { id: "panel", titulo: "Panel", icono: Gamepad2 },
-  { id: "respaldos", titulo: "Respaldos", icono: Archive },
   { id: "seguridad", titulo: "Seguridad", icono: Shield },
   { id: "redes", titulo: "Redes y streams", icono: Radio },
   { id: "novedades", titulo: "Novedades", icono: Newspaper },
@@ -164,6 +162,54 @@ export const CATEGORIAS: readonly { id: ModuleCategory; titulo: string; icono: L
   { id: "ia", titulo: "IA", icono: Sparkles },
   { id: "ajustes", titulo: "Ajustes", icono: Settings },
 ];
+
+/**
+ * Apartados que en el menú salen como una sola entrada; adentro se cambian con
+ * pestañas. Cada uno sigue siendo su propio módulo (ruta y permisos).
+ */
+export interface GrupoMenu {
+  readonly id: string;
+  readonly titulo: string;
+  readonly icono: LucideIcon;
+  readonly miembros: readonly { id: ModuleId; texto: string }[];
+}
+
+export const GRUPOS_MENU: readonly GrupoMenu[] = [
+  {
+    id: "bots",
+    titulo: "Bots de Discord",
+    icono: Bot,
+    miembros: [
+      { id: "bots_discord", texto: "Crear y vender bots" },
+      { id: "vps_bots", texto: "Bots en mi VPS" },
+    ],
+  },
+  {
+    id: "negocio",
+    titulo: "Negocio y cobros",
+    icono: Wallet,
+    miembros: [
+      { id: "clientes", texto: "Clientes y cobros" },
+      { id: "vencimientos", texto: "Vencimientos" },
+      { id: "finanzas", texto: "Gastos e ingresos" },
+      { id: "negocio", texto: "Ideas de mejoras" },
+    ],
+  },
+  {
+    id: "contrasenas",
+    titulo: "Contraseñas y 2FA",
+    icono: KeyRound,
+    miembros: [
+      { id: "boveda", texto: "Gestor de contraseñas" },
+      { id: "autenticador", texto: "Autenticador 2FA" },
+      { id: "correos_temporales", texto: "Correos temporales" },
+    ],
+  },
+];
+
+export function grupoDe(id: ModuleId): GrupoMenu | undefined {
+  return GRUPOS_MENU.find((g) => g.miembros.some((m) => m.id === id));
+}
 
 export function moduloPorRuta(ruta: string): ModuloUi | undefined {
   return Object.values(MODULOS_UI)

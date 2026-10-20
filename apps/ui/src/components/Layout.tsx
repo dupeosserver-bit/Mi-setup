@@ -8,7 +8,7 @@
  */
 import { MODULES, temas, type ModuleId } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ChevronsLeft, ChevronsRight, CircleHelp, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X } from "lucide-react";
+import { Bell, ChevronsLeft, ChevronsRight, CircleHelp, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X, type LucideIcon } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -20,7 +20,7 @@ import { escritorio } from "../lib/plataforma";
 import { usePreferencias } from "../lib/preferencias";
 import { useSesion } from "../lib/sesion";
 import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
-import { CATEGORIAS, MODULOS_UI, moduloPorRuta } from "../modulos";
+import { CATEGORIAS, MODULOS_UI, grupoDe, moduloPorRuta } from "../modulos";
 import { AsistenteFlotante } from "./Asistente";
 import { Buscador } from "./Buscador";
 import { ErrorPantalla } from "./ErrorPantalla";
@@ -49,11 +49,44 @@ function useVisibles(): Set<ModuleId> {
   }, [data]);
 }
 
+/** Una entrada del menú: un apartado o un grupo de apartados (con pestañas adentro). */
+interface ItemMenu {
+  readonly clave: string;
+  readonly ruta: string;
+  readonly texto: string;
+  readonly icono: LucideIcon;
+  readonly ids: readonly ModuleId[];
+}
+
 function agruparVisibles(visibles: Set<ModuleId>) {
-  return CATEGORIAS.map((c) => ({
-    ...c,
-    modulos: Object.values(MODULOS_UI).filter((mod) => MODULES[mod.id].category === c.id && (mod.enMenu !== false || !visibles.has("novedades")) && visibles.has(mod.id)),
-  })).filter((c) => c.modulos.length > 0);
+  return CATEGORIAS.map((c) => {
+    const modulos = Object.values(MODULOS_UI).filter((mod) => MODULES[mod.id].category === c.id && (mod.enMenu !== false || !visibles.has("novedades")) && visibles.has(mod.id));
+    const items: ItemMenu[] = [];
+    for (const mod of modulos) {
+      const grupo = grupoDe(mod.id);
+      if (!grupo) {
+        items.push({ clave: mod.id, ruta: mod.ruta, texto: MODULES[mod.id].label, icono: mod.icono, ids: [mod.id] });
+        continue;
+      }
+      const ids = grupo.miembros.map((m) => m.id).filter((id) => visibles.has(id));
+      // El grupo sale una vez, en el lugar de su primer apartado visible.
+      if (ids[0] !== mod.id) continue;
+      items.push(ids.length > 1 ? { clave: grupo.id, ruta: mod.ruta, texto: grupo.titulo, icono: grupo.icono, ids } : { clave: mod.id, ruta: mod.ruta, texto: MODULES[mod.id].label, icono: mod.icono, ids });
+    }
+    return { ...c, modulos, items };
+  }).filter((c) => c.modulos.length > 0);
+}
+
+/** Enlace del menú; un grupo queda marcado en cualquiera de sus pestañas. */
+function EnlaceMenu({ item, className, onClick, children }: { item: ItemMenu; className: (activo: boolean) => string; onClick?: () => void; children: ReactNode }) {
+  const { pathname } = useLocation();
+  const actual = moduloPorRuta(pathname);
+  const activo = Boolean(actual && item.ids.includes(actual.id));
+  return (
+    <Link to={item.ruta} title={item.texto} onClick={onClick} className={className(activo)}>
+      {children}
+    </Link>
+  );
 }
 
 interface Equipo {
@@ -103,23 +136,21 @@ function BarraLateral({ grupos, compacta, alternar }: { grupos: ReturnType<typeo
             ) : (
               <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tenue">{g.titulo}</div>
             )}
-            {g.modulos.map((mod) => (
-              <NavLink
-                key={mod.id}
-                to={mod.ruta}
-                end={mod.ruta === "/"}
-                title={MODULES[mod.id].label}
-                className={({ isActive }) =>
+            {g.items.map((item) => (
+              <EnlaceMenu
+                key={item.clave}
+                item={item}
+                className={(activo) =>
                   cx(
                     "flex items-center gap-3 rounded-xl text-sm transition-colors",
                     compacta ? "mx-auto h-10 w-10 justify-center" : "px-3 py-2",
-                    isActive ? "bg-acento text-black" : "text-tenue hover:bg-tarjeta hover:text-texto",
+                    activo ? "bg-acento text-black" : "text-tenue hover:bg-tarjeta hover:text-texto",
                   )
                 }
               >
-                <mod.icono className="h-[18px] w-[18px] shrink-0" />
-                {compacta ? null : <span className="truncate">{MODULES[mod.id].label}</span>}
-              </NavLink>
+                <item.icono className="h-[18px] w-[18px] shrink-0" />
+                {compacta ? null : <span className="truncate">{item.texto}</span>}
+              </EnlaceMenu>
             ))}
           </div>
         ))}
@@ -202,16 +233,11 @@ function PanelMovil({
         {grupos.map((g) => (
           <section key={g.id} className="px-2 pb-2">
             <h4 className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-tenue">{g.titulo}</h4>
-            {g.modulos.map((mod) => (
-              <NavLink
-                key={mod.id}
-                to={mod.ruta}
-                onClick={alCerrar}
-                className={({ isActive }) => cx("flex items-center gap-3 rounded-xl px-3 py-2 text-sm", isActive ? "bg-tarjeta" : "hover:bg-tarjeta")}
-              >
-                <mod.icono className="h-4 w-4 text-tenue" />
-                {MODULES[mod.id].label}
-              </NavLink>
+            {g.items.map((item) => (
+              <EnlaceMenu key={item.clave} item={item} onClick={alCerrar} className={(activo) => cx("flex items-center gap-3 rounded-xl px-3 py-2 text-sm", activo ? "bg-tarjeta" : "hover:bg-tarjeta")}>
+                <item.icono className="h-4 w-4 text-tenue" />
+                {item.texto}
+              </EnlaceMenu>
             ))}
           </section>
         ))}
@@ -410,5 +436,26 @@ export function GuardiaModulo({ modulo, children }: { modulo: ModuleId; children
   if (!visibles.has(modulo)) {
     return <p className="py-10 text-center text-sm text-tenue">No tienes permiso para ver este apartado.</p>;
   }
-  return <>{children}</>;
+  const grupo = grupoDe(modulo);
+  const hermanos = grupo?.miembros.filter((m) => visibles.has(m.id)) ?? [];
+  return (
+    <>
+      {hermanos.length > 1 ? (
+        <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-superficie p-1" role="tablist" aria-label={grupo?.titulo}>
+          {hermanos.map((h) => (
+            <NavLink
+              key={h.id}
+              to={MODULOS_UI[h.id].ruta}
+              role="tab"
+              aria-selected={h.id === modulo}
+              className={cx("whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors", h.id === modulo ? "bg-acento text-black" : "text-tenue hover:text-texto")}
+            >
+              {h.texto}
+            </NavLink>
+          ))}
+        </div>
+      ) : null}
+      {children}
+    </>
+  );
 }

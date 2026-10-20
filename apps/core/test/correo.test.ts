@@ -1,26 +1,18 @@
-import { createServer, type Server } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
 import { loadConfig } from "../src/config.js";
 import { mailMessages } from "../src/db/schema.js";
 import { firmar, purgarCorreos } from "../src/modules/correo.js";
-import { interpretarAlta } from "../src/modules/vpn.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
 let ctx: Ctx | undefined;
-let agente: Server | undefined;
 afterEach(async () => {
   await ctx?.close();
   ctx = undefined;
-  agente?.close();
-  agente = undefined;
 });
 
 const SECRETO = "secreto-de-prueba-del-worker-".padEnd(40, "z");
-const LLAVE = "dGVzdC1sbGF2ZS1wdWJsaWNhLXdpcmVndWFyZC0xMjM=";
 
 async function maestra(c: Ctx) {
   const secret = generateTotpSecret();
@@ -76,51 +68,5 @@ describe("correos temporales", () => {
     const quedan = await ctx.db.select().from(mailMessages);
     expect(quedan).toHaveLength(1);
     expect(quedan[0]?.saved).toBe(true);
-  });
-});
-
-describe("VPN", () => {
-  it("interpreta la respuesta de mi-setup-wg con distintos nombres de campo", () => {
-    expect(interpretarAlta({ address: "10.66.66.5/32", server_public_key: LLAVE, endpoint: "vpn.mexicanland.net:51820" })).toMatchObject({
-      direccion: "10.66.66.5/32",
-      endpoint: "vpn.mexicanland.net:51820",
-      dns: "1.1.1.1",
-    });
-    expect(() => interpretarAlta({ address: "10.66.66.5/32" })).toThrow();
-  });
-
-  it("da de alta un dispositivo solo con su llave pública a través del servicio del host", async () => {
-    const recibido: unknown[] = [];
-    agente = createServer((req, res) => {
-      let cuerpo = "";
-      req.on("data", (d) => (cuerpo += d));
-      req.on("end", () => {
-        res.setHeader("content-type", "application/json");
-        if (req.url === "/alta") {
-          recibido.push(JSON.parse(cuerpo));
-          res.end(JSON.stringify({ address: "10.66.66.7/32", server_public_key: LLAVE, endpoint: "203.0.113.10:51820" }));
-        } else if (req.url === "/estado") {
-          res.end(JSON.stringify([{ llave: LLAVE, endpoint: null, ultimoSaludo: 0, rx: 0, tx: 0 }]));
-        } else res.end("{}");
-      });
-    });
-    const socket = process.platform === "win32" ? `\\\\.\\pipe\\mi-setup-prueba-${process.pid}-${Date.now()}` : join(tmpdir(), `mi-setup-${process.pid}-${Date.now()}.sock`);
-    await new Promise<void>((r) => agente!.listen(socket, () => r()));
-
-    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, VPN_SOCKET: socket }) });
-    const h = await maestra(ctx);
-    const alta = await ctx.app.inject({ method: "POST", url: "/api/vpn/dispositivos", headers: h, payload: { nombre: "celular", llavePublica: LLAVE } });
-    expect(alta.json()).toMatchObject({ direccion: "10.66.66.7/32", endpoint: "203.0.113.10:51820" });
-    expect(recibido).toEqual([{ nombre: "celular", llavePublica: LLAVE }]);
-    const lista = (await ctx.app.inject({ method: "GET", url: "/api/vpn/dispositivos", headers: h })).json<{ servicio: boolean; dispositivos: { nombre: string; conectado: boolean }[] }>();
-    expect(lista).toMatchObject({ servicio: true, dispositivos: [{ nombre: "celular", conectado: false }] });
-  });
-
-  it("sin servicio del host responde 'Falta configurar' sin romperse", async () => {
-    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, VPN_SOCKET: join(tmpdir(), "no-existe.sock") }) });
-    const h = await maestra(ctx);
-    const res = await ctx.app.inject({ method: "POST", url: "/api/vpn/dispositivos", headers: h, payload: { nombre: "pc", llavePublica: LLAVE } });
-    expect(res.statusCode).toBe(503);
-    expect((await ctx.app.inject({ method: "GET", url: "/api/vpn/dispositivos", headers: h })).json()).toMatchObject({ servicio: false });
   });
 });

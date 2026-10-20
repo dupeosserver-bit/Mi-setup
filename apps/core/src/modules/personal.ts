@@ -11,10 +11,11 @@ import { can } from "@mi-setup/shared";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { calendarEvents, charges, clients, expirations, personalBudgets, personalCards, personalMovements, reminders, subscriptions, users } from "../db/schema.js";
+import { calendarEvents, charges, clients, expirations, personalBudgets, personalMovements, reminders, subscriptions, users } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { idParams, sync, type ModuleDeps } from "./common.js";
+import { firmaTicket } from "./finanzas-extra.js";
 
 const FECHA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (AAAA-MM-DD)");
 const MONTO = z.coerce.number().positive("El monto debe ser mayor que 0").max(1_000_000_000);
@@ -36,8 +37,8 @@ export function sumarCiclo(fecha: string, ciclo: (typeof CICLOS)[number]): strin
 
 const hoy = (ahora: Date) => ahora.toISOString().slice(0, 10);
 
-function movDto(m: typeof personalMovements.$inferSelect) {
-  return { id: m.id, tipo: m.kind as "gasto" | "ingreso", monto: Number(m.amount), categoria: m.category, descripcion: m.description, fecha: m.occurredOn, tarjetaId: m.cardId };
+function movDto(m: typeof personalMovements.$inferSelect, secreto = "") {
+  return { id: m.id, tipo: m.kind as "gasto" | "ingreso", monto: Number(m.amount), categoria: m.category, descripcion: m.description, fecha: m.occurredOn, iva: m.tax === null ? null : Number(m.tax), ticket: m.receipt && secreto ? `/api/finanzas-personales/ticket/${m.id}/${firmaTicket(secreto, m.id)}` : null };
 }
 
 function subDto(s: typeof subscriptions.$inferSelect) {
@@ -93,8 +94,6 @@ export function personalRoutes(deps: ModuleDeps) {
     categoria: z.string().trim().min(1).max(60).default("Otros"),
     descripcion: z.string().trim().max(300).default(""),
     fecha: FECHA,
-    /** Tarjeta de la billetera con la que se pagó (opcional). */
-    tarjetaId: z.string().uuid().nullable().default(null),
   });
 
   return async function (app: FastifyInstance): Promise<void> {
@@ -106,19 +105,16 @@ export function personalRoutes(deps: ModuleDeps) {
         ? and(eq(personalMovements.userId, user.id), gte(personalMovements.occurredOn, `${mes}-01`), lte(personalMovements.occurredOn, `${mes}-31`))
         : eq(personalMovements.userId, user.id);
       const filas = await db.select().from(personalMovements).where(filtro).orderBy(desc(personalMovements.occurredOn), desc(personalMovements.createdAt)).limit(2000);
-      return filas.map(movDto);
+      const secreto = deps.config.env.JWT_SECRET ?? deps.config.env.SERVER_ENC_KEY ?? "desarrollo-sin-secreto";
+      return filas.map((f) => movDto(f, secreto));
     });
 
     app.post("/api/finanzas-personales/movimientos", escribir, async (request) => {
       const user = currentUser(request);
       const d = movimientoSchema.parse(request.body);
-      if (d.tarjetaId) {
-        const [t] = await db.select({ id: personalCards.id }).from(personalCards).where(and(eq(personalCards.id, d.tarjetaId), eq(personalCards.userId, user.id)));
-        if (!t) throw new HttpError(404, "Esa tarjeta no existe");
-      }
       const [m] = await db
         .insert(personalMovements)
-        .values({ userId: user.id, kind: d.tipo, amount: d.monto.toFixed(2), category: d.categoria, description: d.descripcion, occurredOn: d.fecha, cardId: d.tarjetaId })
+        .values({ userId: user.id, kind: d.tipo, amount: d.monto.toFixed(2), category: d.categoria, description: d.descripcion, occurredOn: d.fecha })
         .returning();
       if (!m) throw new HttpError(500, "No se pudo guardar");
       sync(deps, user.id, "finanzas-personales");

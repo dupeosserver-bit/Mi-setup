@@ -769,6 +769,10 @@ export const personalMovements = pgTable(
     occurredOn: text("occurred_on").notNull(),
     /** Tarjeta de la billetera con la que se pagó (opcional). */
     cardId: uuid("card_id").references(() => personalCards.id, { onDelete: "set null" }),
+    /** IVA del ticket (para el resumen de impuestos). */
+    tax: numeric("tax", { precision: 14, scale: 2 }),
+    /** Foto del ticket (archivo en ARCHIVOS_DIR/tickets/<usuario>/). */
+    receipt: text("receipt"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("movimientos_usuario").on(t.userId, t.occurredOn)],
@@ -1153,4 +1157,76 @@ export const studioProjects = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("studio_usuario").on(t.userId, t.kind, t.updatedAt)],
+);
+
+// ---------------------------------------------------------------- 0.11: pagos divididos
+
+/** Personas con las que divides pagos (Netflix entre 4, la renta…). */
+export const financePeople = pgTable(
+  "finance_people",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    contact: text("contact").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("finance_people_nombre").on(t.userId, t.name)],
+);
+
+/** Un pago que se divide: total, cada cuánto y la próxima fecha de cobro. */
+export const financeSplits = pgTable(
+  "finance_splits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("MXN"),
+    /** unico | semanal | mensual | anual */
+    cycle: text("cycle").notNull().default("mensual"),
+    /** Próxima fecha que todavía no tiene cobros generados (AAAA-MM-DD). */
+    nextDue: text("next_due").notNull(),
+    notes: text("notes").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("finance_splits_usuario").on(t.userId)],
+);
+
+/** Cuánto le toca a cada persona de un pago dividido. */
+export const financeSplitMembers = pgTable(
+  "finance_split_members",
+  {
+    splitId: uuid("split_id")
+      .notNull()
+      .references(() => financeSplits.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => financePeople.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.splitId, t.personId] })],
+);
+
+/** Cada cobro de cada periodo: se marca pagado; si pasa la fecha queda «debe». */
+export const financeSplitCharges = pgTable(
+  "finance_split_charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    splitId: uuid("split_id")
+      .notNull()
+      .references(() => financeSplits.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => financePeople.id, { onDelete: "cascade" }),
+    dueOn: text("due_on").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("finance_cargo_unico").on(t.splitId, t.personId, t.dueOn), index("finance_cargos_persona").on(t.personId, t.dueOn)],
 );

@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { zonaDe } from "../src/modules/cloudflare.js";
 import { nombreRespaldo, scriptRespaldo, validarCarpeta } from "../src/modules/respaldos-vps.js";
-import { NUMEROS_DE_PRUEBA } from "../src/modules/tarjetas.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -93,7 +92,7 @@ describe("Cloudflare", () => {
   });
 });
 
-describe("finanzas: concepto libre y billetera", () => {
+describe("finanzas: concepto libre", () => {
   it("el concepto escrito por ti queda en tus sugerencias", async () => {
     const { h, otra } = await preparar();
     const app = ctx!.app;
@@ -104,47 +103,6 @@ describe("finanzas: concepto libre y billetera", () => {
     expect(deOtra).toHaveLength(0);
   });
 
-  it("tarjeta real: solo últimos 4; no acepta números completos", async () => {
-    const { h } = await preparar();
-    const app = ctx!.app;
-    const mal = await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas", headers: h, payload: { apodo: "BBVA", ultimos4: "4111111111111111" } });
-    expect(mal.statusCode).toBe(400);
-    const ok = await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas", headers: h, payload: { apodo: "BBVA", marca: "visa", ultimos4: "1234" } });
-    expect(ok.statusCode).toBe(200);
-    const t = ok.json<{ ultimos4: string; numeroPrueba: string | null; cvv: string | null }>();
-    expect(t.ultimos4).toBe("1234");
-    expect(t.numeroPrueba).toBeNull();
-    expect(t.cvv).toBeNull();
-  });
-
-  it("tarjeta de prueba: número público de pruebas y no más de 10", async () => {
-    const { h } = await preparar();
-    const app = ctx!.app;
-    const t = (await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas/prueba", headers: h, payload: { marca: "mastercard" } })).json<{ tipo: string; numeroPrueba: string; vence: string; cvv: string }>();
-    expect(t.tipo).toBe("prueba");
-    expect(NUMEROS_DE_PRUEBA.map((n) => n.numero)).toContain(t.numeroPrueba);
-    expect(t.vence).toMatch(/^\d{2}\/\d{2}$/);
-    expect(t.cvv).toMatch(/^\d{3}$/);
-    for (let i = 0; i < 9; i++) await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas/prueba", headers: h, payload: {} });
-    expect((await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas/prueba", headers: h, payload: {} })).statusCode).toBe(400);
-  });
-
-  it("pagar exige confirmar, anota el gasto y es solo de su dueña", async () => {
-    const { h, otra } = await preparar();
-    const app = ctx!.app;
-    const t = (await app.inject({ method: "POST", url: "/api/finanzas-personales/tarjetas", headers: h, payload: { apodo: "Débito", ultimos4: "9876" } })).json<{ id: string }>();
-    const url = `/api/finanzas-personales/tarjetas/${t.id}/pagar`;
-    expect((await app.inject({ method: "POST", url, headers: h, payload: { monto: 100, concepto: "Hosting" } })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url, headers: h, payload: { monto: 100, concepto: "Hosting", confirmo: false } })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url, headers: otra, payload: { monto: 100, concepto: "Hosting", confirmo: true } })).statusCode).toBe(404);
-    const ok = await app.inject({ method: "POST", url, headers: h, payload: { monto: 100, concepto: "Hosting", categoria: "Servicios", confirmo: true } });
-    expect(ok.statusCode).toBe(200);
-    const movs = (await app.inject({ method: "GET", url: "/api/finanzas-personales/movimientos?mes=2026-03", headers: h })).json<{ descripcion: string; tarjetaId: string; monto: number }[]>();
-    expect(movs[0]?.descripcion).toContain("Débito ••9876: Hosting");
-    expect(movs[0]?.tarjetaId).toBe(t.id);
-    const lista = (await app.inject({ method: "GET", url: "/api/finanzas-personales/tarjetas", headers: h })).json<{ tarjetas: { gastadoMes: number }[] }>();
-    expect(lista.tarjetas[0]?.gastadoMes).toBe(100);
-  });
 });
 
 describe("notas: adjuntos y color", () => {

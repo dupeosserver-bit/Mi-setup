@@ -6,3 +6,4 @@ export * from "./permissions.js";
 export * from "./schemas.js";
 export * from "./preferencias.js";
 export * from "./bots.js";
+export * from "./impuestos.js";

@@ -48,7 +48,7 @@ export default function NavegadorPrivado() {
           <li>Sesión aislada en memoria: no comparte cookies con la app ni con otras ventanas.</li>
           <li>Bloqueo básico de rastreadores y anuncios conocidos.</li>
           <li>Sin permisos de cámara, micrófono, ubicación ni notificaciones.</li>
-          <li>No oculta tu IP: para eso conéctate antes a la VPN.</li>
+          <li>No oculta tu IP.</li>
         </ul>
       </Tarjeta>
     </div>

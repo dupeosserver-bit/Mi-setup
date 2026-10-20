@@ -294,12 +294,6 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     ],
     nota: "Necesita el Email Worker de Cloudflare configurado (ver docs/USO.md).",
   },
-  vpn: {
-    pasos: [
-      "Agrega este dispositivo: la app genera las llaves y te da un QR o un archivo .conf.",
-      "Escanea el QR con la app oficial de WireGuard (o importa el .conf en la PC) y conéctate desde ahí.",
-    ],
-  },
   navegador_privado: {
     pasos: ["En la app de PC escribe una dirección o búsqueda y se abre una ventana privada.", "Al cerrarla se borra todo: historial, cookies y sesiones."],
   },
