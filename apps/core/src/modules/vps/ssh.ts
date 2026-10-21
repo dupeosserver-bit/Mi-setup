@@ -4,7 +4,10 @@
  * la primera vez y, si cambia, se rechaza la conexión.
  */
 import { createHash } from "node:crypto";
-import { Client, utils, type ConnectConfig, type SFTPWrapper } from "ssh2";
+import ssh2, { Client, type ConnectConfig, type SFTPWrapper } from "ssh2";
+
+// ssh2 es CommonJS: en Node (ESM) `utils` solo existe en la exportación por defecto.
+const { utils } = ssh2;
 import type { VpsServerRow } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import type { ServerCipher } from "../../security/crypto.js";
