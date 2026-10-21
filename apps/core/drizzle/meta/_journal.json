@@ -162,6 +162,13 @@
       "when": 1792520138170,
       "tag": "0022_google-correo",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792609013749,
+      "tag": "0023_pagos-divididos-2",
+      "breakpoints": true
     }
   ]
 }

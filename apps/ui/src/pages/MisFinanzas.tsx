@@ -2,6 +2,8 @@
  * Mis finanzas: gastos e ingresos con categoría, presupuestos, suscripciones con
  * aviso antes del cobro, y tu Excel (importar y exportar).
  */
+import { Rendimientos } from "../components/Rendimientos";
+import { COLOR_GASTOS, COLOR_INGRESOS, GastosSemana, TendenciaFinanzas } from "../components/FinanzasGraficas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarClock, Camera, Download, FileSpreadsheet, PiggyBank, Plus, Trash2, Upload, Wallet } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -101,6 +103,8 @@ function ResumenMes({ mes }: { mes: string }) {
           <p className={cx("text-2xl font-bold", r.balance >= 0 ? "text-ok" : "text-peligro")}>{dinero(r.balance)}</p>
         </Tarjeta>
       </div>
+      <GastosSemana />
+      <TendenciaFinanzas />
       <Tarjeta titulo="¿En qué se va?" icono={PiggyBank}>
         {!r.porCategoria.length ? <Vacio texto="Sin gastos este mes." /> : null}
         <div className="space-y-3">
@@ -159,8 +163,8 @@ function ResumenMes({ mes }: { mes: string }) {
                 <YAxis tick={{ fontSize: 11 }} width={60} />
                 <Tooltip formatter={(v: number) => dinero(v)} contentStyle={{ background: "#1e1e1e", border: "1px solid #333", borderRadius: 12 }} />
                 <Legend />
-                <Bar dataKey="ingresos" name="Ingresos" fill="#4ade80" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="gastos" name="Gastos" fill="#f87171" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="ingresos" name="Ingresos" fill={COLOR_INGRESOS} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="gastos" name="Gastos" fill={COLOR_GASTOS} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -479,7 +483,7 @@ function ExcelImportarExportar() {
 // ---------------------------------------------------------------- página
 
 export default function MisFinanzas() {
-  const [pestana, setPestana] = useState<"resumen" | "movimientos" | "divididos" | "impuestos" | "suscripciones" | "excel">("resumen");
+  const [pestana, setPestana] = useState<"resumen" | "movimientos" | "divididos" | "rendimientos" | "impuestos" | "suscripciones" | "excel">("resumen");
   const [mes, setMes] = useState(mesActual());
   const meses = useMemo(() => {
     const lista: string[] = [];
@@ -511,6 +515,7 @@ export default function MisFinanzas() {
           { id: "resumen", texto: "Resumen" },
           { id: "movimientos", texto: "Movimientos" },
           { id: "divididos", texto: "Pagos divididos" },
+          { id: "rendimientos", texto: "Rendimientos" },
           { id: "impuestos", texto: "Impuestos" },
           { id: "suscripciones", texto: "Suscripciones" },
           { id: "excel", texto: "Excel" },
@@ -519,6 +524,7 @@ export default function MisFinanzas() {
       {pestana === "resumen" ? <ResumenMes mes={mes} /> : null}
       {pestana === "movimientos" ? <Movimientos mes={mes} /> : null}
       {pestana === "divididos" ? <PagosDivididos /> : null}
+      {pestana === "rendimientos" ? <Rendimientos /> : null}
       {pestana === "impuestos" ? <Impuestos mes={mes} /> : null}
       {pestana === "suscripciones" ? <Suscripciones /> : null}
       {pestana === "excel" ? <ExcelImportarExportar /> : null}

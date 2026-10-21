@@ -7,7 +7,7 @@
  * - Calendario que junta eventos propios, recordatorios, suscripciones y, si
  *   tienes permiso, cobros a clientes y vencimientos.
  */
-import { can } from "@mi-setup/shared";
+import { DIAS_SEMANA, can, gruposTendencia, semanaDe } from "@mi-setup/shared";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -193,6 +193,46 @@ export function personalRoutes(deps: ModuleDeps) {
           ingresos: Number(historial.find((h) => h.mes === m && h.tipo === "ingreso")?.total ?? 0),
           gastos: Number(historial.find((h) => h.mes === m && h.tipo === "gasto")?.total ?? 0),
         })),
+      };
+    });
+
+    /** Gastos e ingresos de una semana (lunes a domingo) día por día, para la gráfica de columnas. */
+    app.get("/api/finanzas-personales/semana", leer, async (request) => {
+      const user = currentUser(request);
+      const { fecha } = z.object({ fecha: FECHA.optional() }).parse(request.query);
+      const dias = semanaDe(fecha ?? hoy(deps.now()));
+      const filas = await db
+        .select({ fecha: personalMovements.occurredOn, tipo: personalMovements.kind, total: sql<string>`sum(${personalMovements.amount})` })
+        .from(personalMovements)
+        .where(and(eq(personalMovements.userId, user.id), gte(personalMovements.occurredOn, dias[0]!), lte(personalMovements.occurredOn, dias[6]!)))
+        .groupBy(personalMovements.occurredOn, personalMovements.kind);
+      const suma = (f: string, t: string) => Number(filas.find((x) => x.fecha === f && x.tipo === t)?.total ?? 0);
+      const lista = dias.map((f, i) => ({ fecha: f, dia: DIAS_SEMANA[i]!, gastos: suma(f, "gasto"), ingresos: suma(f, "ingreso") }));
+      const gastos = lista.reduce((a, d) => a + d.gastos, 0);
+      const mayor = lista.reduce((a, d) => (d.gastos > a.gastos ? d : a), lista[0]!);
+      return { desde: dias[0], hasta: dias[6], dias: lista, gastos, ingresos: lista.reduce((a, d) => a + d.ingresos, 0), promedio: gastos / 7, diaMayor: mayor.gastos > 0 ? mayor : null };
+    });
+
+    /** Gastos e ingresos en el tiempo, para la gráfica lineal. */
+    app.get("/api/finanzas-personales/tendencia", leer, async (request) => {
+      const user = currentUser(request);
+      const { periodo } = z.object({ periodo: z.enum(["30d", "90d", "12m"]).default("12m") }).parse(request.query);
+      const grupos = gruposTendencia(hoy(deps.now()), periodo);
+      const filas = await db
+        .select({ fecha: personalMovements.occurredOn, tipo: personalMovements.kind, total: sql<string>`sum(${personalMovements.amount})` })
+        .from(personalMovements)
+        .where(and(eq(personalMovements.userId, user.id), gte(personalMovements.occurredOn, grupos[0]!.desde), lte(personalMovements.occurredOn, grupos.at(-1)!.hasta)))
+        .groupBy(personalMovements.occurredOn, personalMovements.kind);
+      let acumulado = 0;
+      return {
+        periodo,
+        puntos: grupos.map((g) => {
+          const dentro = filas.filter((f) => f.fecha >= g.desde && f.fecha <= g.hasta);
+          const gastos = dentro.filter((f) => f.tipo === "gasto").reduce((a, f) => a + Number(f.total), 0);
+          const ingresos = dentro.filter((f) => f.tipo === "ingreso").reduce((a, f) => a + Number(f.total), 0);
+          acumulado += ingresos - gastos;
+          return { clave: g.clave, gastos: Math.round(gastos * 100) / 100, ingresos: Math.round(ingresos * 100) / 100, ahorro: Math.round(acumulado * 100) / 100 };
+        }),
       };
     });
 

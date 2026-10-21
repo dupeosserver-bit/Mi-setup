@@ -56,6 +56,8 @@ export const envBase = z.object({
     GEMINI_TEXT_MODEL: z.string().default("gemini-2.5-flash"),
     TIKTOK_CLIENT_SECRET: optionalString,
     CURSEFORGE_API_KEY: optionalString,
+    // Token gratis del SIE de Banxico (CETES y tasa objetivo para Rendimientos).
+    BANXICO_TOKEN: optionalString,
     GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),
     MERCADOLIBRE_CLIENT_ID: optionalString,
     MERCADOLIBRE_CLIENT_SECRET: optionalString,

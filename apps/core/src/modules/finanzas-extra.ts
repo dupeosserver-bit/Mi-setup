@@ -6,18 +6,18 @@
  * - Pagos divididos: un pago (Netflix, renta…) entre varias personas; cada
  *   una tiene su lista de cobros, se marcan pagados y si pasa la fecha queda «debe».
  */
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { repartir } from "@mi-setup/shared";
+import { repartir, repartirPorPorcentaje } from "@mi-setup/shared";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { financePeople, financeSplitCharges, financeSplitMembers, financeSplits, personalMovements } from "../db/schema.js";
+import { financePeople, financeSplitCharges, financeSplitMembers, financeSplits, personalMovements, users } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
-import { idParams, sync, type ModuleDeps } from "./common.js";
+import { idParams, requireCipher, sync, type ModuleDeps } from "./common.js";
 import { carpetaArchivos } from "./herramientas.js";
 import type { IaSimple } from "./ia/simple.js";
 import { tipoPorBytes } from "./notas-adjuntos.js";
@@ -65,6 +65,39 @@ export function estadoCobro(c: { dueOn: string; paidAt: Date | null }, hoy: stri
   if (c.paidAt) return "pagado";
   return c.dueOn < hoy ? "debe" : "pendiente";
 }
+
+export type ModoReparto = "igual" | "monto" | "porcentaje";
+
+/**
+ * Cuánto le toca a cada persona (sin contarte a ti):
+ * - igual: el total entre todos (contándote si pagas).
+ * - monto: lo que escribiste (vacío = parte igual).
+ * - porcentaje: el % de cada quien; lo que falta para 100 % es tuyo.
+ */
+export function calcularMontos(
+  total: number,
+  modo: ModoReparto,
+  incluirme: boolean,
+  personas: readonly { monto?: number | undefined; porcentaje?: number | undefined }[],
+): number[] {
+  const partes = repartir(total, personas.length + (incluirme ? 1 : 0)).slice(incluirme ? 1 : 0);
+  if (modo === "igual") return partes;
+  if (modo === "monto") return personas.map((p, i) => p.monto ?? partes[i]!);
+  if (personas.some((p) => p.porcentaje === undefined)) throw new HttpError(400, "Pon el porcentaje de cada persona");
+  const pcts = personas.map((p) => p.porcentaje!);
+  const suma = pcts.reduce((a, b) => a + b, 0);
+  if (suma > 100.001) throw new HttpError(400, `Los porcentajes suman ${Math.round(suma * 100) / 100} %: no pueden pasar de 100 %`);
+  if (!incluirme && Math.abs(suma - 100) > 0.001) throw new HttpError(400, "Si tú no pagas, los porcentajes deben sumar 100 %");
+  return incluirme ? repartirPorPorcentaje(total, [100 - suma, ...pcts]).slice(1) : repartirPorPorcentaje(total, pcts);
+}
+
+const PERSONA_PAGO = z.object({
+  nombre: z.string().trim().min(1).max(60),
+  contacto: z.string().trim().max(120).default(""),
+  monto: z.coerce.number().positive().optional(),
+  porcentaje: z.coerce.number().positive().max(100).optional(),
+});
+const hashEnlace = (t: string) => createHash("sha256").update(t).digest("hex");
 
 export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
   const { db } = deps;
@@ -251,13 +284,23 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
           proximo: p.nextDue === SIN_MAS ? null : p.nextDue,
           notas: p.notes,
           activo: p.active,
-          miembros: miembros.filter((m) => m.splitId === p.id).map((m) => ({ personaId: m.personId, nombre: nombrePersona.get(m.personId) ?? "", monto: Number(m.amount) })),
+          modo: p.splitMode as ModoReparto,
+          miembros: miembros
+            .filter((m) => m.splitId === p.id)
+            .map((m) => ({ personaId: m.personId, nombre: nombrePersona.get(m.personId) ?? "", monto: Number(m.amount), porcentaje: m.percent === null ? null : Number(m.percent) })),
         })),
         personas: personas.map((p) => {
           const suyos = cobros.filter((c) => c.personId === p.id);
           const lista = suyos.map((c) => ({ id: c.id, pago: nombrePago.get(c.splitId) ?? "", fecha: c.dueOn, monto: Number(c.amount), estado: estadoCobro(c, h) }));
           const suma = (e: EstadoCobro) => Math.round(lista.filter((c) => c.estado === e).reduce((a, c) => a + c.monto, 0) * 100) / 100;
-          return { id: p.id, nombre: p.name, contacto: p.contact, debe: suma("debe"), pendiente: suma("pendiente"), cobros: lista.slice(-36) };
+          // Lo que comparte: cada pago o suscripción en el que participa y cuánto le toca.
+          const comparte = miembros
+            .filter((m) => m.personId === p.id)
+            .map((m) => {
+              const pago = pagos.find((x) => x.id === m.splitId)!;
+              return { pagoId: pago.id, pago: pago.name, monto: Number(m.amount), porcentaje: m.percent === null ? null : Number(m.percent), ciclo: pago.cycle, moneda: pago.currency, activo: pago.active };
+            });
+          return { id: p.id, nombre: p.name, contacto: p.contact, debe: suma("debe"), pendiente: suma("pendiente"), cobros: lista.slice(-36), comparte, enlace: Boolean(p.shareTokenHash) };
         }),
       };
     });
@@ -274,25 +317,21 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
           notas: z.string().trim().max(500).default(""),
           /** Tú también pagas una parte (no se te cobra a ti). */
           incluirme: z.boolean().default(true),
-          personas: z
-            .array(z.object({ nombre: z.string().trim().min(1).max(60), contacto: z.string().trim().max(120).default(""), monto: z.coerce.number().positive().optional() }))
-            .min(1, "Agrega al menos una persona")
-            .max(30),
+          modo: z.enum(["igual", "monto", "porcentaje"]).default("monto"),
+          personas: z.array(PERSONA_PAGO).min(1, "Agrega al menos una persona").max(30),
         })
         .parse(request.body);
       const nombres = new Set(d.personas.map((p) => p.nombre.toLowerCase()));
       if (nombres.size !== d.personas.length) throw new HttpError(400, "Hay una persona repetida");
-      // Montos: los que escribiste; si no, el total entre todos (contándote a ti si pagas).
-      const partes = repartir(d.total, d.personas.length + (d.incluirme ? 1 : 0)).slice(d.incluirme ? 1 : 0);
-      const montos = d.personas.map((p, i) => p.monto ?? partes[i]!);
+      const montos = calcularMontos(d.total, d.modo, d.incluirme, d.personas);
       const [pago] = await db
         .insert(financeSplits)
-        .values({ userId: user.id, name: d.nombre, total: d.total.toFixed(2), currency: d.moneda.toUpperCase(), cycle: d.ciclo, nextDue: d.primerCobro, notes: d.notas })
+        .values({ userId: user.id, name: d.nombre, total: d.total.toFixed(2), currency: d.moneda.toUpperCase(), cycle: d.ciclo, nextDue: d.primerCobro, notes: d.notas, splitMode: d.modo })
         .returning();
       if (!pago) throw new HttpError(500, "No se pudo guardar");
       for (const [i, p] of d.personas.entries()) {
         const personId = await persona(user.id, p.nombre, p.contacto);
-        await db.insert(financeSplitMembers).values({ splitId: pago.id, personId, amount: montos[i]!.toFixed(2) });
+        await db.insert(financeSplitMembers).values({ splitId: pago.id, personId, amount: montos[i]!.toFixed(2), percent: d.modo === "porcentaje" && p.porcentaje ? p.porcentaje.toFixed(3) : null });
       }
       await generarCobros(user.id);
       sync(deps, user.id, "finanzas-personales");
@@ -327,27 +366,25 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
           total: MONTO,
           notas: z.string().trim().max(500).default(""),
           incluirme: z.boolean().default(true),
-          personas: z
-            .array(z.object({ nombre: z.string().trim().min(1).max(60), contacto: z.string().trim().max(120).default(""), monto: z.coerce.number().positive().optional() }))
-            .min(1, "Deja al menos una persona")
-            .max(30),
+          modo: z.enum(["igual", "monto", "porcentaje"]).default("monto"),
+          personas: z.array(PERSONA_PAGO).min(1, "Deja al menos una persona").max(30),
         })
         .parse(request.body);
       const nombres = new Set(d.personas.map((p) => p.nombre.toLowerCase()));
       if (nombres.size !== d.personas.length) throw new HttpError(400, "Hay una persona repetida");
-      const partes = repartir(d.total, d.personas.length + (d.incluirme ? 1 : 0)).slice(d.incluirme ? 1 : 0);
-      const montos = d.personas.map((p, i) => p.monto ?? partes[i]!);
-      await db.update(financeSplits).set({ name: d.nombre, total: d.total.toFixed(2), notes: d.notas }).where(eq(financeSplits.id, id));
+      const montos = calcularMontos(d.total, d.modo, d.incluirme, d.personas);
+      await db.update(financeSplits).set({ name: d.nombre, total: d.total.toFixed(2), notes: d.notas, splitMode: d.modo }).where(eq(financeSplits.id, id));
       const quedan: string[] = [];
       for (const [i, p] of d.personas.entries()) {
         const personId = await persona(user.id, p.nombre, p.contacto);
         if (p.contacto) await db.update(financePeople).set({ contact: p.contacto }).where(eq(financePeople.id, personId));
         quedan.push(personId);
         const monto = montos[i]!.toFixed(2);
+        const percent = d.modo === "porcentaje" && p.porcentaje ? p.porcentaje.toFixed(3) : null;
         await db
           .insert(financeSplitMembers)
-          .values({ splitId: id, personId, amount: monto })
-          .onConflictDoUpdate({ target: [financeSplitMembers.splitId, financeSplitMembers.personId], set: { amount: monto } });
+          .values({ splitId: id, personId, amount: monto, percent })
+          .onConflictDoUpdate({ target: [financeSplitMembers.splitId, financeSplitMembers.personId], set: { amount: monto, percent } });
         await db
           .update(financeSplitCharges)
           .set({ amount: monto })
@@ -408,6 +445,65 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
         .where(eq(financePeople.id, id));
       sync(deps, user.id, "finanzas-personales");
       return { ok: true };
+    });
+
+    // ---- enlace para cobrar: la persona ve su lista sin cuenta (solo lectura)
+    const enlaceCobro = (token: string) => `https://${deps.config.env.APP_HOST}/cobro/${token}`;
+    app.get("/api/finanzas-personales/divididos/personas/:id/enlace", leer, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const p = await personaPropia(user.id, id);
+      if (!p.shareTokenEnc) return { activo: false };
+      return { activo: true, url: enlaceCobro(requireCipher(deps).decrypt(p.shareTokenEnc)) };
+    });
+
+    app.post("/api/finanzas-personales/divididos/personas/:id/enlace", escribir, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      const { nuevo } = z.object({ nuevo: z.boolean().default(false) }).parse(request.body ?? {});
+      const p = await personaPropia(user.id, id);
+      // Se reutiliza el mismo enlace (para mandarlo varias veces) salvo que pidas uno nuevo.
+      if (p.shareTokenEnc && !nuevo) return { activo: true, url: enlaceCobro(requireCipher(deps).decrypt(p.shareTokenEnc)) };
+      const token = randomBytes(24).toString("base64url");
+      await db.update(financePeople).set({ shareTokenHash: hashEnlace(token), shareTokenEnc: requireCipher(deps).encrypt(token) }).where(eq(financePeople.id, id));
+      return { activo: true, url: enlaceCobro(token) };
+    });
+
+    app.delete("/api/finanzas-personales/divididos/personas/:id/enlace", escribir, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      await personaPropia(user.id, id);
+      await db.update(financePeople).set({ shareTokenHash: null, shareTokenEnc: null }).where(eq(financePeople.id, id));
+      return { activo: false };
+    });
+
+    /** Página pública de cobro: solo el nombre de la persona y lo que debe (nada más de tus finanzas). */
+    app.get("/api/cobros-publicos/:token", { config: { acceso: { publico: true } } }, async (request) => {
+      const { token } = z.object({ token: z.string().min(20).max(64) }).parse(request.params);
+      const [fila] = await db
+        .select({ p: financePeople, de: users.displayName })
+        .from(financePeople)
+        .innerJoin(users, eq(users.id, financePeople.userId))
+        .where(eq(financePeople.shareTokenHash, hashEnlace(token)));
+      if (!fila) throw new HttpError(404, "Este enlace ya no sirve");
+      await generarCobros(fila.p.userId);
+      const h = hoy();
+      const cobros = await db
+        .select({ id: financeSplitCharges.id, pago: financeSplits.name, moneda: financeSplits.currency, fecha: financeSplitCharges.dueOn, monto: financeSplitCharges.amount, paidAt: financeSplitCharges.paidAt })
+        .from(financeSplitCharges)
+        .innerJoin(financeSplits, eq(financeSplits.id, financeSplitCharges.splitId))
+        .where(eq(financeSplitCharges.personId, fila.p.id))
+        .orderBy(asc(financeSplitCharges.dueOn));
+      const lista = cobros.map((c) => ({ pago: c.pago, moneda: c.moneda, fecha: c.fecha, monto: Number(c.monto), estado: estadoCobro({ dueOn: c.fecha, paidAt: c.paidAt }, h) }));
+      const suma = (e: EstadoCobro) => Math.round(lista.filter((c) => c.estado === e).reduce((a, c) => a + c.monto, 0) * 100) / 100;
+      return {
+        nombre: fila.p.name,
+        de: fila.de,
+        hoy: h,
+        debe: suma("debe"),
+        pendiente: suma("pendiente"),
+        cobros: lista.filter((c) => c.estado !== "pagado").concat(lista.filter((c) => c.estado === "pagado").slice(-6)),
+      };
     });
 
     app.delete("/api/finanzas-personales/divididos/personas/:id", escribir, async (request) => {

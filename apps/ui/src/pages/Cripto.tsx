@@ -1,4 +1,5 @@
 /** Cripto: precios en vivo (CoinGecko) de tu lista de monedas. Solo datos, no es asesoría financiera. */
+import { FichaCripto } from "../components/FichaMercado";
 import { Paginas } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, Search, X } from "lucide-react";
@@ -50,7 +51,7 @@ const ORDENES_CRIPTO = [
 ] as const;
 
 /** Explorar todo el mercado por páginas, con datos para comparar (no son recomendaciones). */
-function ExplorarCripto({ moneda, misIds, alAgregar }: { moneda: "mxn" | "usd" | "eur"; misIds: string[]; alAgregar: (id: string) => void }) {
+function ExplorarCripto({ moneda, misIds, alAgregar, alAbrir }: { moneda: "mxn" | "usd" | "eur"; misIds: string[]; alAgregar: (id: string) => void; alAbrir: (id: string) => void }) {
   const [orden, setOrden] = useState<(typeof ORDENES_CRIPTO)[number]["id"]>("capitalizacion");
   const [pagina, setPagina] = useState(1);
   const q = useQuery({
@@ -95,10 +96,10 @@ function ExplorarCripto({ moneda, misIds, alAgregar }: { moneda: "mxn" | "usd" |
               <tr key={m.id} className="border-t border-borde">
                 <td className="py-1.5 text-xs text-tenue">{m.rango ?? "—"}</td>
                 <td>
-                  <span className="flex items-center gap-2">
+                  <button type="button" className="flex items-center gap-2 text-left hover:underline" onClick={() => alAbrir(m.id)} title="Ver estadísticas y gráficas">
                     <img src={m.imagen} alt="" className="h-5 w-5 rounded-full" loading="lazy" />
                     <span className="truncate">{m.nombre}</span> <span className="text-xs text-tenue">{m.simbolo}</span>
-                  </span>
+                  </button>
                 </td>
                 <td className="text-right">{fmt.format(m.precio)}</td>
                 <td className="text-right">
@@ -135,6 +136,7 @@ export default function Cripto() {
   const [moneda, setMoneda] = useState<"mxn" | "usd" | "eur">("mxn");
   const [buscar, setBuscar] = useState("");
   const [q, setQ] = useState("");
+  const [ficha, setFicha] = useState<string | null>(null);
   const lista = useQuery({ queryKey: ["cripto", moneda], queryFn: () => api<Moneda[]>(`/api/cripto?moneda=${moneda}`), refetchInterval: 2 * 60_000 });
   const resultados = useQuery({ queryKey: ["cripto", "buscar", q], queryFn: () => api<Resultado[]>(`/api/cripto/buscar?q=${encodeURIComponent(q)}`), enabled: q.length > 0 });
   const guardar = useMutation({
@@ -164,7 +166,7 @@ export default function Cripto() {
           </>
         }
       />
-      <ExplorarCripto moneda={moneda} misIds={ids} alAgregar={(id) => guardar.mutate([...ids, id])} />
+      <ExplorarCripto moneda={moneda} misIds={ids} alAgregar={(id) => guardar.mutate([...ids, id])} alAbrir={setFicha} />
       <Tarjeta titulo="Agregar moneda" icono={Search}>
         <form
           className="flex gap-2"
@@ -207,7 +209,9 @@ export default function Cripto() {
             <div className="flex items-center gap-3">
               <img src={m.imagen} alt="" className="h-8 w-8 rounded-full" referrerPolicy="no-referrer" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{m.nombre}</p>
+                <button type="button" className="block max-w-full truncate text-left font-medium hover:underline" onClick={() => setFicha(m.id)}>
+                  {m.nombre}
+                </button>
                 <p className="text-xs text-tenue">
                   {m.simbolo} · Cap. {fmtCorto.format(m.capitalizacion)}
                 </p>
@@ -225,7 +229,8 @@ export default function Cripto() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-tenue">Datos de CoinGecko (gráfica de 7 días).</p>
+      <p className="text-xs text-tenue">Datos de CoinGecko (gráfica de 7 días). Toca una moneda para ver sus estadísticas y gráficas.</p>
+      {ficha ? <FichaCripto id={ficha} moneda={moneda} alCerrar={() => setFicha(null)} /> : null}
     </div>
   );
 }

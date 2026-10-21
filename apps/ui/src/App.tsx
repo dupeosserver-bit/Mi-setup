@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 
 const BotPublico = lazy(() => import("./pages/BotPublico"));
 const NotaPublica = lazy(() => import("./pages/NotaPublica"));
+const CobroPublico = lazy(() => import("./pages/CobroPublico"));
 
 export function App() {
   const conSesion = useSesion((s) => Boolean(s.refreshToken));
@@ -52,6 +53,15 @@ export function App() {
           element={
             <Suspense fallback={<p className="py-10 text-center text-sm text-tenue">Cargando…</p>}>
               <NotaPublica />
+            </Suspense>
+          }
+        />
+        {/* Lista de cobros de Pagos divididos con enlace: se ve sin cuenta. */}
+        <Route
+          path="/cobro/:token"
+          element={
+            <Suspense fallback={<p className="py-10 text-center text-sm text-tenue">Cargando…</p>}>
+              <CobroPublico />
             </Suspense>
           }
         />

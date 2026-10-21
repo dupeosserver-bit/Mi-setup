@@ -1,4 +1,5 @@
 /** Inversiones: precio de acciones, ETF e índices (Yahoo Finance, con retraso). Solo datos, no es asesoría financiera. */
+import { FichaAccion } from "../components/FichaMercado";
 import { Paginas } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, X } from "lucide-react";
@@ -66,7 +67,7 @@ function Analistas({ a }: { a: Accion["analistas"] }) {
 }
 
 /** Explorar acciones por listas y páginas, con la opinión promedio de los analistas. */
-function ExplorarAcciones({ mios, alAgregar }: { mios: string[]; alAgregar: (s: string) => void }) {
+function ExplorarAcciones({ mios, alAgregar, alAbrir }: { mios: string[]; alAgregar: (s: string) => void; alAbrir: (s: string) => void }) {
   const [lista, setLista] = useState<(typeof LISTAS_ACCIONES)[number]["id"]>("most_actives");
   const [pagina, setPagina] = useState(1);
   const [orden, setOrden] = useState<"lista" | "analistas">("lista");
@@ -112,8 +113,10 @@ function ExplorarAcciones({ mios, alAgregar }: { mios: string[]; alAgregar: (s: 
             {acciones.map((a) => (
               <tr key={a.simbolo} className="border-t border-borde">
                 <td className="py-1.5">
-                  <span className="block truncate">{a.nombre}</span>
-                  <span className="text-xs text-tenue">{a.simbolo}</span>
+                  <button type="button" className="block max-w-[16rem] text-left hover:underline" onClick={() => alAbrir(a.simbolo)} title="Ver estadísticas, finanzas y noticias">
+                    <span className="block truncate">{a.nombre}</span>
+                    <span className="text-xs text-tenue">{a.simbolo}</span>
+                  </button>
                 </td>
                 <td className="text-right">{a.precio !== null ? `${a.precio.toLocaleString("es-MX", { maximumFractionDigits: 2 })} ${a.moneda ?? ""}` : "—"}</td>
                 <td className="text-right">
@@ -147,6 +150,7 @@ function ExplorarAcciones({ mios, alAgregar }: { mios: string[]; alAgregar: (s: 
 
 export default function Inversiones() {
   const [nuevo, setNuevo] = useState("");
+  const [ficha, setFicha] = useState<string | null>(null);
   const lista = useQuery({ queryKey: ["inversiones"], queryFn: () => api<Cotizacion[]>("/api/inversiones") });
   const guardar = useMutation({
     mutationFn: (simbolos: string[]) => api("/api/inversiones/lista", { metodo: "PUT", cuerpo: { simbolos } }),
@@ -170,7 +174,7 @@ export default function Inversiones() {
           </Boton>
         }
       />
-      <ExplorarAcciones mios={simbolos} alAgregar={agregar} />
+      <ExplorarAcciones mios={simbolos} alAgregar={agregar} alAbrir={setFicha} />
       <Tarjeta titulo="Agregar acción, ETF o índice">
         <form
           className="flex gap-2"
@@ -200,7 +204,9 @@ export default function Inversiones() {
         {lista.data?.map((c) => (
           <div key={c.simbolo} className="rounded-tarjeta border border-borde bg-superficie p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="font-medium">{c.nombre}</p>
+              <button type="button" className="min-w-0 truncate text-left font-medium hover:underline" onClick={() => setFicha(c.simbolo)} title="Ver estadísticas, finanzas y noticias">
+                {c.nombre}
+              </button>
               <button type="button" aria-label={`Quitar ${c.nombre}`} className="text-tenue hover:text-texto" onClick={() => guardar.mutate(simbolos.filter((x) => x !== c.simbolo))}>
                 <X className="h-4 w-4" />
               </button>
@@ -222,7 +228,8 @@ export default function Inversiones() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-tenue">Datos de Yahoo Finance (con retraso).</p>
+      <p className="text-xs text-tenue">Datos de Yahoo Finance (con retraso). Toca un nombre para ver su ficha completa.</p>
+      {ficha ? <FichaAccion simbolo={ficha} alCerrar={() => setFicha(null)} /> : null}
     </div>
   );
 }

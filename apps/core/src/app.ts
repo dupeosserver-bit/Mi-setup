@@ -21,6 +21,8 @@ import { chatRoutes } from "./modules/chat.js";
 import { descargasRoutes } from "./modules/descargas.js";
 import { herramientasRoutes, limpiarCompartidos } from "./modules/herramientas.js";
 import { personalRoutes, revisarSuscripciones } from "./modules/personal.js";
+import { mercadosDetalleRoutes } from "./modules/mercados-detalle.js";
+import { actualizarTasas, rendimientosRoutes } from "./modules/rendimientos.js";
 import { finanzasExtraRoutes, limpiarTickets } from "./modules/finanzas-extra.js";
 import { clavesUsuarioRoutes } from "./modules/claves-usuario.js";
 import { crearIaSimple } from "./modules/ia/simple.js";
@@ -218,6 +220,9 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(finanzasExtraRoutes(deps, iaSimple));
   await app.register(clavesUsuarioRoutes(deps));
   jobs.push({ nombre: "limpiar-tickets", cadaMs: 12 * 60 * 60_000, alInicio: false, run: () => limpiarTickets(deps) });
+  await app.register(rendimientosRoutes(deps));
+  // Tasas de Rendimientos: se revisa cada 6 h y se actualiza si pasó un día.
+  jobs.push({ nombre: "rendimientos", cadaMs: 6 * 60 * 60_000, alInicio: true, run: async () => void (await actualizarTasas(deps)) });
   await app.register(extrasRoutes(deps));
   await app.register(entretenimientoRoutes(deps));
   await app.register(ciberseguridadRoutes(deps));
@@ -258,6 +263,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(redes.routes);
   await app.register(novedadesRoutes(deps));
   await app.register(mercadosRoutes(deps));
+  await app.register(mercadosDetalleRoutes(deps));
   await app.register(noticiasRoutes(deps));
   await app.register(cuentasRoutes(deps));
   await app.register(controlRemotoRoutes(deps));

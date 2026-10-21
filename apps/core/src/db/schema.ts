@@ -1171,9 +1171,12 @@ export const financePeople = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     contact: text("contact").notNull().default(""),
+    /** Enlace para cobrarle (0.11.2b): hash para buscarlo y cifrado para volver a copiarlo. */
+    shareTokenHash: text("share_token_hash"),
+    shareTokenEnc: text("share_token_enc"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("finance_people_nombre").on(t.userId, t.name)],
+  (t) => [uniqueIndex("finance_people_nombre").on(t.userId, t.name), uniqueIndex("finance_people_enlace").on(t.shareTokenHash)],
 );
 
 /** Un pago que se divide: total, cada cuánto y la próxima fecha de cobro. */
@@ -1193,6 +1196,8 @@ export const financeSplits = pgTable(
     nextDue: text("next_due").notNull(),
     notes: text("notes").notNull().default(""),
     active: boolean("active").notNull().default(true),
+    /** Cómo se reparte (0.11.2b): igual | monto | porcentaje. */
+    splitMode: text("split_mode").notNull().default("monto"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("finance_splits_usuario").on(t.userId)],
@@ -1209,6 +1214,8 @@ export const financeSplitMembers = pgTable(
       .notNull()
       .references(() => financePeople.id, { onDelete: "cascade" }),
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    /** Porcentaje del total cuando el pago se reparte por porcentaje. */
+    percent: numeric("percent", { precision: 6, scale: 3 }),
   },
   (t) => [primaryKey({ columns: [t.splitId, t.personId] })],
 );
