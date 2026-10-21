@@ -226,3 +226,145 @@ describe("0.11.2b · ficha de acciones y cripto", () => {
     expect(c.estadisticas).toMatchObject({ precio: 2e6, maximoHistorico: 2.3e6, fechaMaximo: "2026-03-01", maximo: 21e6, minimoHistorico: null });
   });
 });
+
+describe("0.11.2b · Blueprint", () => {
+  const ZIP = Buffer.from("UEsDBBQAAAAIAPSZVV1ysWZHiAAAAL8AAAAIAAAAY29uZi55bWxFjjEOgzAMRXdOEWUnhagTW9l7CIeYYqk4yDFwfZK2Usf/3pNs4jkNjTEMKw7GPlMUYl3MKOnMKLYoishKM6GUYP0F4e8j5kloU0pcgnHPE5iS5eoOlPzlvfOuq0hBXqiFBFRofefvbe+rgF2XVG88GGwDcSWunx2EZ4GffavDhTdEdNuy2eYCUEsDBBQAAAAIAPSZVV29L0lZEwAAACYCAAAUAAAAYWRtaW4vdmlldy5ibGFkZS5waHCzKbDLyM9JtNEvsLMZZY4ysTMBUEsBAhQDFAAAAAgA9JlVXXKxZkeIAAAAvwAAAAgAAAAAAAAAAAAAAIABAAAAAGNvbmYueW1sUEsBAhQDFAAAAAgA9JlVXb0vSVkTAAAAJgIAABQAAAAAAAAAAAAAAIABrgAAAGFkbWluL3ZpZXcuYmxhZGUucGhwUEsFBgAAAAACAAIAeAAAAPMAAAAAAA==", "base64");
+
+  it("detecta un .blueprint y lee su conf.yml", async () => {
+    const { revisarBlueprint, compatibilidad, interpretarTiendaOficial, interpretarGithub, descargaPermitida } = await import("../src/modules/blueprint-tienda.js");
+    const info = revisarBlueprint(ZIP);
+    expect(info).toMatchObject({ identificador: "modrinthbrowser", nombre: "Modrinth Browser", version: "1.2.0", objetivo: "beta-2024-12", autor: "Ana" });
+    expect(() => revisarBlueprint(Buffer.from("no es zip"))).toThrow(/blueprint/);
+    expect(compatibilidad("beta-2024-12", "beta-2026-06")).toBe("si");
+    expect(compatibilidad("beta-2026-09", "beta-2025-01")).toBe("no");
+    expect(compatibilidad("", "beta-2025-01")).toBe("quizas");
+    const oficial = interpretarTiendaOficial([
+      { identifier: "gratis", name: "Gratis", summary: "x", platforms: { GITHUB: { url: "https://github.com/a/b", price: 0, downloads: 5 } } },
+      { identifier: "pago", name: "De pago", platforms: { BUILTBYBIT: { url: "https://builtbybit.com/x", price: 5 } } },
+    ]);
+    expect(oficial.map((e) => e.nombre)).toEqual(["Gratis"]);
+    expect(interpretarGithub({ items: [{ full_name: "a/b", name: "b", description: null, html_url: "https://github.com/a/b", stargazers_count: 3, pushed_at: "2026-01-01", owner: { login: "a" } }] })[0]).toMatchObject({ id: "gh:a/b", popularidad: 3 });
+    expect(descargaPermitida("https://github.com/a/b/releases/download/v1/x.blueprint")).toBe(true);
+    expect(descargaPermitida("https://evil.example/x.blueprint")).toBe(false);
+    expect(descargaPermitida("http://github.com/x")).toBe(false);
+  });
+
+  it("el script del panel lee extensiones y versiones", async () => {
+    const { SCRIPT_EXTENSIONES, leerExtensiones } = await import("../src/modules/ptero-admin.js");
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+    const base = mkdtempSync(join(tmpdir(), "panel-"));
+    mkdirSync(join(base, "config"));
+    writeFileSync(join(base, "config/app.php"), "<?php return [\n    'version' => '1.11.10',\n];");
+    mkdirSync(join(base, ".blueprint/extensions/blueprint/private/db"), { recursive: true });
+    writeFileSync(join(base, ".blueprint/extensions/blueprint/private/db/version"), "beta-2026-06\n");
+    mkdirSync(join(base, ".blueprint/extensions/modrinthbrowser"), { recursive: true });
+    writeFileSync(join(base, ".blueprint/extensions/modrinthbrowser/conf.yml"), 'info:\n  name: "Modrinth Browser"\n  version: "1.2.0"\n  author: "Ana"\n');
+    const salida = execFileSync("bash", ["-c", SCRIPT_EXTENSIONES.replace("/var/www/pterodactyl", base)]).toString();
+    const r = leerExtensiones(salida);
+    expect(r.versionPanel).toBe("1.11.10");
+    expect(r.versionBlueprint).toBe("beta-2026-06");
+    expect(r.extensiones).toEqual([{ id: "modrinthbrowser", nombre: "Modrinth Browser", version: "1.2.0", autor: "Ana" }]);
+    await rm(base, { recursive: true, force: true });
+  });
+});
+
+describe("0.11.2b · encendido y servicios del VPS", () => {
+  it("lee servicios y contenedores, y protege SSH y Mi Setup", async () => {
+    const { interpretarServicios, comandoEnergia, textoConfirmacion } = await import("../src/modules/vps/energia.js");
+    const r = interpretarServicios(
+      "==SERVICIOS\nssh.service|running| OpenBSD Secure Shell server\nnginx.service|exited| A web server\n==DOCKER\nmisetup-core|running|Up 2 hours (healthy)|mi-setup-core\nweb|exited|Exited (0)|nginx\n==FIN\n",
+    );
+    expect(r.servicios.map((s) => s.nombre)).toEqual(["ssh.service", "nginx.service"]);
+    expect(r.contenedores).toEqual([
+      { nombre: "misetup-core", estado: "Up 2 hours (healthy)", imagen: "mi-setup-core", activo: true },
+      { nombre: "web", estado: "Exited (0)", imagen: "nginx", activo: false },
+    ]);
+    expect(r.docker).toBe("si");
+    expect(interpretarServicios("==SERVICIOS\n==DOCKER\nSIN_DOCKER\n==FIN").docker).toBe("no");
+
+    expect(() => comandoEnergia({ tipo: "servicio", nombre: "ssh.service", operacion: "detener", confirmacion: "" }, true)).toThrow(/sin acceso/);
+    expect(comandoEnergia({ tipo: "servicio", nombre: "ssh.service", operacion: "reiniciar", confirmacion: "" }, true)).toContain("systemctl restart 'ssh.service'");
+    expect(() => comandoEnergia({ tipo: "contenedor", nombre: "misetup-db", operacion: "detener", confirmacion: "" }, true)).toThrow(/solo se reinician/);
+    expect(comandoEnergia({ tipo: "contenedor", nombre: "misetup-core", operacion: "reiniciar", confirmacion: "" }, true)).toContain("nohup");
+    expect(comandoEnergia({ tipo: "vps", confirmacion: "" }, false)).toContain("sudo -n systemctl reboot");
+    expect(comandoEnergia({ tipo: "contenedor", nombre: "web", operacion: "iniciar", confirmacion: "" }, true)).toBe("docker start 'web'");
+    expect(textoConfirmacion({ tipo: "vps", confirmacion: "" }, "Contabo")).toBe("Contabo");
+    expect(textoConfirmacion({ tipo: "misetup", confirmacion: "" }, "Contabo")).toBe("MI SETUP");
+  });
+});
+
+describe("0.11.2b · IA estilo Claude", () => {
+  it("lee skills de Claude y de otras IA", async () => {
+    const { leerSkill } = await import("../src/modules/ia/organizar.js");
+    expect(leerSkill("---\nname: tono-amable\ndescription: cuando escribas a clientes\n---\n# Tono\nSé amable.")).toMatchObject({ nombre: "tono-amable", descripcion: "cuando escribas a clientes", contenido: "# Tono\nSé amable.", origen: "claude" });
+    expect(leerSkill("# Revisor de código\nRevisa todo.", "rev.md")).toMatchObject({ nombre: "Revisor de código", origen: "otra" });
+  });
+
+  it("importa chats de Mi Setup y de Claude.ai sin traer herramientas", async () => {
+    const { interpretarImportacion, limpiarBloques } = await import("../src/modules/ia/organizar.js");
+    expect(limpiarBloques([{ type: "text", text: "hola" }, { type: "tool_use", name: "crear_nota", id: "x", input: {} }, { type: "image", source: { type: "url", url: "http://x" } }])).toEqual([
+      { type: "text", text: "hola" },
+      { type: "text", text: "[Propuesta de la IA: crear_nota]" },
+    ]);
+    const claude = interpretarImportacion([{ name: "Plan", chat_messages: [{ sender: "human", text: "hola" }, { sender: "assistant", text: "qué tal" }] }]);
+    expect(claude[0]).toEqual({ titulo: "Plan", mensajes: [{ rol: "user", contenido: [{ type: "text", text: "hola" }] }, { rol: "assistant", contenido: [{ type: "text", text: "qué tal" }] }] });
+    expect(() => interpretarImportacion({ algo: 1 })).toThrow();
+  });
+
+  it("proyectos, memoria y skills llegan a la IA; mover, exportar e importar chats", async () => {
+    const vistos: string[] = [];
+    dir = await mkdtemp(join(tmpdir(), "v0112b-ia-"));
+    ctx = await createTestContext({
+      config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir, ANTHROPIC_API_KEY: "sk-prueba" }),
+      clienteIa: {
+        async mensajes(p) {
+          vistos.push(p.sistema);
+          return { model: "claude-sonnet-5-5", stop_reason: "end_turn", content: [{ type: "text", text: "Listo" }], usage: { input_tokens: 5, output_tokens: 5 } };
+        },
+      },
+    });
+    await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123", permissions: { ia: "escritura" } as never });
+    await seedUser(ctx.db, { email: "otra@x.test", password: "clave-de-prueba-123", permissions: { ia: "escritura" } as never });
+    const entrar = async (email: string) => bearer((await ctx!.app.inject({ method: "POST", url: "/api/auth/login", payload: { email, password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
+    const h = await entrar("u@x.test");
+    const otra = await entrar("otra@x.test");
+    const app = ctx.app;
+    const proyecto = (await app.inject({ method: "POST", url: "/api/ia/proyectos", headers: h, payload: { nombre: "MexicanLand", instrucciones: "Habla de servidores de Minecraft." } })).json<{ id: string }>();
+    expect((await app.inject({ method: "POST", url: "/api/ia/memoria", headers: h, payload: { texto: "Me llamo Yahir y vivo en México" } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/ia/skills", headers: h, payload: { nombre: "Breve", contenido: "Responde en 3 líneas." } })).statusCode).toBe(200);
+    const chat = await app.inject({ method: "POST", url: "/api/ia/chat", headers: h, payload: { mensaje: "Hola", proyectoId: proyecto.id } });
+    expect(chat.statusCode).toBe(200);
+    const sistema = vistos.at(-1)!;
+    expect(sistema).toContain("Me llamo Yahir");
+    expect(sistema).toContain("Habla de servidores de Minecraft.");
+    expect(sistema).toContain("Responde en 3 líneas.");
+    expect(sistema).toContain("Solo PROPONES");
+    const id = chat.json<{ conversacionId: string }>().conversacionId;
+    const lista = (await app.inject({ method: "GET", url: `/api/ia/conversaciones?proyectoId=${proyecto.id}`, headers: h })).json<{ id: string }[]>();
+    expect(lista.map((c) => c.id)).toEqual([id]);
+    // La otra cuenta no ve ni mueve nada.
+    expect((await app.inject({ method: "PATCH", url: `/api/ia/conversaciones/${id}`, headers: otra, payload: { proyectoId: null } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/api/ia/memoria", headers: otra })).json<unknown[]>()).toHaveLength(0);
+    // Mover a «sin proyecto».
+    expect((await app.inject({ method: "PATCH", url: `/api/ia/conversaciones/${id}`, headers: h, payload: { proyectoId: null, titulo: "Saludo" } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/ia/conversaciones-sueltas", headers: h })).json<{ titulo: string }[]>()[0]!.titulo).toBe("Saludo");
+    // Exportar e importar en otra cuenta.
+    const exportado = (await app.inject({ method: "GET", url: `/api/ia/conversaciones/${id}/exportar`, headers: h })).json<{ formato: string; mensajes: unknown[] }>();
+    expect(exportado.formato).toBe("mi-setup-chat");
+    expect(exportado.mensajes).toHaveLength(2);
+    const imp = await app.inject({ method: "POST", url: "/api/ia/importar", headers: otra, payload: { datos: exportado } });
+    expect(imp.json()).toEqual({ chats: 1, mensajes: 2 });
+    // Borrar el proyecto deja los chats.
+    expect((await app.inject({ method: "DELETE", url: `/api/ia/proyectos/${proyecto.id}`, headers: h })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/ia/conversaciones", headers: h })).json<unknown[]>()).toHaveLength(1);
+  });
+
+  it("solo modelos gratis de Ollama", async () => {
+    const { modeloPermitido } = await import("../src/modules/ia/modelos-locales.js");
+    expect(modeloPermitido("llama3.2:3b")).toBe(true);
+    expect(modeloPermitido("hf.co/bartowski/model:Q4")).toBe(false);
+    expect(modeloPermitido("gpt-oss:120b-cloud")).toBe(false);
+    expect(modeloPermitido("rm -rf /")).toBe(false);
+  });
+});

@@ -8,6 +8,8 @@ import { HttpError } from "../../http-error.js";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
 import { clienteAgente, type AgenteVps } from "./agentes-vps.js";
+import { modelosLocalesRoutes } from "./modelos-locales.js";
+import { organizarIaRoutes } from "./organizar.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
 import { clienteAnthropic, clienteOllama, MARCA_RESULTADO, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
 
@@ -18,6 +20,8 @@ const chatSchema = z.object({
   conversacionId: z.string().uuid().optional(),
   mensaje: z.string().trim().min(1, "Escribe un mensaje").max(8000),
   modulo: z.string().max(40).optional(),
+  /** Proyecto para un chat nuevo. */
+  proyectoId: z.string().uuid().optional(),
   adjuntos: z
     .array(
       z.object({
@@ -95,15 +99,19 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
     // Con adjuntos el cuerpo puede pasar de 1 MB: se permite hasta 40 MB solo en esta ruta.
     app.post("/api/ia/chat", { ...escribir, bodyLimit: 40 * 1024 * 1024 }, async (request) => servicio.chat(currentUser(request), chatSchema.parse(request.body)));
 
+    await app.register(organizarIaRoutes(deps));
+    await app.register(modelosLocalesRoutes(deps));
+
     app.get("/api/ia/conversaciones", leer, async (request) => {
       const user = currentUser(request);
+      const { proyectoId } = z.object({ proyectoId: z.string().uuid().optional() }).parse(request.query);
       const filas = await deps.db
         .select()
         .from(aiConversations)
-        .where(eq(aiConversations.userId, user.id))
+        .where(proyectoId ? and(eq(aiConversations.userId, user.id), eq(aiConversations.projectId, proyectoId)) : eq(aiConversations.userId, user.id))
         .orderBy(desc(aiConversations.updatedAt))
-        .limit(100);
-      return filas.map((c) => ({ id: c.id, titulo: c.title, actualizada: c.updatedAt.toISOString() }));
+        .limit(300);
+      return filas.map((c) => ({ id: c.id, titulo: c.title, actualizada: c.updatedAt.toISOString(), proyectoId: c.projectId }));
     });
 
     app.get("/api/ia/conversaciones/:id", leer, async (request) => {
@@ -128,7 +136,7 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
         const adjuntos = (m.content as BloqueIa[]).filter((b) => b.type === "image" || b.type === "document" || (b.type === "text" && String(b.text).startsWith("Archivo adjunto"))).length;
         return texto ? [{ id: m.id, rol: m.role, texto: texto.replace(SIN_ARCHIVOS, "").trim(), adjuntos, fecha: m.createdAt.toISOString() }] : [];
       });
-      return { id: c.id, titulo: c.title, mensajes: visibles, propuestas: propuestas.map(propuestaDto) };
+      return { id: c.id, titulo: c.title, proyectoId: c.projectId, mensajes: visibles, propuestas: propuestas.map(propuestaDto) };
     });
 
     app.delete("/api/ia/conversaciones/:id", escribir, async (request) => {

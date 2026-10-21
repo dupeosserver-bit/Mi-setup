@@ -169,6 +169,13 @@
       "when": 1792609013749,
       "tag": "0023_pagos-divididos-2",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792610454597,
+      "tag": "0024_ia-proyectos",
+      "breakpoints": true
     }
   ]
 }

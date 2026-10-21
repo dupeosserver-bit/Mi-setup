@@ -489,15 +489,66 @@ export const priceHistory = pgTable(
 
 // ---------------------------------------------------------------- Plan 9: IA asistente
 
+/** Proyectos de la IA (0.11.2b): agrupan chats y tienen instrucciones propias. */
+export const aiProjects = pgTable(
+  "ai_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_projects_usuario").on(t.userId)],
+);
+
 export const aiConversations = pgTable("ai_conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull().default("Conversación"),
+  /** Proyecto al que pertenece (null = suelto). */
+  projectId: uuid("project_id").references(() => aiProjects.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Memoria de la IA: cosas que la IA debe recordar de ti en todos los chats. */
+export const aiMemories = pgTable(
+  "ai_memories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_memories_usuario").on(t.userId)],
+);
+
+/** Skills: instrucciones reutilizables (SKILL.md de Claude o de otras IA). */
+export const aiSkills = pgTable(
+  "ai_skills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    content: text("content").notNull(),
+    /** claude | otra | propia */
+    source: text("source").notNull().default("propia"),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_skills_usuario").on(t.userId)],
+);
 
 export const aiMessages = pgTable(
   "ai_messages",

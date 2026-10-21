@@ -1,12 +1,14 @@
 /** Administración de Pterodactyl: servidores, cuentas, nodos, eggs y extensiones de Blueprint. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, Egg, FileJson, Plus, Power, Puzzle, RefreshCw, Server, Trash2, UserPlus, Users } from "lucide-react";
+import { Copy, Download, Egg, ExternalLink, FileJson, Plus, Power, Puzzle, RefreshCw, Search, Server, Trash2, Upload, UserPlus, Users } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
 import { fmtFechaHora } from "../lib/formato";
+import { abrirExterno } from "../lib/plataforma";
 import { useServidores } from "../lib/vps";
+import { Paginas } from "./Paginas";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError } from "./ui";
 
 interface ServidorAdmin {
@@ -580,13 +582,181 @@ interface EstadoBlueprint {
   panel: boolean;
   blueprint: boolean;
   servidor: string;
+  versionPanel?: string | null;
+  versionBlueprint?: string | null;
   extensiones: { id: string; nombre: string; version: string; autor: string }[];
+}
+interface Revision {
+  token: string;
+  info: { identificador: string; nombre: string; version: string; autor: string; descripcion: string; objetivo: string };
+  tamano: number;
+  blueprint: boolean;
+  versionPanel: string | null;
+  versionBlueprint: string | null;
+  compatible: "si" | "quizas" | "no";
+  yaInstalada: boolean;
+}
+interface ExtensionTienda {
+  id: string;
+  nombre: string;
+  resumen: string;
+  autor: string;
+  imagen: string | null;
+  origen: "blueprint" | "github";
+  pagina: string;
+  descarga: string | null;
+  popularidad: number;
+  actualizada: string | null;
+  recomendada: boolean;
+}
+
+/** Muestra qué es la extensión y si es compatible; al confirmar se instala (pide PIN o huella). */
+function ConfirmarInstalacion({ r, servidor, alCerrar, alTerminar }: { r: Revision; servidor: string; alCerrar: () => void; alTerminar: () => void }) {
+  const instalar = useMutation({
+    mutationFn: async () => {
+      const ok = await confirmar({
+        titulo: `Instalar ${r.info.nombre}`,
+        mensaje: "Blueprint instala la extensión y recompila el panel (de 1 a 10 minutos; el panel puede verse raro mientras). Instala solo extensiones en las que confíes.",
+        boton: "Instalar",
+      });
+      if (!ok) return false;
+      await api("/api/ptero/admin/blueprint/instalar", { cuerpo: { token: r.token, ...(servidor ? { servidorId: servidor } : {}) } });
+      return true;
+    },
+    onSuccess: (ok) => {
+      if (!ok) return;
+      avisar(`${r.info.nombre} instalada`);
+      alTerminar();
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  const textoCompat = { si: "Compatible con tu Blueprint", quizas: "No se pudo comprobar la compatibilidad", no: "Se hizo para un Blueprint más nuevo que el tuyo" } as const;
+  return (
+    <Modal abierto titulo="Revisar extensión" alCerrar={alCerrar} ancho="max-w-md">
+      <div className="space-y-3 text-sm">
+        <div>
+          <p className="text-lg font-semibold">{r.info.nombre}</p>
+          <p className="text-tenue">
+            {r.info.identificador}
+            {r.info.version ? ` · v${r.info.version}` : ""}
+            {r.info.autor ? ` · ${r.info.autor}` : ""} · {(r.tamano / 1024 / 1024).toFixed(1)} MB
+          </p>
+        </div>
+        {r.info.descripcion ? <p>{r.info.descripcion}</p> : null}
+        <div className="rounded-xl bg-fondo p-3">
+          <p>
+            Panel: <b>{r.versionPanel ?? "—"}</b> · Blueprint: <b>{r.versionBlueprint ?? "—"}</b> · La extensión pide: <b>{r.info.objetivo || "—"}</b>
+          </p>
+          <p className="mt-1">
+            <Insignia tono={r.compatible === "si" ? "ok" : r.compatible === "no" ? "peligro" : "aviso"}>{textoCompat[r.compatible]}</Insignia>
+          </p>
+        </div>
+        {!r.blueprint ? <p className="text-peligro">Blueprint no está instalado en el panel: instálalo primero (blueprint.zip).</p> : null}
+        {r.yaInstalada ? <p className="text-aviso">Ya está instalada: se actualizará a esta versión.</p> : null}
+        {instalar.isPending ? <Cargando texto="Instalando y recompilando el panel… no cierres esta pantalla" /> : null}
+        <Boton variante="primario" className="w-full" icono={Download} cargando={instalar.isPending} disabled={!r.blueprint} onClick={() => instalar.mutate()}>
+          {r.yaInstalada ? "Actualizar" : "Instalar"}
+        </Boton>
+      </div>
+    </Modal>
+  );
+}
+
+function TiendaBlueprint({ servidor, alRevisar }: { servidor: string; alRevisar: (r: Revision) => void }) {
+  const [buscar, setBuscar] = useState("");
+  const [q, setQ] = useState("");
+  const [origen, setOrigen] = useState<"todas" | "blueprint" | "github">("todas");
+  const [pagina, setPagina] = useState(1);
+  const consulta = servidor ? `?servidorId=${servidor}` : "";
+  const tienda = useQuery({
+    queryKey: ["ptero", "admin", "blueprint-tienda", q, origen, pagina],
+    queryFn: () => api<{ total: number; paginas: number; avisos: string[]; extensiones: ExtensionTienda[] }>(`/api/ptero/admin/blueprint/tienda?q=${encodeURIComponent(q)}&origen=${origen}&pagina=${pagina}`),
+  });
+  const revisar = useMutation({
+    mutationFn: (e: ExtensionTienda) =>
+      api<Revision>(`/api/ptero/admin/blueprint/revisar${consulta}`, { cuerpo: e.descarga ? { url: e.descarga } : e.origen === "github" ? { repo: e.id.slice(3) } : { url: e.pagina } }),
+    onSuccess: alRevisar,
+    onError: avisarError,
+  });
+  return (
+    <div className="space-y-3">
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setQ(buscar.trim());
+          setPagina(1);
+        }}
+      >
+        <Entrada className="min-w-0 flex-1" value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar extensiones gratis (ej. mods, temas, backups)" />
+        <Selector className="w-auto" value={origen} onChange={(e) => (setOrigen(e.target.value as typeof origen), setPagina(1))}>
+          <option value="todas">Todas</option>
+          <option value="blueprint">Página oficial</option>
+          <option value="github">GitHub</option>
+        </Selector>
+        <Boton type="submit" icono={Search}>
+          Buscar
+        </Boton>
+      </form>
+      {tienda.data?.avisos.map((a) => (
+        <p key={a} className="text-xs text-aviso">
+          {a}
+        </p>
+      ))}
+      {tienda.isLoading ? <Cargando /> : null}
+      <ErrorCaja error={tienda.error} />
+      {tienda.data && !tienda.data.extensiones.length ? <Vacio icono={Puzzle} texto="No se encontraron extensiones gratis con esa búsqueda." /> : null}
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {tienda.data?.extensiones.map((e) => (
+          <div key={e.id} className="flex gap-3 rounded-xl border border-borde bg-fondo p-3">
+            {e.imagen ? <img src={e.imagen} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-lg object-cover" /> : <Puzzle className="h-12 w-12 shrink-0 p-2 text-tenue" />}
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1 font-medium">
+                <span className="truncate">{e.nombre}</span>
+                {e.recomendada ? <Insignia tono="ok">Recomendada</Insignia> : null}
+              </p>
+              <p className="line-clamp-2 text-xs text-tenue">{e.resumen || "Sin descripción"}</p>
+              <p className="mt-0.5 text-[11px] text-tenue">
+                {e.autor} · {e.origen === "github" ? `★ ${e.popularidad}` : `${e.popularidad} descargas`} · {e.origen === "github" ? "GitHub" : "Blueprint"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                <Boton tamano="sm" variante="primario" icono={Download} cargando={revisar.isPending && revisar.variables?.id === e.id} disabled={revisar.isPending} onClick={() => revisar.mutate(e)}>
+                  Instalar
+                </Boton>
+                <Boton tamano="sm" variante="fantasma" icono={ExternalLink} onClick={() => abrirExterno(e.pagina)}>
+                  Ver
+                </Boton>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Paginas pagina={pagina} total={tienda.data?.paginas} alCambiar={setPagina} />
+      <p className="text-xs text-tenue">Solo extensiones gratis. Antes de instalar se baja y se revisa el archivo (nombre, versión y compatibilidad); nada se instala sin que confirmes.</p>
+    </div>
+  );
 }
 
 function Blueprint() {
   const [servidor, setServidor] = useState("");
+  const [vista, setVista] = useState<"instaladas" | "tienda">("instaladas");
+  const [revision, setRevision] = useState<Revision | null>(null);
+  const archivo = useRef<HTMLInputElement>(null);
+  const [arrastrando, setArrastrando] = useState(false);
   const consulta = servidor ? `?servidorId=${servidor}` : "";
   const q = useQuery({ queryKey: ["ptero", "admin", "blueprint", servidor], queryFn: () => api<EstadoBlueprint>(`/api/ptero/admin/blueprint${consulta}`), retry: false });
+  const subir = useMutation({
+    mutationFn: async (f: File) => {
+      // Se detecta solo: .blueprint (o un .zip con conf.yml adentro, lo revisa el servidor).
+      if (!/\.(blueprint|zip)$/i.test(f.name)) throw new Error("Elige un archivo .blueprint");
+      const datos = new FormData();
+      datos.append("archivo", f, f.name);
+      return api<Revision>(`/api/ptero/admin/blueprint/revisar${consulta}`, { metodo: "POST", formulario: datos });
+    },
+    onSuccess: setRevision,
+    onError: avisarError,
+  });
   const quitar = useMutation({
     mutationFn: async (e: { id: string; nombre: string }) => {
       const ok = await confirmar({
@@ -613,30 +783,83 @@ function Blueprint() {
       icono={Puzzle}
       acciones={<Boton tamano="sm" variante="fantasma" icono={RefreshCw} cargando={q.isFetching} onClick={() => void q.refetch()} aria-label="Actualizar" />}
     >
-      <SelectorVps valor={servidor} alCambiar={setServidor} />
-      <ErrorCaja error={q.error} />
-      {q.isLoading ? <Cargando texto="Revisando el panel por SSH…" /> : null}
-      {q.data && !q.data.panel ? <Vacio icono={Puzzle} texto={`No encontré el panel en /var/www/pterodactyl de ${q.data.servidor}.`} /> : null}
-      {q.data?.panel && !q.data.blueprint ? <p className="text-sm text-tenue">Blueprint no está instalado en este panel.</p> : null}
-      {q.data?.panel && q.data.blueprint && !q.data.extensiones.length ? <Vacio icono={Puzzle} texto="No hay extensiones instaladas." /> : null}
-      {quitar.isPending ? <Cargando texto="Quitando y recompilando el panel… no cierres esta pantalla" /> : null}
-      <ul className="space-y-1">
-        {q.data?.extensiones.map((e) => (
-          <li key={e.id} className="flex items-center gap-2 rounded-lg bg-fondo px-3 py-2 text-sm">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{e.nombre}</p>
-              <p className="truncate text-xs text-tenue">
-                {e.id}
-                {e.version ? ` · v${e.version}` : ""}
-                {e.autor ? ` · ${e.autor}` : ""}
-              </p>
+      <div className="space-y-3">
+        <SelectorVps valor={servidor} alCambiar={setServidor} />
+        {q.data?.panel ? (
+          <p className="text-xs text-tenue">
+            Panel {q.data.versionPanel ?? "—"} · Blueprint {q.data.blueprint ? (q.data.versionBlueprint ?? "instalado") : "no instalado"} · {q.data.servidor}
+          </p>
+        ) : null}
+        <Pestanas
+          valor={vista}
+          alCambiar={setVista}
+          opciones={[
+            { id: "instaladas", texto: "Instaladas" },
+            { id: "tienda", texto: "Tienda gratis" },
+          ]}
+        />
+        {vista === "instaladas" ? (
+          <>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setArrastrando(true);
+              }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setArrastrando(false);
+                const f = e.dataTransfer.files[0];
+                if (f) subir.mutate(f);
+              }}
+              className={`flex flex-wrap items-center gap-3 rounded-xl border border-dashed p-3 text-sm ${arrastrando ? "border-acento bg-acento/10" : "border-borde"}`}
+            >
+              <Upload className="h-5 w-5 text-tenue" />
+              <span className="min-w-0 flex-1 text-tenue">Sube o arrastra aquí un archivo .blueprint para instalarlo.</span>
+              <Boton tamano="sm" icono={Upload} cargando={subir.isPending} onClick={() => archivo.current?.click()}>
+                Subir .blueprint
+              </Boton>
+              <input
+                ref={archivo}
+                type="file"
+                accept=".blueprint,.zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) subir.mutate(f);
+                  e.target.value = "";
+                }}
+              />
             </div>
-            <Boton tamano="sm" variante="peligro" icono={Trash2} disabled={quitar.isPending} onClick={() => quitar.mutate(e)}>
-              Quitar
-            </Boton>
-          </li>
-        ))}
-      </ul>
+            <ErrorCaja error={q.error} />
+            {q.isLoading ? <Cargando texto="Revisando el panel por SSH…" /> : null}
+            {q.data && !q.data.panel ? <Vacio icono={Puzzle} texto={`No encontré el panel en /var/www/pterodactyl de ${q.data.servidor}.`} /> : null}
+            {q.data?.panel && !q.data.blueprint ? <p className="text-sm text-tenue">Blueprint no está instalado en este panel.</p> : null}
+            {q.data?.panel && q.data.blueprint && !q.data.extensiones.length ? <Vacio icono={Puzzle} texto="No hay extensiones instaladas." /> : null}
+            {quitar.isPending ? <Cargando texto="Quitando y recompilando el panel… no cierres esta pantalla" /> : null}
+            <ul className="space-y-1">
+              {q.data?.extensiones.map((e) => (
+                <li key={e.id} className="flex items-center gap-2 rounded-lg bg-fondo px-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{e.nombre}</p>
+                    <p className="truncate text-xs text-tenue">
+                      {e.id}
+                      {e.version ? ` · v${e.version}` : ""}
+                      {e.autor ? ` · ${e.autor}` : ""}
+                    </p>
+                  </div>
+                  <Boton tamano="sm" variante="peligro" icono={Trash2} disabled={quitar.isPending} onClick={() => quitar.mutate(e)}>
+                    Quitar
+                  </Boton>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <TiendaBlueprint servidor={servidor} alRevisar={setRevision} />
+        )}
+      </div>
+      {revision ? <ConfirmarInstalacion r={revision} servidor={servidor} alCerrar={() => setRevision(null)} alTerminar={() => void q.refetch()} /> : null}
     </Tarjeta>
   );
 }

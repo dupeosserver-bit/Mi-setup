@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
   aiConversations,
   aiMessages,
+  aiProjects,
   aiProposals,
   aiUsage,
   chatChannels,
@@ -21,6 +22,7 @@ import { HttpError, missingConfig } from "../../http-error.js";
 import type { AuthUser } from "../../security/rbac.js";
 import type { ModuleDeps } from "../common.js";
 import { leerPreferencias } from "../cuenta.js";
+import { instruccionesDelUsuario } from "./organizar.js";
 import { CONFIRMACION_PELIGROSA, herramientasPermitidas, type Herramienta } from "./herramientas.js";
 
 // ---------------------------------------------------------------- cliente (inyectable en pruebas)
@@ -362,7 +364,7 @@ export class ServicioIa {
 
   async chat(
     user: AuthUser,
-    entrada: { conversacionId?: string; mensaje: string; modulo?: string; adjuntos?: readonly Adjunto[] },
+    entrada: { conversacionId?: string; mensaje: string; modulo?: string; proyectoId?: string; adjuntos?: readonly Adjunto[] },
   ): Promise<ResultadoChat> {
     // Elige quién responde: Claude, o la IA local si se pidió, si no hay clave o si se llegó al tope.
     const elegido = await this.modeloDe(user);
@@ -410,9 +412,13 @@ export class ServicioIa {
         .where(and(eq(aiConversations.id, conversacionId), eq(aiConversations.userId, user.id)));
       if (!c) throw new HttpError(404, "Conversación no encontrada");
     } else {
+      if (entrada.proyectoId) {
+        const [p] = await db.select({ id: aiProjects.id }).from(aiProjects).where(and(eq(aiProjects.id, entrada.proyectoId), eq(aiProjects.userId, user.id)));
+        if (!p) throw new HttpError(404, "Ese proyecto no existe");
+      }
       const [c] = await db
         .insert(aiConversations)
-        .values({ userId: user.id, title: entrada.mensaje.slice(0, 80) })
+        .values({ userId: user.id, title: entrada.mensaje.slice(0, 80), projectId: entrada.proyectoId ?? null })
         .returning({ id: aiConversations.id });
       if (!c) throw new HttpError(500, "No se pudo crear la conversación");
       conversacionId = c.id;
@@ -431,13 +437,16 @@ export class ServicioIa {
     const textos: string[] = [];
     let costoTotal = 0;
 
+    // Memoria, instrucciones del proyecto y skills del usuario.
+    const delUsuario = await instruccionesDelUsuario(this.deps, user.id, conversacionId);
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       if (vuelta > 0 && !usarLocal && (await this.gastoDelMes()) >= this.presupuesto) break;
       const r = await cliente.mensajes({
         modelo,
-        sistema: usarLocal
-          ? `${SISTEMA}\n- Ahora eres la IA local gratuita del VPS: no tienes herramientas. Si piden una acción, explica los pasos para hacerla a mano o sugiere cambiar a un modelo Claude.`
-          : SISTEMA,
+        sistema:
+          (usarLocal
+            ? `${SISTEMA}\n- Ahora eres la IA local gratuita del VPS: no tienes herramientas. Si piden una acción, explica los pasos para hacerla a mano o sugiere cambiar a un modelo Claude.`
+            : SISTEMA) + delUsuario,
         mensajes: await this.historial(conversacionId, idTurno),
         herramientas: disponibles.map((h) => ({ name: h.nombre, description: h.descripcion, input_schema: h.inputSchema })),
       });

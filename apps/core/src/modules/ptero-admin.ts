@@ -12,7 +12,11 @@ import { currentUser } from "../security/rbac.js";
 import { clientInfo, type ModuleDeps } from "./common.js";
 import type { PteroClient } from "./ptero.js";
 import type { Servidores } from "./vps/servidores.js";
-import { citar, ejecutar } from "./vps/ssh.js";
+import { randomBytes } from "node:crypto";
+import { MAX_BLUEPRINT, compatibilidad, descargaPermitida, interpretarGithub, interpretarTiendaOficial, revisarBlueprint, type ExtensionTienda, type InfoBlueprint } from "./blueprint-tienda.js";
+import { conCache } from "./novedades.js";
+import { pedirJson } from "./redes/oauth.js";
+import { abrirSftp, citar, ejecutar } from "./vps/ssh.js";
 
 interface Lista<T> {
   data: { attributes: T }[];
@@ -26,10 +30,18 @@ const idExtension = /^[a-zA-Z0-9_-]{1,64}$/;
 const COMO_PANEL = `cd ${PANEL} || { echo "NOPANEL"; exit 3; }; DUENO=$(stat -c %U storage); if [ "$(id -u)" = 0 ]; then C="runuser -u $DUENO --"; else C="sudo -n -u $DUENO"; fi;`;
 
 /** Lee la lista de extensiones de Blueprint (salida del script de abajo). */
-export function leerExtensiones(salida: string): { blueprint: boolean; extensiones: { id: string; nombre: string; version: string; autor: string }[] } {
+export function leerExtensiones(salida: string): {
+  blueprint: boolean;
+  versionPanel: string | null;
+  versionBlueprint: string | null;
+  extensiones: { id: string; nombre: string; version: string; autor: string }[];
+} {
   const lineas = salida.split("\n").map((l) => l.trim());
+  const valor = (prefijo: string) => lineas.find((l) => l.startsWith(prefijo))?.slice(prefijo.length).trim() || null;
   return {
     blueprint: lineas.includes("BP:1"),
+    versionPanel: valor("PV|"),
+    versionBlueprint: valor("BV|"),
     extensiones: lineas
       .filter((l) => l.startsWith("EXT|"))
       .map((l) => {
@@ -40,8 +52,10 @@ export function leerExtensiones(salida: string): { blueprint: boolean; extension
   };
 }
 
-const SCRIPT_EXTENSIONES = `cd ${PANEL} 2>/dev/null || { echo NOPANEL; exit 0; }
+export const SCRIPT_EXTENSIONES = `cd ${PANEL} 2>/dev/null || { echo NOPANEL; exit 0; }
 command -v blueprint >/dev/null 2>&1 && echo BP:1 || echo BP:0
+echo "PV|$(grep -m1 -oE "'version' => '[^']+'" config/app.php 2>/dev/null | sed -E "s/.*'([^']+)'$/\\1/")"
+echo "BV|$(grep -rhoE -m1 '(beta|alpha)-[0-9]{4}-[0-9]{2}[a-z0-9-]*' .blueprint/extensions/blueprint/private/db/version .blueprint/data/internal/db/version 2>/dev/null | head -1)"
 campo() { [ -n "$2" ] && grep -m1 -E "^[[:space:]]*$1:" "$2" | sed -E "s/^[^:]*:[[:space:]]*//; s/[\\"'|]//g"; }
 for d in .blueprint/extensions/*/; do
   [ -d "$d" ] || continue
@@ -307,6 +321,145 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
       await auditar(request, "ptero_blueprint_quitada", extension, { sigue });
       if (sigue) throw new HttpError(502, `Blueprint no quitó ${extension}: ${salida.trim().split("\n").slice(-3).join(" ").slice(0, 300)}`);
       return { ok: true, salida };
+    });
+
+    // ---- instalar: primero se revisa el archivo (subido o bajado de la tienda) y luego se confirma
+    const revisados = new Map<string, { buf: Buffer; info: InfoBlueprint; vence: number }>();
+    const guardarRevisado = (buf: Buffer, info: InfoBlueprint) => {
+      for (const [k, v] of revisados) if (v.vence < Date.now()) revisados.delete(k);
+      const token = randomBytes(18).toString("base64url");
+      revisados.set(token, { buf, info, vence: Date.now() + 15 * 60_000 });
+      return token;
+    };
+
+    /** Baja un .blueprint solo de GitHub o de la página oficial, revisando cada redirección. */
+    async function bajarBlueprint(url: string): Promise<Buffer> {
+      let actual = url;
+      for (let i = 0; i < 5; i++) {
+        if (!descargaPermitida(actual)) throw new HttpError(400, "Solo se bajan extensiones de GitHub o de la página oficial de Blueprint");
+        const r = await fetch(actual, { redirect: "manual", headers: { "user-agent": "MiSetup/0.11 (+https://setup.mexicanland.net)" }, signal: AbortSignal.timeout(60_000) });
+        if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
+          actual = new URL(r.headers.get("location")!, actual).toString();
+          continue;
+        }
+        if (!r.ok) throw new HttpError(502, `No se pudo bajar la extensión (${r.status})`);
+        if (Number(r.headers.get("content-length") ?? 0) > MAX_BLUEPRINT) throw new HttpError(413, "La extensión pasa de 50 MB");
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (buf.length > MAX_BLUEPRINT) throw new HttpError(413, "La extensión pasa de 50 MB");
+        return buf;
+      }
+      throw new HttpError(502, "Demasiadas redirecciones");
+    }
+
+    /** Busca el .blueprint en la última versión publicada de un repositorio de GitHub. */
+    async function blueprintDeRepo(repo: string): Promise<string> {
+      const r = await pedirJson<{ assets?: { name: string; browser_download_url: string }[] }>("GitHub", `https://api.github.com/repos/${repo}/releases/latest`, { headers: { accept: "application/vnd.github+json" } }).catch(() => ({ assets: [] }));
+      const archivo = r.assets?.find((a) => a.name.toLowerCase().endsWith(".blueprint"));
+      if (archivo) return archivo.browser_download_url;
+      // Algunos lo dejan en la raíz del repositorio.
+      const raiz = await pedirJson<{ name: string; download_url: string | null }[]>("GitHub", `https://api.github.com/repos/${repo}/contents/`).catch(() => []);
+      const enRaiz = raiz.find((a) => a.name.toLowerCase().endsWith(".blueprint") && a.download_url);
+      if (enRaiz?.download_url) return enRaiz.download_url;
+      throw new HttpError(404, "Ese repositorio no publica un archivo .blueprint (revisa su página: puede pedir instalarlo a mano)");
+    }
+
+    app.post("/api/ptero/admin/blueprint/revisar", { ...leer, bodyLimit: MAX_BLUEPRINT + 1024 * 1024 }, async (request) => {
+      let buf: Buffer;
+      if (request.isMultipart()) {
+        const archivo = await request.file({ limits: { fileSize: MAX_BLUEPRINT, files: 1 } });
+        if (!archivo) throw new HttpError(400, "Elige el archivo .blueprint");
+        buf = await archivo.toBuffer();
+        if (archivo.file.truncated) throw new HttpError(413, "La extensión pasa de 50 MB");
+      } else {
+        const d = z.object({ url: z.string().url().max(500).optional(), repo: z.string().regex(/^[\w.-]{1,100}\/[\w.-]{1,100}$/).optional() }).parse(request.body);
+        if (!d.url && !d.repo) throw new HttpError(400, "Falta el archivo o la extensión");
+        buf = await bajarBlueprint(d.url ?? (await blueprintDeRepo(d.repo!)));
+      }
+      const info = revisarBlueprint(buf);
+      const { servidorId } = z.object({ servidorId: z.string().uuid().optional() }).parse(request.query);
+      const s = await servidorPanel(request, servidorId);
+      const r = await servidores.usar(s.id, (c) => ejecutar(c, SCRIPT_EXTENSIONES, { timeoutMs: 20_000 }));
+      const estado = leerExtensiones(r.salida);
+      return {
+        token: guardarRevisado(buf, info),
+        info,
+        tamano: buf.length,
+        blueprint: estado.blueprint,
+        versionPanel: estado.versionPanel,
+        versionBlueprint: estado.versionBlueprint,
+        compatible: compatibilidad(info.objetivo, estado.versionBlueprint),
+        yaInstalada: estado.extensiones.some((e) => e.id === info.identificador),
+      };
+    });
+
+    app.post("/api/ptero/admin/blueprint/instalar", peligro, async (request) => {
+      const d = z.object({ token: z.string().min(10).max(64), servidorId: z.string().uuid().optional() }).parse(request.body);
+      const revisado = revisados.get(d.token);
+      if (!revisado || revisado.vence < Date.now()) throw new HttpError(410, "Pasó mucho tiempo: vuelve a elegir la extensión");
+      revisados.delete(d.token);
+      const s = await servidorPanel(request, d.servidorId);
+      const id = revisado.info.identificador;
+      const destino = `${PANEL}/${id}.blueprint`;
+      await servidores.usar(s.id, async (c) => {
+        const sftp = await abrirSftp(c);
+        try {
+          await new Promise<void>((res, rej) => sftp.writeFile(destino, revisado.buf, (err) => (err ? rej(new HttpError(502, `No se pudo subir al panel: ${err.message}`)) : res())));
+        } finally {
+          sftp.end();
+        }
+      });
+      // blueprint pide confirmaciones: `yes` responde por ti. Recompila el panel (varios minutos).
+      const r = await servidores.usar(s.id, (c) => ejecutar(c, `cd ${PANEL} && yes | blueprint -install ${citar(id)} 2>&1 | tail -n 20; rm -f ${citar(destino)}`, { timeoutMs: 900_000 }));
+      // eslint-disable-next-line no-control-regex
+      const salida = r.salida.replace(/\x1b\[[0-9;]*m/g, "");
+      const despues = await servidores.usar(s.id, (c) => ejecutar(c, SCRIPT_EXTENSIONES, { timeoutMs: 20_000 }));
+      const quedo = leerExtensiones(despues.salida).extensiones.some((e) => e.id === id);
+      await auditar(request, "ptero_blueprint_instalada", id, { version: revisado.info.version, quedo });
+      if (!quedo) throw new HttpError(502, `Blueprint no instaló ${revisado.info.nombre}: ${salida.trim().split("\n").slice(-3).join(" ").slice(0, 300)}`);
+      return { ok: true, salida };
+    });
+
+    // ---- tienda: extensiones gratis de la página oficial y de GitHub, con páginas
+    app.get("/api/ptero/admin/blueprint/tienda", leer, async (request) => {
+      const q = z
+        .object({ q: z.string().trim().max(60).default(""), origen: z.enum(["todas", "blueprint", "github"]).default("todas"), pagina: z.coerce.number().int().min(1).max(30).default(1) })
+        .parse(request.query);
+      const avisos: string[] = [];
+      const oficial =
+        q.origen === "github"
+          ? []
+          : await conCache("blueprint-tienda-oficial", 60 * 60_000, async () => interpretarTiendaOficial(await pedirJson<unknown>("Blueprint", "https://blueprint.zip/api/extensions"))).catch(() => {
+              avisos.push("La página oficial de Blueprint no respondió; se muestran las de GitHub.");
+              return [] as ExtensionTienda[];
+            });
+      const busqueda = `${q.q ? `${q.q} ` : ""}blueprint pterodactyl extension in:name,description,topics`;
+      const github =
+        q.origen === "blueprint"
+          ? []
+          : await conCache(`blueprint-tienda-gh:${busqueda}`, 60 * 60_000, async () =>
+              interpretarGithub(await pedirJson<{ items?: [] }>("GitHub", `https://api.github.com/search/repositories?q=${encodeURIComponent(busqueda)}&sort=stars&order=desc&per_page=100`, { headers: { accept: "application/vnd.github+json" } })),
+            ).catch(() => {
+              avisos.push("GitHub no respondió (límite de búsquedas); intenta en unos minutos.");
+              return [] as ExtensionTienda[];
+            });
+      const filtro = q.q.toLowerCase();
+      const todas = [...oficial.filter((e) => !filtro || `${e.nombre} ${e.resumen} ${e.autor}`.toLowerCase().includes(filtro)), ...github].sort((a, b) => b.popularidad - a.popularidad);
+      const porPagina = 12;
+      // Recomendadas: las más usadas y con cambios en el último año.
+      const haceUnAnio = Date.now() - 365 * 86_400_000;
+      const recomendadas = new Set(
+        todas
+          .filter((e) => !e.actualizada || Date.parse(e.actualizada) > haceUnAnio)
+          .slice(0, 5)
+          .map((e) => e.id),
+      );
+      return {
+        total: todas.length,
+        paginas: Math.max(1, Math.ceil(todas.length / porPagina)),
+        pagina: q.pagina,
+        avisos,
+        extensiones: todas.slice((q.pagina - 1) * porPagina, q.pagina * porPagina).map((e) => ({ ...e, recomendada: recomendadas.has(e.id) })),
+      };
     });
   };
 }
