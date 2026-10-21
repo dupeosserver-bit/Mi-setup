@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi Setup — sitio oficial (vista previa)</title>
+<style>
+  :root {
+    --fondo: #0b0d12; --fondo2: #10131a; --tarjeta: #151922; --borde: #252b37; --texto: #eceff5; --tenue: #98a2b6;
+    --acento: #b49cff; --acento2: #7dd3fc; --ok: #4ade80; --aviso: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--acento); text-decoration: none; cursor: pointer; }
+  img { max-width: 100%; display: block; }
+  .ancho { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  nav { position: sticky; top: 0; z-index: 20; background: rgba(11,13,18,.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--borde); }
+  nav .ancho { display: flex; align-items: center; gap: 22px; height: 62px; position: relative; }
+  .logo { font-weight: 800; font-size: 18px; color: var(--texto); display: flex; gap: 10px; align-items: center; }
+  .logo b { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--acento), var(--acento2)); display: grid; place-items: center; color: #111; font-size: 15px; }
+  .menu { display: flex; gap: 4px; margin-left: auto; }
+  .menu a { color: var(--tenue); padding: 7px 12px; border-radius: 10px; font-size: 14px; }
+  .menu a:hover, .menu a.activo { color: var(--texto); background: var(--tarjeta); }
+  .hamburguesa { display: none; margin-left: auto; background: none; border: 1px solid var(--borde); color: var(--texto); border-radius: 10px; padding: 6px 10px; font-size: 18px; }
+  .boton { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 999px; font-weight: 600; font-size: 15px; border: 1px solid var(--borde); color: var(--texto); background: var(--tarjeta); cursor: pointer; }
+  .boton.primario { background: var(--acento); color: #111; border-color: transparent; }
+  .etiqueta { display: inline-block; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--borde); color: var(--tenue); font-size: 13px; }
+  h1 { font-size: clamp(36px, 6.5vw, 62px); line-height: 1.06; margin: 18px 0 16px; letter-spacing: -.02em; }
+  h1 span { background: linear-gradient(90deg, var(--acento), var(--acento2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; letter-spacing: -.01em; }
+  .sub { color: var(--tenue); font-size: 19px; max-width: 620px; }
+  .intro { color: var(--tenue); margin: 0 0 28px; max-width: 720px; }
+  .pagina { display: none; padding: 56px 0 80px; }
+  .pagina.activa { display: block; }
+  .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 18px; padding: 20px; }
+  .tarjeta h3 { margin: 8px 0 6px; font-size: 17px; }
+  .tarjeta p { margin: 0; color: var(--tenue); font-size: 14px; }
+  .icono { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: color-mix(in srgb, var(--acento) 15%, transparent); }
+  input, textarea, select { width: 100%; background: var(--fondo2); color: var(--texto); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; }
+  label { font-size: 13px; color: var(--tenue); display: block; margin: 12px 0 4px; }
+  .fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  /* capturas reales */
+  .ventana { border-radius: 16px; border: 1px solid var(--borde); background: #111; overflow: hidden; box-shadow: 0 30px 80px -24px rgba(124,92,255,.45); }
+  .ventana .titulo { height: 30px; background: #181a22; display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .ventana .titulo i { width: 10px; height: 10px; border-radius: 50%; background: #ffffff30; }
+  .telefono { border: 8px solid #222633; border-radius: 34px; overflow: hidden; max-width: 260px; box-shadow: 0 30px 80px -24px rgba(125,211,252,.35); }
+  .heroe-fotos { position: relative; }
+  .heroe-fotos .telefono { position: absolute; right: -10px; bottom: -40px; width: 34%; }
+  .pie { text-align: center; color: var(--tenue); font-size: 13px; margin-top: 10px; }
+  .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+  /* wiki */
+  .wiki { display: grid; grid-template-columns: 250px 1fr; gap: 24px; }
+  .wiki aside { position: sticky; top: 80px; align-self: start; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 18px; padding: 14px; font-size: 14px; max-height: calc(100vh - 100px); overflow: auto; }
+  .wiki aside b { display: block; margin: 12px 0 4px; color: var(--tenue); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .wiki aside a { display: block; padding: 4px 8px; border-radius: 8px; color: var(--texto); }
+  .wiki aside a.sel { background: #ffffff12; color: var(--acento); }
+  .articulo h2 { font-size: 30px; }
+  .articulo h3 { margin-top: 26px; }
+  .articulo p, .articulo li { color: #c9d0dd; }
+  .nota { border-left: 3px solid var(--acento); background: var(--tarjeta); padding: 12px 14px; border-radius: 0 12px 12px 0; font-size: 14px; margin: 16px 0; }
+  code { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+  pre { background: var(--fondo2); border: 1px solid var(--borde); border-radius: 12px; padding: 14px; overflow-x: auto; font-size: 13px; }
+  /* demo */
+  .demo { display: grid; grid-template-columns: 210px 1fr; min-height: 520px; }
+  .demo aside { border-right: 1px solid var(--borde); padding: 12px 8px; background: #14161d; }
+  .demo aside a { display: block; padding: 8px 12px; border-radius: 10px; color: var(--tenue); font-size: 14px; }
+  .demo aside a.sel { background: #ffffff12; color: var(--texto); }
+  .demo main { background: #121212; }
+  /* comunidad */
+  .proyecto { display: flex; flex-direction: column; gap: 10px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--borde); color: var(--tenue); }
+  .chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .comentario { border-top: 1px solid var(--borde); padding: 10px 0; font-size: 14px; }
+  .comentario .oficial { color: var(--acento); }
+  .barra-uso { height: 10px; border-radius: 99px; background: var(--borde); overflow: hidden; margin: 6px 0 2px; }
+  .barra-uso i { display: block; height: 100%; background: linear-gradient(90deg, var(--acento), var(--acento2)); }
+  footer { border-top: 1px solid var(--borde); padding: 36px 0 60px; color: var(--tenue); font-size: 14px; }
+  footer .ancho { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .nota-preview { position: fixed; bottom: 12px; right: 12px; background: var(--aviso); color: #111; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; z-index: 30; }
+  @media (max-width: 820px) {
+    .menu { display: none; position: absolute; top: 62px; left: 0; right: 0; flex-direction: column; background: var(--fondo); border-bottom: 1px solid var(--borde); padding: 10px 16px; }
+    .menu.abierto { display: flex; }
+    .hamburguesa { display: block; }
+    .wiki { grid-template-columns: 1fr; }
+    .wiki aside { position: static; max-height: none; }
+    .demo { grid-template-columns: 1fr; }
+    .demo aside { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--borde); }
+    .demo aside a { white-space: nowrap; }
+    .heroe-fotos .telefono { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="nota-preview">Vista previa · capturas reales con datos de ejemplo</div>
+
+<nav>
+  <div class="ancho">
+    <a class="logo" data-ir="inicio"><b>M</b> Mi Setup</a>
+    <button class="hamburguesa" onclick="document.querySelector('.menu').classList.toggle('abierto')">☰</button>
+    <div class="menu">
+      <a data-ir="funciones">Funciones</a>
+      <a data-ir="descargas">Descargas</a>
+      <a data-ir="instalar">Instalar</a>
+      <a data-ir="wiki">Wiki</a>
+      <a data-ir="demo">Demo</a>
+      <a data-ir="comunidad">Comunidad</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================================================================ INICIO -->
+<div class="pagina" id="inicio">
+  <div class="ancho">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;align-items:center">
+      <div>
+        <span class="etiqueta">Código abierto · MIT · v0.11.1</span>
+        <h1>Tu servidor, tus apps y tu día <span>en un solo lugar</span></h1>
+        <p class="sub">Mi Setup se instala en tu propio VPS y lo usas desde la PC, el celular o el navegador: terminal, archivos, sitios web, finanzas, notas e IA. Tus datos se quedan contigo.</p>
+        <div class="fila" style="margin-top:26px">
+          <a class="boton primario" data-ir="descargas">⬇ Descargar gratis</a>
+          <a class="boton" data-ir="demo">Probar la demo</a>
+        </div>
+        <p style="color:var(--tenue);font-size:13px;margin-top:18px">🤖 Hecho con IA · Esta es la página oficial</p>
+      </div>
+      <div class="heroe-fotos">
+        <div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/finanzas.png" alt="Mis finanzas en la PC"></div>
+        <div class="telefono"><img src="capturas/notas-celular.png" alt="Notas en el celular"></div>
+      </div>
+    </div>
+    <div class="rejilla" style="margin-top:90px">
+      <div class="tarjeta"><div class="icono">🔒</div><h3>Privado de verdad</h3><p>Corre en tu VPS. Contraseñas cifradas, 2FA, huella y avisos de inicio de sesión.</p></div>
+      <div class="tarjeta"><div class="icono">📱</div><h3>PC, celular y web</h3><p>App de Windows, app de Android y navegador, todo sincronizado.</p></div>
+      <div class="tarjeta"><div class="icono">🤖</div><h3>IA que solo propone</h3><p>La IA te ayuda, pero nada se ejecuta sin que toques Aprobar.</p></div>
+      <div class="tarjeta"><div class="icono">🧩</div><h3>Abierto</h3><p>Código en GitHub con licencia MIT. Mejóralo y compártelo.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ FUNCIONES -->
+<div class="pagina" id="funciones">
+  <div class="ancho">
+    <h2>Funciones</h2>
+    <p class="intro">Cada persona ve solo los apartados que le das en Cuentas y permisos.</p>
+    <div class="rejilla">
+      <div class="tarjeta"><div class="icono">🖥️</div><h3>VPS</h3><p>Terminal, rendimiento, alertas de caída, comandos aprobados, archivos, seguridad y respaldos.</p></div>
+      <div class="tarjeta"><div class="icono">🌐</div><h3>Sitios y apps</h3><p>Editor visual, dominio propio, DNS automático en Cloudflare, pedidos, cuentas y estadísticas.</p></div>
+      <div class="tarjeta"><div class="icono">🤖</div><h3>IA asistente</h3><p>Claude, modelos gratis en tu VPS y agentes. Solo propone: tú apruebas.</p></div>
+      <div class="tarjeta"><div class="icono">💰</div><h3>Mis finanzas</h3><p>Gastos con foto del ticket, suscripciones, pagos divididos, impuestos y rendimientos.</p></div>
+      <div class="tarjeta"><div class="icono">📝</div><h3>Notas y calendario</h3><p>Notas con fotos, voz y dictado, recordatorios, tareas y calendario.</p></div>
+      <div class="tarjeta"><div class="icono">🔐</div><h3>Contraseñas y 2FA</h3><p>Bóveda cifrada, códigos 2FA y autocompletado en Android.</p></div>
+      <div class="tarjeta"><div class="icono">🛡️</div><h3>Ciberseguridad</h3><p>Filtraciones de tu correo, correos peligrosos y avisos de inicio de sesión.</p></div>
+      <div class="tarjeta"><div class="icono">🎨</div><h3>Estudio</h3><p>Editor de fotos y video, convertidor, PDF, firma y códigos QR.</p></div>
+      <div class="tarjeta"><div class="icono">💬</div><h3>Chat</h3><p>Canales con fotos, archivos, código y notas de voz.</p></div>
+    </div>
+    <h2 style="margin-top:64px">Así se ve</h2>
+    <p class="intro">Capturas reales de la app.</p>
+    <div class="galeria">
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/finanzas.png" alt=""></div><p class="pie">Mis finanzas</p></div>
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/ia.png" alt=""></div><p class="pie">IA asistente</p></div>
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/notas.png" alt=""></div><p class="pie">Bloc de notas</p></div>
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/sitios.png" alt=""></div><p class="pie">Sitios y apps</p></div>
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/editor-fotos.png" alt=""></div><p class="pie">Editor de fotos</p></div>
+      <div><div class="ventana"><div class="titulo"><i></i><i></i><i></i></div><img src="capturas/herramientas.png" alt=""></div><p class="pie">Herramientas</p></div>
+    </div>
+    <div class="fila" style="justify-content:center;gap:28px;margin-top:40px">
+      <div><div class="telefono"><img src="capturas/finanzas-celular.png" alt=""></div><p class="pie">Finanzas en el celular</p></div>
+      <div><div class="telefono"><img src="capturas/notas-celular.png" alt=""></div><p class="pie">Notas en el celular</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ DESCARGAS -->
+<div class="pagina" id="descargas">
+  <div class="ancho">
+    <h2>Descargas</h2>
+    <p class="intro">La versión nueva y las 2 anteriores. Descarga solo desde esta página o desde el GitHub oficial.</p>
+    <div class="rejilla">
+      <div class="tarjeta proyecto"><div class="icono">🪟</div><h3>Windows</h3><p>MiSetup-0.11.1.exe · 79 MB · Windows 10/11</p><a class="boton primario">Descargar</a><p style="font-size:13px">Anteriores: 0.11.0 · 0.10.0</p></div>
+      <div class="tarjeta proyecto"><div class="icono">🤖</div><h3>Android</h3><p>MiSetup.apk 0.11.1 · 17 MB · Android 8 o más nuevo</p><a class="boton primario">Descargar</a><p style="font-size:13px">Anteriores: 0.11.0b · 0.10.0b</p></div>
+      <div class="tarjeta proyecto"><div class="icono">🖥️</div><h3>Servidor</h3><p>Código fuente · Docker · Ubuntu 22.04/24.04</p><a class="boton" data-ir="instalar">Cómo instalar</a><p style="font-size:13px">GitHub: dupeosserver-bit/Mi-setup</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ INSTALAR -->
+<div class="pagina" id="instalar">
+  <div class="ancho">
+    <h2>Requisitos e instalación</h2>
+    <p class="intro">Para tenerla encendida 24/7 necesitas un VPS. También puedes instalarla en tu PC, pero solo funciona mientras la PC esté prendida y conectada.</p>
+    <div class="rejilla">
+      <div class="tarjeta"><h3>Mínimo</h3><p>2 vCPU · 4 GB RAM · 40 GB de disco · Ubuntu · Docker</p></div>
+      <div class="tarjeta"><h3>Recomendado</h3><p>4 vCPU · 8 GB RAM · 100 GB de disco (para la IA gratis y los respaldos)</p></div>
+      <div class="tarjeta"><h3>Dominio</h3><p>Un dominio con DNS en Cloudflare (gratis) para el HTTPS y los sitios.</p></div>
+      <div class="tarjeta">
+        <h3>Ejemplo real: VPS del autor</h3>
+        <p>Contabo · Ubuntu 22.04 · 96.7 GB de disco</p>
+        <p style="margin-top:8px">Disco usado · 22.9 %</p><div class="barra-uso"><i style="width:23%"></i></div>
+        <p style="margin-top:8px">Memoria usada · 14 %</p><div class="barra-uso"><i style="width:14%"></i></div>
+      </div>
+    </div>
+    <h3 style="margin-top:40px">Pasos</h3>
+    <ol>
+      <li>Renta un VPS (Contabo, Hetzner, DigitalOcean…) con Ubuntu y entra por SSH.</li>
+      <li>En Cloudflare, apunta <code>setup.tudominio.com</code> a la IP del VPS.</li>
+      <li>Instala:<pre>git clone https://github.com/dupeosserver-bit/Mi-setup.git /opt/mi-setup/app
+cd /opt/mi-setup/app && sh deploy/instalar.sh</pre></li>
+      <li>Abre <code>https://setup.tudominio.com</code>, crea tu cuenta y activa el 2FA.</li>
+      <li>Instala la app de Windows o Android y escribe la dirección de tu servidor.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ================================================================ WIKI -->
+<div class="pagina" id="wiki">
+  <div class="ancho">
+    <div class="wiki">
+      <aside id="indice-wiki"></aside>
+      <div class="articulo" id="articulo-wiki"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ DEMO -->
+<div class="pagina" id="demo">
+  <div class="ancho">
+    <h2>Demo en vivo</h2>
+    <p class="intro">Una copia de la app con datos de ejemplo, separada de cualquier VPS real. Se actualiza sola con cada versión nueva y nada de lo que hagas se guarda. Toca un apartado:</p>
+    <div class="ventana">
+      <div class="titulo"><i></i><i></i><i></i></div>
+      <div class="demo">
+        <aside id="menu-demo"></aside>
+        <main><img id="pantalla-demo" alt=""></main>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ COMUNIDAD -->
+<div class="pagina" id="comunidad">
+  <div class="ancho">
+    <h2>Comunidad</h2>
+    <p class="intro">Versiones mejoradas de Mi Setup hechas por la comunidad. ¿Hiciste la tuya? Súbela y etiqueta a <b>@JokeerYT_Oficia</b> en X.</p>
+    <div class="fila" style="margin-bottom:22px"><a class="boton primario" onclick="document.getElementById('subir').scrollIntoView({behavior:'smooth'})">＋ Subir mi versión</a><select style="width:auto"><option>Más recientes</option><option>Más comentadas</option></select></div>
+    <div class="rejilla">
+      <div class="tarjeta proyecto">
+        <h3>Mi Setup Dark Pro</h3><p>Tema oscuro nuevo y widgets en el inicio.</p>
+        <div class="chips"><span class="chip">por Anónimo</span><span class="chip">GitHub</span><span class="chip ok">✔ Revisado sin virus</span></div>
+        <div class="comentario"><b>Ana</b> · ¡Se ve increíble!</div>
+        <div class="comentario"><b class="oficial">JokeerYT ✔ oficial</b> · Gracias por compartirlo 🔥</div>
+        <input placeholder="Comentar (puedes ser anónimo)">
+      </div>
+      <div class="tarjeta proyecto">
+        <h3>Finanzas con bancos de Argentina</h3><p>Agrega rendimientos de bancos argentinos.</p>
+        <div class="chips"><span class="chip">por Lucas</span><span class="chip">Archivo .zip</span><span class="chip ok">✔ Revisado sin virus</span></div>
+        <div class="comentario"><b>Anónimo</b> · ¿Funciona con la 0.11.1?</div>
+        <input placeholder="Comentar (puedes ser anónimo)">
+      </div>
+    </div>
+    <div class="tarjeta" id="subir" style="margin-top:30px;max-width:640px">
+      <h3>Subir mi versión</h3>
+      <label>Nombre del proyecto</label><input placeholder="Ej. Mi Setup con tema claro">
+      <label>¿Qué cambiaste?</label><textarea rows="3"></textarea>
+      <label>Enlace de GitHub (opcional)</label><input placeholder="https://github.com/…">
+      <label>O sube un archivo (.zip)</label><input type="file">
+      <label>¿Cómo quieres aparecer?</label>
+      <select><option>Anónimo</option><option>Con mi nombre</option></select>
+      <p style="font-size:13px;color:var(--tenue);margin-top:12px">Antes de publicarse, cada archivo se revisa con antivirus y lo aprueba el autor. Los comentarios con insultos o groserías se bloquean. El nombre «JokeerYT» está reservado.</p>
+      <a class="boton primario" style="margin-top:8px">Enviar a revisión</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="ancho">
+    <span>Mi Setup · Página oficial · Hecho con IA · Código abierto (MIT)</span>
+    <span>𝕏 @JokeerYT_Oficia · GitHub dupeosserver-bit/Mi-setup</span>
+  </div>
+</footer>
+
+<script>
+  // ---------------------------------------------------------------- wiki
+  const WIKI = [
+    ["Empezar", [
+      ["primeros-pasos", "Primeros pasos", `<p>Al abrir Mi Setup por primera vez creas la <b>cuenta maestra</b>: la que administra todo. Después invitas a otras personas y les das solo los apartados que quieras.</p>
+        <h3>1. Activa el 2FA</h3><p>En Ajustes → Seguridad escanea el código con tu app de autenticación.</p>
+        <h3>2. Agrega tus claves</h3><p>En Ajustes → Servicios y claves pon las de los servicios que vayas a usar. Nunca salen de tu servidor.</p>
+        <h3>3. Conecta tu VPS</h3><p>En VPS → Terminal agrega tu servidor con su llave SSH y toca «Probar».</p>`],
+      ["cuentas", "Cuentas y permisos", `<p>La cuenta maestra decide qué ve cada persona y con qué nivel: <b>leer</b>, <b>escribir</b> o <b>administrar</b>.</p>
+        <div class="nota">Si alguien no tiene permiso para un apartado, no le aparece ni en el menú ni en el tutorial.</div>
+        <p>Puedes dejar que una persona de confianza use tus claves de servicios (por ejemplo la de la IA) o que ponga las suyas.</p>`],
+      ["claves", "Claves de servicios", `<p>En <b>Ajustes → Servicios y claves</b> se guardan las claves de los servicios externos (IA, Cloudflare, Google…). Se guardan cifradas y nunca se muestran completas.</p>
+        <p>Cada apartado te dice qué clave le falta con un aviso «Falta configurar».</p>`],
+    ]],
+    ["Apartados", [
+      ["vps", "VPS", `<p>Administra tu servidor: terminal en el navegador, rendimiento (CPU, RAM, disco, red), alertas de caída, comandos guardados, archivos, seguridad y bots.</p>
+        <div class="nota">Los comandos peligrosos piden confirmar dos veces y tu PIN o huella.</div>
+        <h3>Conectar con llave SSH</h3><p>En Terminal → Agregar servidor elige «Llave privada», pega la llave completa y toca «Probar».</p>`],
+      ["sitios", "Sitios y apps", `<img src="capturas/sitios.png" style="border-radius:12px;border:1px solid var(--borde)" alt=""><p>Crea páginas con el editor visual, súbelas con un clic y usa tu dominio. Al publicar se crea solo el registro DNS en Cloudflare.</p>
+        <p>Cada sitio puede tener formularios, pedidos, tablas, cuentas de usuarios y estadísticas.</p>`],
+      ["ia", "IA asistente", `<img src="capturas/ia.png" style="border-radius:12px;border:1px solid var(--borde)" alt=""><p>Conversa con Claude, con modelos gratis en tu VPS (Ollama) o con agentes instalados ahí. La IA puede revisar tu VPS, explicar errores y proponer acciones.</p>
+        <div class="nota">La IA solo propone: nada se ejecuta hasta que tocas «Aprobar».</div>`],
+      ["finanzas", "Mis finanzas", `<img src="capturas/finanzas.png" style="border-radius:12px;border:1px solid var(--borde)" alt=""><p>Anota gastos e ingresos (también con foto del ticket), suscripciones, pagos divididos con familia o amigos y calcula impuestos.</p>`],
+      ["notas", "Notas", `<img src="capturas/notas.png" style="border-radius:12px;border:1px solid var(--borde)" alt=""><p>Notas tipo Notion con fotos, archivos, notas de voz y dictado. Tablero de tareas y enlaces para compartir.</p>`],
+      ["contrasenas", "Contraseñas", `<p>Bóveda cifrada en tu dispositivo con una clave maestra (o tu huella / PIN). Códigos 2FA y correos temporales. En Android puede autocompletar en otras apps.</p>`],
+      ["estudio", "Estudio", `<img src="capturas/editor-fotos.png" style="border-radius:12px;border:1px solid var(--borde)" alt=""><p>Editor de fotos y de video, convertidor de archivos, herramientas de PDF, firma y códigos QR. Todo se procesa en tu dispositivo.</p>`],
+    ]],
+    ["Seguridad", [
+      ["huella", "Huella y PIN", `<p>Las acciones delicadas piden confirmar que eres tú. Puedes usar tu <b>PIN</b>, tu <b>huella</b> (en el celular) o tu contraseña.</p>
+        <div class="nota">5 PIN incorrectos seguidos cierran la sesión, así nadie puede adivinarlo.</div>`],
+      ["respaldos", "Respaldos", `<p>Respalda la base de datos de Mi Setup, carpetas o el VPS completo. Puedes programarlos cada día y restaurarlos con un clic.</p>`],
+      ["endurecer", "Endurecer el VPS", `<p>En VPS → Seguridad ves una calificación de tu servidor y botones para mejorarla: firewall, SSH solo con llave, Fail2ban, actualizaciones automáticas y alertas de inicio de sesión.</p>`],
+    ]],
+    ["Ayuda", [
+      ["faq", "Preguntas frecuentes", `<h3>¿Necesito un VPS?</h3><p>Para tenerla 24/7, sí. En tu PC funciona mientras esté prendida.</p><h3>¿Cuánto cuesta?</h3><p>Mi Setup es gratis. Pagas solo tu VPS y, si quieres, la IA de Claude.</p>`],
+      ["problemas", "Problemas comunes", `<h3>Mi sitio no abre</h3><p>Usa «¿No abre? Revisar» en el sitio: revisa publicación, DNS y HTTPS.</p><h3>No conecta al VPS</h3><p>Toca «Probar» en el servidor: te dice si rechazó la llave o si no hubo conexión.</p>`],
+    ]],
+  ];
+  const indice = document.getElementById("indice-wiki");
+  indice.innerHTML = '<input placeholder="🔍 Buscar en la wiki" id="buscar-wiki">' +
+    WIKI.map(([grupo, temas]) => `<b>${grupo}</b>` + temas.map(([id, titulo]) => `<a data-wiki="${id}">${titulo}</a>`).join("")).join("");
+  const abrirWiki = (id) => {
+    for (const [grupo, temas] of WIKI) {
+      const t = temas.find((x) => x[0] === id);
+      if (!t) continue;
+      document.getElementById("articulo-wiki").innerHTML = `<p style="color:var(--tenue);font-size:13px">Wiki › ${grupo}</p><h2>${t[1]}</h2>${t[2]}`;
+      indice.querySelectorAll("a").forEach((a) => a.classList.toggle("sel", a.dataset.wiki === id));
+      return;
+    }
+  };
+  indice.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-wiki]");
+    if (a) { abrirWiki(a.dataset.wiki); history.replaceState(null, "", "#wiki/" + a.dataset.wiki); window.scrollTo(0, 0); }
+  });
+  document.getElementById("buscar-wiki").addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    indice.querySelectorAll("a").forEach((a) => (a.style.display = a.textContent.toLowerCase().includes(q) ? "" : "none"));
+  });
+
+  // ---------------------------------------------------------------- demo
+  const DEMO = [["Mis finanzas", "finanzas"], ["IA asistente", "ia"], ["Bloc de notas", "notas"], ["Sitios y apps", "sitios"], ["Editor de fotos", "editor-fotos"], ["Herramientas", "herramientas"]];
+  const menuDemo = document.getElementById("menu-demo");
+  menuDemo.innerHTML = DEMO.map(([t, id]) => `<a data-demo="${id}">${t}</a>`).join("");
+  const abrirDemo = (id) => {
+    document.getElementById("pantalla-demo").src = `capturas/${id}.png`;
+    menuDemo.querySelectorAll("a").forEach((a) => a.classList.toggle("sel", a.dataset.demo === id));
+  };
+  menuDemo.addEventListener("click", (e) => { const a = e.target.closest("[data-demo]"); if (a) abrirDemo(a.dataset.demo); });
+  abrirDemo("finanzas");
+
+  // ---------------------------------------------------------------- páginas
+  // En el sitio real cada sección es su propia página (/wiki, /descargas…); aquí se simula con #.
+  const ir = (destino) => {
+    const [id, sub] = destino.split("/");
+    document.querySelectorAll(".pagina").forEach((p) => p.classList.toggle("activa", p.id === id));
+    document.querySelectorAll(".menu a").forEach((a) => a.classList.toggle("activo", a.dataset.ir === id));
+    document.querySelector(".menu").classList.remove("abierto");
+    if (id === "wiki") abrirWiki(sub || "primeros-pasos");
+    if (location.hash !== "#" + destino) history.pushState(null, "", "#" + destino);
+    window.scrollTo(0, 0);
+  };
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-ir]");
+    if (a) { e.preventDefault(); ir(a.dataset.ir); }
+  });
+  window.addEventListener("popstate", () => ir(location.hash.slice(1) || "inicio"));
+  ir(location.hash.slice(1) || "inicio");
+</script>
+</body>
+</html>

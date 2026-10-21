@@ -16,3 +16,6 @@ apps/desktop/release/
 # Paquete para subir al VPS
 mi-setup.tar.gz
 MiSetup.apk
+
+# Vista previa con las fotos incrustadas (se genera desde docs/sitio-web/preview.html)
+docs/sitio-web/preview-completo.html
