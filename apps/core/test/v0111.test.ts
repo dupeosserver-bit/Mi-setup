@@ -50,7 +50,7 @@ describe("DNS de los sitios al publicar", () => {
 describe("Pterodactyl: extensiones de Blueprint", () => {
   it("lee la lista del script y oculta Blueprint mismo", () => {
     const salida = ["BP:1", "EXT|blueprint|Blueprint|beta||", "EXT|serverbackgrounds|Server Backgrounds|1.2|Ivy", "EXT|mal id!|x|||", "basura"].join("\n");
-    expect(leerExtensiones(salida)).toEqual({ blueprint: true, extensiones: [{ id: "serverbackgrounds", nombre: "Server Backgrounds", version: "1.2", autor: "Ivy" }] });
+    expect(leerExtensiones(salida)).toEqual({ blueprint: true, versionPanel: null, versionBlueprint: null, extensiones: [{ id: "serverbackgrounds", nombre: "Server Backgrounds", version: "1.2", autor: "Ivy" }] });
     expect(leerExtensiones("BP:0\n").blueprint).toBe(false);
   });
 });
