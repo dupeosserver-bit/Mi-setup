@@ -6,7 +6,7 @@
 export const REDACTED = "[REDACTADO]";
 
 const SECRET_KEY_PATTERN =
-  /pass|secret|token|key|authorization|cookie|totp|otp|private|credential|pin|signature|hmac/i;
+  /pass|secret|token|key|authorization|cookie|totp|otp|private|credential|pin|signature|hmac|^frase$/i;
 
 /** Rutas que pino debe ocultar en los logs de peticiones. */
 export const LOG_REDACT_PATHS = [
@@ -16,6 +16,8 @@ export const LOG_REDACT_PATHS = [
   "*.password",
   "*.token",
   "*.secret",
+  "*.secreto",
+  "*.frase",
 ];
 
 export function isSecretKey(key: string): boolean {

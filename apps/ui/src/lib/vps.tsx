@@ -11,6 +11,8 @@ export interface Servidor {
   puerto: number;
   usuario: string;
   tipo: "llave" | "password";
+  /** Hay frase guardada para la llave (nunca se envía la frase). */
+  conFrase?: boolean;
   esRoot: boolean;
   huella: string | null;
   alertas: boolean;

@@ -11,7 +11,7 @@ import { vpsServers, type VpsServerRow } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { clientInfo, idParams, requireCipher, type ModuleDeps } from "../common.js";
-import { conectar, huellaDe } from "./ssh.js";
+import { conectar, huellaDe, normalizarLlave, validarLlave } from "./ssh.js";
 
 const MODULOS_VPS: ModuleId[] = ["vps_terminal", "vps_rendimiento", "vps_alertas", "vps_comandos", "vps_archivos", "vps_bots"];
 
@@ -41,6 +41,8 @@ export function aDto(s: VpsServerRow) {
     puerto: s.port,
     usuario: s.username,
     tipo: s.authType,
+    /** Solo si hay frase guardada; la llave y la frase nunca salen del servidor. */
+    conFrase: Boolean(s.passphraseEnc),
     esRoot: s.username === "root",
     huella: s.hostKeyFingerprint,
     alertas: s.alerts,
@@ -130,6 +132,7 @@ export function servidoresRoutes(deps: ModuleDeps, servidores: Servidores) {
         const cipher = requireCipher(deps);
         const d = servidorSchema.parse(request.body);
         if (!d.secreto) throw new HttpError(400, d.tipo === "llave" ? "Pega la llave privada" : "Escribe la contraseña");
+        if (d.tipo === "llave") validarLlave(d.secreto, d.frase);
         const [s] = await db
           .insert(vpsServers)
           .values({
@@ -138,8 +141,8 @@ export function servidoresRoutes(deps: ModuleDeps, servidores: Servidores) {
             port: d.puerto,
             username: d.usuario,
             authType: d.tipo,
-            secretEnc: cipher.encrypt(d.secreto),
-            passphraseEnc: d.frase ? cipher.encrypt(d.frase) : null,
+            secretEnc: cipher.encrypt(d.tipo === "llave" ? normalizarLlave(d.secreto) : d.secreto),
+            passphraseEnc: d.tipo === "llave" && d.frase ? cipher.encrypt(d.frase) : null,
             alerts: d.alertas,
             ramThreshold: d.umbralRam,
             diskThreshold: d.umbralDisco,
@@ -168,6 +171,17 @@ export function servidoresRoutes(deps: ModuleDeps, servidores: Servidores) {
         const d = servidorSchema.partial().parse(request.body);
         const actual = await servidores.obtener(id);
         const cambiaDestino = (d.host && d.host !== actual.host) || (d.puerto && d.puerto !== actual.port);
+        const tipo = d.tipo ?? actual.authType;
+        // Al cambiar de método, lo guardado (contraseña o llave) ya no sirve: hay que dar el nuevo.
+        if (tipo !== actual.authType && !d.secreto) throw new HttpError(400, tipo === "llave" ? "Pega la llave privada" : "Escribe la contraseña");
+        if (tipo === "llave" && d.secreto) validarLlave(d.secreto, d.frase);
+        else if (tipo === "llave" && d.frase !== undefined) validarLlave(cipher.decrypt(actual.secretEnc), d.frase);
+        // Llave nueva sin frase = llave sin frase (no se arrastra la frase de la anterior).
+        const frase = d.secreto
+          ? { passphraseEnc: tipo === "llave" && d.frase ? cipher.encrypt(d.frase) : null }
+          : d.frase !== undefined
+            ? { passphraseEnc: d.frase ? cipher.encrypt(d.frase) : null }
+            : {};
         const [s] = await db
           .update(vpsServers)
           .set({
@@ -176,8 +190,8 @@ export function servidoresRoutes(deps: ModuleDeps, servidores: Servidores) {
             ...(d.puerto !== undefined ? { port: d.puerto } : {}),
             ...(d.usuario !== undefined ? { username: d.usuario } : {}),
             ...(d.tipo !== undefined ? { authType: d.tipo } : {}),
-            ...(d.secreto ? { secretEnc: cipher.encrypt(d.secreto) } : {}),
-            ...(d.frase !== undefined ? { passphraseEnc: d.frase ? cipher.encrypt(d.frase) : null } : {}),
+            ...(d.secreto ? { secretEnc: cipher.encrypt(tipo === "llave" ? normalizarLlave(d.secreto) : d.secreto) } : {}),
+            ...frase,
             ...(d.alertas !== undefined ? { alerts: d.alertas } : {}),
             ...(d.umbralRam !== undefined ? { ramThreshold: d.umbralRam } : {}),
             ...(d.umbralDisco !== undefined ? { diskThreshold: d.umbralDisco } : {}),

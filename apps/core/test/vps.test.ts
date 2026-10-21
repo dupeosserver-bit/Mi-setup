@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:net";
 import { eq } from "drizzle-orm";
+import { Server as SshServer, utils } from "ssh2";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
 import { vpsServers } from "../src/db/schema.js";
@@ -60,10 +61,7 @@ describe("lectura de métricas del VPS", () => {
     expect(primera.metricas.uptime).toBeCloseTo(86400.25);
     expect(primera.metricas.cpu).toBeUndefined();
 
-    const siguiente = SALIDA.replace("cpu  1000 0 500 8000 500", "cpu  1600 0 900 8500 500").replace(
-      "eth0: 1000000",
-      "eth0: 1300000",
-    );
+    const siguiente = SALIDA.replace("cpu  1000 0 500 8000 500", "cpu  1600 0 900 8500 500").replace("eth0: 1000000", "eth0: 1300000");
     const segunda = parsearMetricas(siguiente, 4_000, primera.muestra);
     // Δtotal = 1500, Δocioso = 500 → 66.7 % de uso.
     expect(segunda.metricas.cpu).toBeCloseTo(66.67, 1);
@@ -85,7 +83,8 @@ describe("servidores VPS", () => {
   it("guarda credenciales cifradas y nunca las devuelve", async () => {
     ctx = await createTestContext();
     const h = await maestra(ctx);
-    const llave = "-----BEGIN OPENSSH PRIVATE KEY-----\nsecreto-de-prueba\n-----END OPENSSH PRIVATE KEY-----";
+    const llave = utils.generateKeyPairSync("ed25519").private;
+    const cuerpoLlave = llave.split("\n")[2]!;
     const res = await ctx.app.inject({
       method: "POST",
       url: "/api/vps/servidores",
@@ -93,13 +92,127 @@ describe("servidores VPS", () => {
       payload: { nombre: "Contabo", host: "203.0.113.10", usuario: "root", tipo: "llave", secreto: llave },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body).not.toContain("secreto-de-prueba");
-    expect(res.json()).toMatchObject({ nombre: "Contabo", esRoot: true, huella: null });
+    expect(res.body).not.toContain(cuerpoLlave);
+    expect(res.json()).toMatchObject({ nombre: "Contabo", esRoot: true, huella: null, tipo: "llave", conFrase: false });
 
     const lista = await ctx.app.inject({ method: "GET", url: "/api/vps/servidores", headers: h });
-    expect(lista.body).not.toContain("secreto-de-prueba");
+    expect(lista.body).not.toContain(cuerpoLlave);
     const [fila] = await ctx.db.select().from(vpsServers);
-    expect(fila?.secretEnc).not.toContain("secreto-de-prueba");
+    expect(fila?.secretEnc).not.toContain(cuerpoLlave);
+  });
+
+  it("valida la llave privada antes de guardarla", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const crear = (secreto: string, frase?: string) =>
+      ctx!.app.inject({
+        method: "POST",
+        url: "/api/vps/servidores",
+        headers: h,
+        payload: { nombre: "VPS", host: "203.0.113.10", usuario: "root", tipo: "llave", secreto, ...(frase !== undefined ? { frase } : {}) },
+      });
+    const par = utils.generateKeyPairSync("ed25519");
+    const basura = await crear("-----BEGIN OPENSSH PRIVATE KEY-----\nno-es-una-llave\n-----END OPENSSH PRIVATE KEY-----");
+    expect(basura.json()).toMatchObject({ codigo: "llave_invalida" });
+    expect(basura.body).not.toContain("no-es-una-llave");
+    expect((await crear(par.public)).json()).toMatchObject({ codigo: "llave_invalida", error: expect.stringContaining("pública") });
+    expect((await crear("hola")).json()).toMatchObject({ codigo: "llave_invalida" });
+
+    // Llave con frase: sin frase o con frase mala se rechaza; con la correcta se guarda.
+    const cifrada = utils.generateKeyPairSync("ed25519", { passphrase: "frase-correcta", cipher: "aes256-ctr", rounds: 2 }).private;
+    expect((await crear(cifrada)).json()).toMatchObject({ codigo: "llave_frase" });
+    const mala = await crear(cifrada, "otra-frase");
+    expect(mala.json()).toMatchObject({ codigo: "llave_frase" });
+    expect(mala.body).not.toContain("otra-frase");
+    const ok = await crear(cifrada.replace(/\n/g, "\r\n"), "frase-correcta");
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ conFrase: true });
+    expect(ok.body).not.toContain("frase-correcta");
+  });
+
+  it("al editar conserva la llave si el campo va vacío y exige una nueva al cambiar de método", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const srv = (
+      await ctx.app.inject({
+        method: "POST",
+        url: "/api/vps/servidores",
+        headers: h,
+        payload: { nombre: "VPS", host: "203.0.113.10", usuario: "root", tipo: "password", secreto: "clave-vieja" },
+      })
+    ).json<{ id: string }>();
+    const editar = (payload: Record<string, unknown>) => ctx!.app.inject({ method: "PATCH", url: `/api/vps/servidores/${srv.id}`, headers: h, payload });
+    const [antes] = await ctx.db.select().from(vpsServers);
+
+    expect((await editar({ tipo: "llave" })).statusCode).toBe(400);
+    expect((await editar({ tipo: "llave", secreto: "no es llave" })).json()).toMatchObject({ codigo: "llave_invalida" });
+    expect((await editar({ nombre: "VPS 2" })).statusCode).toBe(200);
+    const [igual] = await ctx.db.select().from(vpsServers);
+    expect(igual?.secretEnc).toBe(antes?.secretEnc);
+
+    const llave = utils.generateKeyPairSync("ed25519").private;
+    const cambio = await editar({ tipo: "llave", secreto: llave });
+    expect(cambio.json()).toMatchObject({ tipo: "llave", conFrase: false });
+    const [despues] = await ctx.db.select().from(vpsServers);
+    expect(despues?.secretEnc).not.toBe(antes?.secretEnc);
+  });
+
+  it("Probar se conecta con la llave y explica si la rechazan", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const permitida = utils.generateKeyPairSync("ed25519");
+    const publica = utils.parseKey(permitida.public);
+    if (publica instanceof Error) throw publica;
+    const ssh = new SshServer({ hostKeys: [utils.generateKeyPairSync("ed25519").private] }, (cliente) => {
+      cliente.on("authentication", (a) => {
+        if (a.method !== "publickey" || a.key.algo !== publica.type || !a.key.data.equals(publica.getPublicSSH())) return a.reject(["publickey"]);
+        if (a.signature && publica.verify(a.blob!, a.signature, a.hashAlgo) !== true) return a.reject(["publickey"]);
+        a.accept();
+      });
+      cliente.on("error", () => undefined);
+    });
+    await new Promise<void>((r) => ssh.listen(0, "127.0.0.1", r));
+    try {
+      const puerto = (ssh.address() as { port: number }).port;
+      const crear = async (tipo: "llave" | "password", secreto: string) =>
+        (
+          await ctx!.app.inject({
+            method: "POST",
+            url: "/api/vps/servidores",
+            headers: h,
+            payload: { nombre: `VPS ${tipo} ${Math.random()}`, host: "127.0.0.1", puerto, usuario: "root", tipo, secreto },
+          })
+        ).json<{ id: string }>();
+      const probar = async (id: string) => ctx!.app.inject({ method: "POST", url: `/api/vps/servidores/${id}/probar`, headers: h });
+
+      const buena = await crear("llave", permitida.private);
+      expect((await probar(buena.id)).json()).toMatchObject({ ok: true, huella: expect.stringMatching(/^SHA256:/) });
+
+      const otra = await crear("llave", utils.generateKeyPairSync("ed25519").private);
+      expect((await probar(otra.id)).json()).toMatchObject({ codigo: "ssh_rechazado", error: expect.stringContaining("rechazó la llave") });
+
+      const conPassword = await crear("password", "una-clave");
+      const r = await probar(conPassword.id);
+      expect(r.json()).toMatchObject({ codigo: "ssh_rechazado", error: expect.stringContaining("Llave privada") });
+      expect(r.body).not.toContain("una-clave");
+    } finally {
+      ssh.close();
+    }
+  });
+
+  it("Probar dice claramente si no pudo conectar", async () => {
+    ctx = await createTestContext();
+    const h = await maestra(ctx);
+    const srv = (
+      await ctx.app.inject({
+        method: "POST",
+        url: "/api/vps/servidores",
+        headers: h,
+        payload: { nombre: "Apagado", host: "127.0.0.1", puerto: 1, usuario: "root", tipo: "llave", secreto: utils.generateKeyPairSync("ed25519").private },
+      })
+    ).json<{ id: string }>();
+    const r = await ctx.app.inject({ method: "POST", url: `/api/vps/servidores/${srv.id}/probar`, headers: h });
+    expect(r.json()).toMatchObject({ codigo: "ssh_error", error: expect.stringContaining("No se pudo conectar a Apagado") });
   });
 
   it("un comando peligroso exige reautenticación fuerte y doble confirmación", async () => {
@@ -113,9 +226,10 @@ describe("servidores VPS", () => {
         payload: { nombre: "Local", host: "127.0.0.1", puerto: 1, usuario: "deploy", tipo: "password", secreto: "x" },
       })
     ).json<{ id: string }>();
-    const cmd = (
-      await ctx.app.inject({ method: "POST", url: "/api/vps/comandos", headers: h, payload: { nombre: "Reiniciar VPS", comando: "sudo reboot" } })
-    ).json<{ id: string; peligroso: boolean }>();
+    const cmd = (await ctx.app.inject({ method: "POST", url: "/api/vps/comandos", headers: h, payload: { nombre: "Reiniciar VPS", comando: "sudo reboot" } })).json<{
+      id: string;
+      peligroso: boolean;
+    }>();
     expect(cmd.peligroso).toBe(true);
 
     const ejecutar = (payload: Record<string, unknown>) =>

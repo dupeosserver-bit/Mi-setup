@@ -409,13 +409,19 @@ function Historial({ servidorId, alElegir }: { servidorId: string | null; alEleg
   );
 }
 
-const VACIO = { nombre: "", host: "", puerto: 22, usuario: "root", tipo: "llave" as "llave" | "password", secreto: "", frase: "", alertas: true };
+const VACIO = { nombre: "", host: "", puerto: 22, usuario: "root", tipo: "llave" as "llave" | "password", secreto: "", frase: "", quitarFrase: false, alertas: true };
 
 function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null; alTerminar: () => void }) {
-  const [d, setD] = useState(inicial ? { ...VACIO, ...inicial, secreto: "", frase: "" } : VACIO);
+  const [d, setD] = useState(
+    inicial ? { ...VACIO, nombre: inicial.nombre, host: inicial.host, puerto: inicial.puerto, usuario: inicial.usuario, tipo: inicial.tipo, alertas: inicial.alertas } : VACIO,
+  );
+  // Lo guardado solo se conserva si no cambias de método; al cambiar hay que dar el nuevo.
+  const guardado = Boolean(inicial) && inicial?.tipo === d.tipo;
+  const conservaFrase = guardado && Boolean(inicial?.conFrase) && !d.secreto.trim();
   const guardar = useMutation({
     mutationFn: () => {
-      const cuerpo = { nombre: d.nombre, host: d.host, puerto: Number(d.puerto), usuario: d.usuario, tipo: d.tipo, alertas: d.alertas, ...(d.secreto ? { secreto: d.secreto } : {}), ...(d.frase ? { frase: d.frase } : {}) };
+      const frase = d.tipo !== "llave" ? {} : d.frase ? { frase: d.frase } : d.quitarFrase ? { frase: "" } : {};
+      const cuerpo = { nombre: d.nombre, host: d.host, puerto: Number(d.puerto), usuario: d.usuario, tipo: d.tipo, alertas: d.alertas, ...(d.secreto.trim() ? { secreto: d.secreto } : {}), ...frase };
       return inicial ? api(`/api/vps/servidores/${inicial.id}`, { metodo: "PATCH", cuerpo }) : api("/api/vps/servidores", { cuerpo });
     },
     onSuccess: () => {
@@ -447,24 +453,40 @@ function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null;
           <Entrada value={d.usuario} onChange={(e) => set("usuario", e.target.value)} required />
         </Campo>
       </div>
-      <Campo etiqueta="Autenticación">
+      <Campo etiqueta="Método de autenticación">
         <Selector value={d.tipo} onChange={(e) => set("tipo", e.target.value as "llave" | "password")}>
-          <option value="llave">Llave SSH (recomendado)</option>
+          <option value="llave">Llave privada (recomendado)</option>
           <option value="password">Contraseña</option>
         </Selector>
       </Campo>
       {d.tipo === "llave" ? (
         <>
-          <Campo etiqueta="Llave privada" ayuda={inicial ? "Déjala vacía para conservar la actual." : "Se guarda cifrada en el servidor y nunca se vuelve a mostrar."}>
-            <AreaTexto value={d.secreto} onChange={(e) => set("secreto", e.target.value)} className="font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+          <Campo
+            etiqueta={guardado ? "Llave privada · llave guardada ✓" : "Llave privada"}
+            ayuda={guardado ? "Déjala vacía para conservar la llave guardada, o pega otra para reemplazarla." : "Pega la llave completa (con las líneas BEGIN y END). Se guarda cifrada y nunca se vuelve a mostrar."}
+          >
+            <AreaTexto
+              rows={8}
+              value={d.secreto}
+              onChange={(e) => set("secreto", e.target.value)}
+              className="font-mono text-xs"
+              placeholder={guardado ? "Llave guardada (pega otra solo para reemplazarla)" : "-----BEGIN OPENSSH PRIVATE KEY-----\n…\n-----END OPENSSH PRIVATE KEY-----"}
+              spellCheck={false}
+              autoComplete="off"
+              required={!guardado}
+            />
           </Campo>
-          <Campo etiqueta="Frase de la llave (si tiene)">
-            <Entrada type="password" value={d.frase} onChange={(e) => set("frase", e.target.value)} autoComplete="off" />
+          <Campo etiqueta="Frase de la llave (opcional)" ayuda={conservaFrase ? "Hay una frase guardada: déjala vacía para conservarla." : "Solo si tu llave tiene frase (passphrase). Se guarda cifrada."}>
+            <Entrada type="password" value={d.frase} onChange={(e) => set("frase", e.target.value)} autoComplete="off" disabled={d.quitarFrase} />
           </Campo>
+          {conservaFrase ? <Interruptor activo={d.quitarFrase} alCambiar={(x) => set("quitarFrase", x)} etiqueta="Quitar la frase guardada" /> : null}
         </>
       ) : (
-        <Campo etiqueta="Contraseña" ayuda={inicial ? "Déjala vacía para conservar la actual." : undefined}>
-          <Entrada type="password" value={d.secreto} onChange={(e) => set("secreto", e.target.value)} autoComplete="off" />
+        <Campo
+          etiqueta={guardado ? "Contraseña · contraseña guardada ✓" : "Contraseña"}
+          ayuda={guardado ? "Déjala vacía para conservar la actual." : "Si tu VPS solo acepta llaves (PasswordAuthentication no), usa «Llave privada»."}
+        >
+          <Entrada type="password" value={d.secreto} onChange={(e) => set("secreto", e.target.value)} autoComplete="off" required={!guardado} />
         </Campo>
       )}
       <Interruptor activo={d.alertas} alCambiar={(v) => set("alertas", v)} etiqueta="Vigilar caídas (cada 60 s)" />

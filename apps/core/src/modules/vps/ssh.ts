@@ -4,13 +4,68 @@
  * la primera vez y, si cambia, se rechaza la conexión.
  */
 import { createHash } from "node:crypto";
-import { Client, type ConnectConfig, type SFTPWrapper } from "ssh2";
+import { Client, utils, type ConnectConfig, type SFTPWrapper } from "ssh2";
 import type { VpsServerRow } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import type { ServerCipher } from "../../security/crypto.js";
 
 export function huellaDe(llave: Buffer): string {
   return `SHA256:${createHash("sha256").update(llave).digest("base64").replace(/=+$/, "")}`;
+}
+
+/** Saltos de línea de Windows y espacios sobrantes rompen el formato de la llave. */
+export function normalizarLlave(llave: string): string {
+  return `${llave.replace(/\r\n?/g, "\n").trim()}\n`;
+}
+
+const LLAVE_INVALIDA = "La llave privada no es válida. Pégala completa, con las líneas BEGIN y END.";
+
+/**
+ * Revisa que el texto sea una llave privada usable (y que la frase la abra si
+ * está cifrada). Los mensajes nunca incluyen la llave ni la frase.
+ */
+export function validarLlave(llave: string, frase?: string | null): void {
+  const texto = normalizarLlave(llave);
+  if (/^(ssh-|ecdsa-)/.test(texto)) throw new HttpError(400, "Pegaste la llave pública (.pub): aquí va la llave privada.", "llave_invalida");
+  if (!/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(texto)) {
+    throw new HttpError(400, "Eso no parece una llave privada: debe empezar con -----BEGIN OPENSSH PRIVATE KEY-----.", "llave_invalida");
+  }
+  let r: ReturnType<typeof utils.parseKey>;
+  try {
+    r = utils.parseKey(texto, frase || undefined);
+  } catch {
+    throw new HttpError(400, LLAVE_INVALIDA, "llave_invalida");
+  }
+  if (r instanceof Error) {
+    if (/passphrase|decrypt/i.test(r.message)) {
+      throw new HttpError(400, frase ? "La frase de la llave es incorrecta." : "La llave está protegida con frase: escríbela en «Frase de la llave».", "llave_frase");
+    }
+    throw new HttpError(400, LLAVE_INVALIDA, "llave_invalida");
+  }
+  if (!r.isPrivateKey()) throw new HttpError(400, "Pegaste la llave pública: aquí va la llave privada.", "llave_invalida");
+}
+
+/** Explica en palabras simples por qué falló la conexión (sin secretos). */
+function motivoSsh(err: Error & { level?: string; code?: string }, servidor: VpsServerRow): { mensaje: string; codigo: string } {
+  if (err.level === "client-authentication" || /authentication methods failed/i.test(err.message)) {
+    return {
+      codigo: "ssh_rechazado",
+      mensaje:
+        servidor.authType === "llave"
+          ? `${servidor.name} rechazó la llave. Revisa que su llave pública esté en ~/.ssh/authorized_keys del usuario ${servidor.username}.`
+          : `${servidor.name} rechazó la contraseña. Si el VPS solo acepta llaves (PasswordAuthentication no), edita el servidor y usa «Llave privada».`,
+    };
+  }
+  const red: Record<string, string> = {
+    ECONNREFUSED: `el puerto ${servidor.port} rechazó la conexión`,
+    ENOTFOUND: `no se encontró el host ${servidor.host}`,
+    EAI_AGAIN: `no se encontró el host ${servidor.host}`,
+    EHOSTUNREACH: "el host no es alcanzable",
+    ENETUNREACH: "el host no es alcanzable",
+    ECONNRESET: "el servidor cortó la conexión",
+  };
+  const motivo = err.level === "client-timeout" || /timed out/i.test(err.message) ? "no respondió a tiempo (revisa host, puerto y firewall)" : (red[err.code ?? ""] ?? err.message);
+  return { codigo: "ssh_error", mensaje: `No se pudo conectar a ${servidor.name}: ${motivo}.` };
 }
 
 export interface Conexion {
@@ -40,7 +95,7 @@ export function conectar(servidor: VpsServerRow, cipher: ServerCipher): Promise<
     };
     const secreto = cipher.decrypt(servidor.secretEnc);
     if (servidor.authType === "llave") {
-      config.privateKey = secreto;
+      config.privateKey = normalizarLlave(secreto);
       if (servidor.passphraseEnc) config.passphrase = cipher.decrypt(servidor.passphraseEnc);
     } else {
       config.password = secreto;
@@ -49,23 +104,29 @@ export function conectar(servidor: VpsServerRow, cipher: ServerCipher): Promise<
     cliente.once("ready", () => resolve({ cliente, huellaNueva: servidor.hostKeyFingerprint ? null : vista }));
     cliente.once("error", (err) => {
       cliente.end();
-      reject(
-        cambiada
-          ? new HttpError(
-              409,
-              `La huella del servidor cambió (${vista}). Si reinstalaste el VPS, acéptala en la configuración del servidor.`,
-              "huella_cambiada",
-              { huella: vista },
-            )
-          : new HttpError(502, `No se pudo conectar por SSH a ${servidor.name}: ${err.message}`, "ssh_error"),
-      );
+      if (cambiada) {
+        reject(
+          new HttpError(409, `La huella del servidor cambió (${vista}). Si reinstalaste el VPS, acéptala en la configuración del servidor.`, "huella_cambiada", {
+            huella: vista,
+          }),
+        );
+        return;
+      }
+      const { mensaje, codigo } = motivoSsh(err, servidor);
+      reject(new HttpError(502, mensaje, codigo));
     });
     try {
       cliente.connect(config);
     } catch (err) {
-      // ssh2 valida la llave al conectar y lanza el error de forma síncrona.
-      const detalle = err instanceof Error ? err.message : "error desconocido";
-      reject(new HttpError(400, `La llave privada no es válida (${detalle}). Pega la llave completa en formato OpenSSH o PEM.`, "llave_invalida"));
+      // ssh2 valida la llave al conectar y lanza el error de forma síncrona (sin incluir su texto en el mensaje).
+      const frase = err instanceof Error && /passphrase|decrypt/i.test(err.message);
+      reject(
+        new HttpError(
+          400,
+          frase ? "La frase de la llave falta o es incorrecta: edita el servidor." : "La llave privada guardada no es válida: edita el servidor y pégala de nuevo.",
+          "llave_invalida",
+        ),
+      );
     }
   });
 }
@@ -79,11 +140,7 @@ export interface Resultado {
 }
 
 /** Ejecuta un comando y junta la salida (con límite de tiempo y de tamaño). */
-export function ejecutar(
-  cliente: Client,
-  comando: string,
-  opciones: { timeoutMs?: number; maxBytes?: number } = {},
-): Promise<Resultado> {
+export function ejecutar(cliente: Client, comando: string, opciones: { timeoutMs?: number; maxBytes?: number } = {}): Promise<Resultado> {
   const { timeoutMs = 120_000, maxBytes = 512 * 1024 } = opciones;
   const inicio = Date.now();
   return new Promise((resolve, reject) => {
@@ -114,9 +171,7 @@ export function ejecutar(
 }
 
 export function abrirSftp(cliente: Client): Promise<SFTPWrapper> {
-  return new Promise((resolve, reject) =>
-    cliente.sftp((err, sftp) => (err ? reject(new HttpError(502, `SFTP no disponible: ${err.message}`, "ssh_error")) : resolve(sftp))),
-  );
+  return new Promise((resolve, reject) => cliente.sftp((err, sftp) => (err ? reject(new HttpError(502, `SFTP no disponible: ${err.message}`, "ssh_error")) : resolve(sftp))));
 }
 
 /** Escapa un argumento para el shell remoto (comillas simples). */
