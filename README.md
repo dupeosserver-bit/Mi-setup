@@ -66,7 +66,7 @@ Para tenerla encendida **24/7** necesitas un VPS. También puedes instalarla en 
 
 En [Releases](https://github.com/dupeosserver-bit/Mi-setup/releases) están la versión nueva y las 2 anteriores:
 
-- 🪟 **Windows:** `MiSetup-0.11.2b.exe` (Windows 10/11)
+- 🪟 **Windows:** `MiSetup-0.11.2.exe` (Windows 10/11)
 - 🤖 **Android:** `MiSetup-0.11.2b.apk` (Android 8 o más nuevo)
 - 🖥️ **Servidor:** este repositorio (Docker)
 

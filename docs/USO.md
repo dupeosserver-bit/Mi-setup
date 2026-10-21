@@ -593,4 +593,4 @@ tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && d
 
 ### Actualizar el VPS
 
-Igual que siempre (`docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans`). Después sube el EXE, el `.blockmap`, `latest.yml` y `MiSetup-0.11.2b.apk` a `/opt/mi-setup/descargas/` y corre `python3 /opt/mi-setup/app/deploy/limpiar-descargas.py`.
+Igual que siempre (`docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans`). Después sube `MiSetup-0.11.2.exe`, su `.blockmap`, `latest.yml` y `MiSetup-0.11.2b.apk` a `/opt/mi-setup/descargas/` y corre `python3 /opt/mi-setup/app/deploy/limpiar-descargas.py`.
