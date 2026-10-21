@@ -145,6 +145,8 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
       "Imágenes: sube fotos (se optimizan solas), recórtalas, quítales el fondo o créalas con IA. Datos: tablas tipo Excel que el sitio muestra solo.",
       "Publicar: los visitantes ven lo nuevo solo al tocar Publicar. Cada publicación queda en el historial por si quieres regresar.",
       "Mensajes y pedidos, estadísticas y cuentas del área privada están en sus pestañas; en Ajustes: dominio propio, SEO, app instalable, quién puede editar y exportar en ZIP.",
+      "«Importar sitio»: sube un sitio exportado de otro Mi Setup o uno que ya tengas hecho (.zip con sus páginas .html o un .html suelto). Llega como borrador, sin publicar.",
+      "Comunidad (Ajustes del sitio): los visitantes suben proyectos (enlace de GitHub o .zip) y comentan, con su nombre o como anónimos. Se bloquean groserías, tu nombre oficial queda reservado y cada archivo se revisa con antivirus; en la pestaña «Comunidad» apruebas, rechazas y respondes como oficial.",
     ],
     nota: "Subdominios: pon tu token de Cloudflare en Ajustes → Servicios y claves y, en la tarjeta «¿Abre desde internet?» del sitio, crea el registro DNS por ti. Plantilla «Tienda de hosting»: vende planes y cada pedido se vuelve cliente con cobro.",
   },
@@ -379,6 +381,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
       "Apariencia: tema, fondo (y uno para la PC), cómo se acomoda la imagen y los botones flotantes del celular.",
       "Mis claves: pon tus propias claves de IA, Gemini, TMDB o CurseForge y decide si las compartes (con aviso).",
       "Servicios y claves (cuenta maestra o con permiso): las claves de API del servidor.",
+      "Idioma: español, inglés, portugués, francés, alemán o italiano (también se elige al entrar).",
     ],
   },
 };

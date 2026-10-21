@@ -535,3 +535,62 @@ tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && d
 - **Pagos divididos**: «Tomar de» un gasto que ya anotaste o de una suscripción que ya tienes.
 - **Respaldo de la base**: si sale «Atrasado», el botón «Respaldar ahora y cada día» corre `deploy/respaldo.sh` y lo deja en el cron del VPS (4:15).
 - **Servidores VPS con llave privada** (de 0.11.0b): la llave se valida al guardarla y «Probar» dice si la rechazaron o si no hubo conexión.
+
+## Versión 0.11.2b
+
+### Arreglos (fase 1)
+
+- **Huella** con el aviso propio de Android (como el del banco); la bóveda abre sola con huella o PIN. Hay que reinstalar el APK.
+- El fondo ya no sale doble al abrir el teclado; el chat de la IA baja directo al último mensaje.
+- **Pagos divididos**: editar el pago y sus personas, quitar o editar una persona.
+- Organizar archivos del VPS: si ya existe, agrega -2, -3… en vez de no moverlo.
+- Bloc de notas: «Guardar todo» baja un solo .zip con la nota y sus adjuntos.
+- **Descargas**: solo la versión nueva y las 2 anteriores. En el VPS, `deploy/limpiar-descargas.py` borra las viejas de `/opt/mi-setup/descargas`.
+- Listas largas con páginas 1, 2, 3…; selector propio en toda la app; vista previa HTML en ventana flotante.
+
+### Mis finanzas (fase 2)
+
+- Resumen con los gastos de la semana (lunes a domingo) y gráfica de gastos, ingresos y ahorro.
+- Pagos divididos: partes iguales, por monto o por porcentaje; enlace de solo lectura e imagen con la lista de cada persona.
+- **Rendimientos**: calculadora con tasas de CETES y bancos (Nu, Mercado Pago, Ualá, Revolut, Klar, Hey, BBVA, BanCoppel, GBM). CETES sale de Banxico: pon `BANXICO_TOKEN` (opcional) en el `.env` o en Ajustes → Servicios y claves; sin él se usa la última tasa guardada. Se revisan solas cada día y avisan si no se pudieron actualizar.
+- Acciones y cripto: ficha completa y botones a sitios confiables para invertir.
+
+### Pterodactyl, VPS e IA (fase 3)
+
+- **Blueprint**: subir un `.blueprint` (se revisa su `conf.yml` y la compatibilidad) y tienda de extensiones gratis; todo con confirmación y PIN o huella.
+- Seguridad del servidor: reiniciar el VPS, Docker y Mi Setup; encender, apagar o reiniciar servicios y contenedores (SSH y Mi Setup protegidos).
+- IA gratis: bajar y borrar modelos de Ollama.
+- Chat de la IA estilo Claude: proyectos con instrucciones, memoria, skills (`SKILL.md`), mover, renombrar, exportar e importar chats. Migración **0024**.
+
+### Herramientas, estudio y host local (fase 4)
+
+- QR con puntos de figuras y revisión de que se lea; firmar PDF o fotos donde quieras.
+- Editor de fotos estilo Photoshop y editor de video con transiciones, efectos, 480p a 4K y 24/30/60 fps.
+- Servidores en mi PC: «Semillas» (mapa de biomas) y servidor desde un modpack. Código: abrir y guardar archivos del equipo.
+
+### Sitios y apps (fase 5)
+
+- Editor usable en el celular; los botones piden a dónde llevan (página, enlace o archivo).
+- **Exportar todo** (para otro Mi Setup) e **Importar sitio** (.zip de Mi Setup, .zip con .html o un .html suelto). Lo importado llega como borrador.
+
+### Idiomas, tutorial y edición pública (fase 6)
+
+- La interfaz se traduce a **inglés, portugués, francés, alemán e italiano** (Ajustes → Apariencia, o al entrar). Para ver textos sin traducir: `pnpm --filter @mi-setup/ui i18n`.
+- El tutorial enseña las **novedades** de cada versión, solo de lo que la persona tiene permitido.
+- **Edición** (variable `EDICION` del `.env`, se usa al compilar la imagen):
+  - `personal` (la tuya, la de siempre): todo.
+  - `publica`: la que se comparte. No trae Pterodactyl, Redes y streams, Discord, bots, Servidores en mi PC, Mi casa ni Control remoto (ni su código). Para compilar las apps públicas: `pnpm --filter @mi-setup/desktop dist:publica` y `pnpm --filter @mi-setup/mobile sincronizar:publica`.
+
+### Sitio oficial, demo y comunidad (fase 7)
+
+- **Sitio oficial**: al arrancar, si eres la cuenta maestra, se crea en Sitios y apps «Mi Setup (página oficial)» con la dirección `misetup.mexicanland.net`, **sin publicar**. Tiene Inicio, Funciones, Descargas, Instalar, Wiki, Demo y Comunidad, con el aviso «Hecho con IA · El autor no pide créditos · Esta es la página oficial». Revísalo en el editor y toca **Publicar** cuando quieras (crea el DNS solo, como cualquier sitio). Mientras no lo edites, se regenera con cada versión nueva (wiki y capturas al día); si lo editas, ya no se toca.
+- Solo muestra cosas de la edición pública. Las capturas salen de la demo (`apps/ui/scripts/capturas-sitio.mjs`) y la wiki de la ayuda de la app (`apps/core/scripts/wiki-sitio.ts`).
+- **Demo**: copia de la app (edición pública) con datos de ejemplo, sin servidor ni VPS. Se compila sola en la imagen de Docker en cada versión y se ve en `/demo` del sitio oficial. Nada se guarda. Para regrabar sus datos: `apps/core/scripts/demo-servidor.ts` y `apps/ui/scripts/demo-grabar.mjs`.
+- **Descargas** en el sitio: bloque «Descargas» (la nueva y las 2 anteriores de `/opt/mi-setup/descargas`). Solo funciona en sitios de la cuenta maestra.
+- **Comunidad** (cualquier sitio, en Ajustes del sitio → Comunidad): los visitantes suben su versión (enlace de GitHub o .zip de hasta 50 MB) y comentan, con nombre o como anónimos. Se bloquean insultos y groserías (aunque los escriban con números o letras repetidas). El nombre oficial (**JokeerYT**) está reservado: solo sale cuando respondes desde la pestaña «Comunidad», con la marca «Oficial». Los proyectos esperan tu aprobación.
+- **Antivirus (ClamAV)**: cada .zip y cada repositorio de GitHub se revisa antes de poder aprobarlo; si trae virus, el archivo se borra. Usa ~1 GB de RAM, por eso se enciende aparte: agrega `COMPOSE_PROFILES=comunidad` al `.env` (con la IA local: `COMPOSE_PROFILES=ia-local,comunidad`). La primera vez tarda unos minutos en bajar su base de virus. Sin él, los proyectos quedan «Sin revisar» y no se pueden aprobar.
+- Migración **0025** (comunidad). Las migraciones 0023, 0024 y 0025 se aplican solas al arrancar.
+
+### Actualizar el VPS
+
+Igual que siempre (`docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans`). Después sube el EXE, el `.blockmap`, `latest.yml` y `MiSetup-0.11.2b.apk` a `/opt/mi-setup/descargas/` y corre `python3 /opt/mi-setup/app/deploy/limpiar-descargas.py`.

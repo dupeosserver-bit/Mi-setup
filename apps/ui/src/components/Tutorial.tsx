@@ -44,6 +44,7 @@ const NOVEDADES: readonly { modulo: ModuleId; texto: string }[] = [
   { modulo: "editor_video", texto: "Editor de video: transiciones, efectos, calidades hasta 4K y difuminar marcas de agua de tus propios videos." },
   { modulo: "documentos", texto: "Documentos: firma un PDF o una foto justo donde tú quieras." },
   { modulo: "sitios", texto: "Sitios y apps: editor cómodo en el celular, botones que llevan a una página, un enlace o un archivo, y exportar o importar sitios." },
+  { modulo: "sitios", texto: "Sitios y apps: «Comunidad» para que tus visitantes suban proyectos y comenten, con filtro de groserías, antivirus y tu aprobación." },
 ];
 
 /** Vuelve a abrir el tutorial (botón en Ajustes). */

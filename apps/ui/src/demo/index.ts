@@ -37,6 +37,8 @@ function responder(url: URL, metodo: string): Response {
   if (ruta === "/api/auth/refresh") return json({ accessToken: "demo", refreshToken: "demo", usuario: me().usuario });
   if (metodo !== "GET") return json({ error: AVISO_DEMO, codigo: "demo" }, 403);
   if (ruta === "/api/auth/me") return json(me());
+  // La demo siempre dice la versión con la que se compiló.
+  if (ruta === "/api/actualizaciones") return json({ version: __VERSION_APP__, apk: null });
   const exacta = respuestas[ruta + url.search];
   if (exacta !== undefined) return json(exacta);
   if (porRuta.has(ruta)) return json(porRuta.get(ruta));
