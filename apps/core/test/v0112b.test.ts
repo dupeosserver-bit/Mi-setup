@@ -368,3 +368,79 @@ describe("0.11.2b · IA estilo Claude", () => {
     expect(modeloPermitido("rm -rf /")).toBe(false);
   });
 });
+
+function multipartSitio(nombre: string, tipo: string, contenido: Buffer | string) {
+  const limite = "----prueba0112b";
+  const cuerpo = Buffer.concat([
+    Buffer.from(`--${limite}\r\nContent-Disposition: form-data; name="archivo"; filename="${nombre}"\r\nContent-Type: ${tipo}\r\n\r\n`),
+    Buffer.isBuffer(contenido) ? contenido : Buffer.from(contenido),
+    Buffer.from(`\r\n--${limite}--\r\n`),
+  ]);
+  return { payload: cuerpo, headers: { "content-type": `multipart/form-data; boundary=${limite}` } };
+}
+
+describe("0.11.2b · sitios: exportar e importar", () => {
+  it("resuelve rutas y cambia ids", async () => {
+    const { resolverRuta, cambiarIds, ponerArchivos } = await import("../src/modules/sitios/paquete.js");
+    expect(resolverRuta("blog/post.html", "../img/a.png?v=2")).toBe("img/a.png");
+    expect(resolverRuta("index.html", "./css/x.css")).toBe("css/x.css");
+    expect(resolverRuta("index.html", "https://x.com/a.png")).toBeNull();
+    expect(cambiarIds({ a: ["viejo-1", { b: "url/viejo-1" }] }, new Map([["viejo-1", "nuevo"]]))).toEqual({ a: ["nuevo", { b: "url/nuevo" }] });
+    expect(ponerArchivos('<img src="{{archivo:img/a.png}}">', new Map([["img/a.png", "/api/x"]]))).toBe('<img src="/api/x">');
+  });
+
+  it("importa un sitio hecho en .zip sin scripts y con sus imágenes", async () => {
+    const { leerImportacion } = await import("../src/modules/sitios/paquete.js");
+    const { zipSync, strToU8 } = await import("fflate");
+    const zip = zipSync({
+      "mi-web/index.html": strToU8('<html><head><style>h1{color:red}</style><script>alert(1)</script></head><body><h1 onclick="x()">Hola</h1><img src="img/logo.png"><a href="contacto.html">C</a></body></html>'),
+      "mi-web/contacto.html": strToU8("<body><p>Escríbenos</p></body>"),
+      "mi-web/img/logo.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]),
+    });
+    const imp = leerImportacion("mi-web.zip", zip);
+    expect(imp.tipo).toBe("html");
+    if (imp.tipo !== "html") return;
+    expect(imp.paginas).toHaveLength(2);
+    const todo = imp.paginas.map((p) => p.html).join("");
+    expect(todo).not.toContain("<script");
+    expect(todo).not.toContain("onclick");
+    expect(todo).toContain("{{archivo:img/logo.png}}");
+    expect(imp.css).toContain("color:red");
+    expect([...imp.archivos.keys()]).toEqual(["img/logo.png"]);
+    expect(() => leerImportacion("x.exe", new Uint8Array([1, 2, 3]))).toThrow();
+  });
+
+  it("exporta todo y lo vuelve a importar con imágenes y tablas", async () => {
+    const { h, otra } = await preparar({ sitios: "escritura" });
+    const app = ctx!.app;
+    const s = (await app.inject({ method: "POST", url: "/api/sitios", headers: h, payload: { nombre: "Pastelería", slug: "pasteleria" } })).json<{ id: string }>();
+    const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 2)]);
+    const sub = await app.inject({ method: "POST", url: `/api/sitios/${s.id}/archivos`, ...multipartSitio("logo.png", "image/png", PNG), headers: { ...h, ...multipartSitio("logo.png", "image/png", PNG).headers } });
+    expect(sub.statusCode).toBe(200);
+    const url = sub.json<{ url: string }>().url;
+    await app.inject({ method: "PUT", url: `/api/sitios/${s.id}/borrador`, headers: h, payload: { borrador: { pages: [{ id: "p1", frames: [{ component: { components: [{ type: "image", src: url }] } }] }] } } });
+    const paquete = await app.inject({ method: "GET", url: `/api/sitios/${s.id}/paquete`, headers: h });
+    expect(paquete.statusCode).toBe(200);
+    expect(paquete.headers["content-type"]).toContain("zip");
+    // Otra cuenta lo importa: se crea con otra dirección y la imagen apunta al sitio nuevo.
+    const m = multipartSitio("pasteleria-mi-setup.zip", "application/zip", paquete.rawPayload);
+    const imp = await app.inject({ method: "POST", url: "/api/sitios/importar", payload: m.payload, headers: { ...otra, ...m.headers } });
+    expect(imp.statusCode).toBe(200);
+    const nuevo = imp.json<{ id: string; slug: string; publicado: string | null }>();
+    expect(nuevo.slug).toBe("pasteleria-2");
+    expect(nuevo.publicado).toBe(false);
+    const detalle = (await app.inject({ method: "GET", url: `/api/sitios/${nuevo.id}`, headers: otra })).json<{ borrador: unknown }>();
+    const texto = JSON.stringify(detalle.borrador);
+    expect(texto).toContain(`/api/sitios/${nuevo.id}/archivos/`);
+    expect(texto).not.toContain(s.id);
+    const archivos = (await app.inject({ method: "GET", url: `/api/sitios/${nuevo.id}/archivos`, headers: otra })).json<unknown[]>();
+    expect(archivos).toHaveLength(1);
+    // Un .html suelto también se importa.
+    const html = multipartSitio("landing.html", "text/html", "<body><h1>Mi landing</h1><script>x</script></body>");
+    const r = await app.inject({ method: "POST", url: "/api/sitios/importar", payload: html.payload, headers: { ...h, ...html.headers } });
+    expect(r.statusCode).toBe(200);
+    const d = (await app.inject({ method: "GET", url: `/api/sitios/${r.json<{ id: string }>().id}`, headers: h })).json<{ borrador: { importado: { paginas: { html: string }[] } } }>();
+    expect(d.borrador.importado.paginas[0]!.html).toContain("Mi landing");
+    expect(d.borrador.importado.paginas[0]!.html).not.toContain("<script");
+  });
+});

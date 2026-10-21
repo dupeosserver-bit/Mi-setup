@@ -188,9 +188,20 @@ select {
 .editor-sitio .gjs-pn-views-container,
 .editor-sitio .gjs-pn-views { width: 260px; }
 .editor-sitio .gjs-pn-options { right: 260px; }
+/* En el celular el lienzo usa todo el ancho y el panel (bloques, estilos, capas)
+   sale encima, desde la derecha, solo cuando lo abres. */
 @media (max-width: 760px) {
-  .editor-sitio .gjs-cv-canvas { width: calc(100% - 190px); }
-  .editor-sitio .gjs-pn-views-container,
-  .editor-sitio .gjs-pn-views { width: 190px; }
-  .editor-sitio .gjs-pn-options { right: 190px; }
+  .editor-sitio .gjs-cv-canvas { width: 100%; }
+  .editor-sitio .gjs-pn-commands { width: 100%; }
+  .editor-sitio .gjs-pn-options { right: auto; left: 0; }
+  .editor-sitio .gjs-pn-views { width: auto; right: 0; border-left: 0; z-index: 6; }
+  .editor-sitio .gjs-pn-views-container {
+    width: min(320px, 88%);
+    z-index: 5;
+    box-shadow: -12px 0 24px rgba(0, 0, 0, 0.35);
+    transform: translateX(105%);
+    transition: transform 0.2s ease;
+  }
+  .editor-sitio.panel-abierto .gjs-pn-views-container { transform: translateX(0); }
+  .editor-sitio .gjs-block { width: calc(50% - 10px); min-height: 72px; }
 }

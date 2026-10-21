@@ -4,7 +4,7 @@
  */
 import { asegurarDnsDeSitio, borrarDnsDeSitio } from "../cloudflare.js";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { and, asc, desc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
@@ -22,9 +22,15 @@ import { calcularCosto, clienteAnthropic, clienteOllama, type ClienteIa } from "
 import { SLUG_VALIDO, SLUGS_RESERVADOS, type DetectorSitios } from "./detector.js";
 import { armarPagina, type AjustesSitio, type PaginaPublicada } from "./publico.js";
 import { RUNTIME } from "./runtime.js";
+import { armarPaquete, cambiarIds, leerImportacion, ponerArchivos, type ArchivoPaquete } from "./paquete.js";
 
 const MAX_IMAGEN = 10 * 1024 * 1024;
 const TIPOS_IMAGEN = /^image\/(png|jpeg|webp|gif|svg\+xml|x-icon|vnd\.microsoft\.icon)$/;
+/** Archivos para descargar desde un botón del sitio (0.11.2b): siempre se entregan como descarga. */
+export const TIPOS_DESCARGA = /^(application\/(pdf|zip|x-zip-compressed|vnd\.openxmlformats-officedocument\.[\w.-]+|msword|vnd\.ms-excel|vnd\.ms-powerpoint|java-archive|x-java-archive|vnd\.android\.package-archive|octet-stream)|text\/(plain|csv)|audio\/(mpeg|mp4|ogg|wav)|video\/(mp4|webm))$/;
+/** Extensiones que nunca se aceptan como descarga (pueden ejecutar algo al abrirlas). */
+const EXTENSIONES_PELIGROSAS = /\.(html?|svg|xhtml|js|mjs|exe|msi|bat|cmd|ps1|vbs|scr|com|sh)$/i;
+const MAX_DESCARGA = 25 * 1024 * 1024;
 const DOMINIO = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
 
 const ajustesSchema = z.object({
@@ -254,21 +260,25 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       if (!a) throw new HttpError(404, "No encontrado");
       const datos = await readFile(join(dirSitio(id), a.storedName)).catch(() => null);
       if (!datos) throw new HttpError(404, "No encontrado");
+      if (!TIPOS_IMAGEN.test(a.mime)) reply.header("content-disposition", `attachment; filename="${a.name.replace(/[^\w. -]/g, "_")}"`);
       return reply.type(a.mime).header("cache-control", "public, max-age=86400").header("x-content-type-options", "nosniff").send(datos);
     });
 
-    app.post("/api/sitios/:id/archivos", { ...escribir, bodyLimit: MAX_IMAGEN + 1024 * 1024 }, async (request) => {
+    app.post("/api/sitios/:id/archivos", { ...escribir, bodyLimit: MAX_DESCARGA + 1024 * 1024 }, async (request) => {
       const s = await sitioDe(request);
-      const archivo = await request.file({ limits: { fileSize: MAX_IMAGEN, files: 1 } });
+      const archivo = await request.file({ limits: { fileSize: MAX_DESCARGA, files: 1 } });
       if (!archivo) throw new HttpError(400, "Falta el archivo");
-      if (!TIPOS_IMAGEN.test(archivo.mimetype)) throw new HttpError(415, "Solo imágenes (PNG, JPG, WebP, GIF, SVG o ICO)");
+      const esImagen = TIPOS_IMAGEN.test(archivo.mimetype);
+      if (!esImagen && (!TIPOS_DESCARGA.test(archivo.mimetype) || EXTENSIONES_PELIGROSAS.test(archivo.filename))) {
+        throw new HttpError(415, "Ese tipo de archivo no se puede subir (imágenes, PDF, documentos de Office, ZIP, audio o video)");
+      }
       await mkdir(dirSitio(s.id), { recursive: true });
       const guardado = crypto.randomUUID();
       const ruta = join(dirSitio(s.id), guardado);
       await pipeline(archivo.file, createWriteStream(ruta));
-      if (archivo.file.truncated) {
+      if (archivo.file.truncated || (esImagen && (await stat(ruta)).size > MAX_IMAGEN)) {
         await unlink(ruta).catch(() => undefined);
-        throw new HttpError(413, "La imagen supera 10 MB");
+        throw new HttpError(413, esImagen ? "La imagen supera 10 MB" : "El archivo supera 25 MB");
       }
       const { size } = await stat(ruta);
       const [a] = await db.insert(siteAssets).values({ siteId: s.id, name: archivo.filename.slice(0, 120), storedName: guardado, mime: archivo.mimetype, size }).returning();
@@ -449,6 +459,87 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
         .type("application/zip")
         .header("content-disposition", `attachment; filename="${s.slug}.zip"`)
         .send(Buffer.from(zipSync(archivos, { level: 6 })));
+    });
+
+    // ---------------------------------------------------------- paquete completo (exportar / importar)
+    app.get("/api/sitios/:id/paquete", leer, async (request, reply) => {
+      const s = await sitioDe(request);
+      const tablas = await db.select().from(siteTables).where(eq(siteTables.siteId, s.id));
+      const assets = await db.select().from(siteAssets).where(eq(siteAssets.siteId, s.id));
+      const archivos: ArchivoPaquete[] = [];
+      for (const a of assets) {
+        const datos = await readFile(join(dirSitio(s.id), a.storedName)).catch(() => null);
+        if (datos) archivos.push({ id: a.id, nombre: a.name, mime: a.mime, datos: new Uint8Array(datos) });
+      }
+      const zip = armarPaquete(
+        { nombre: s.name, slug: s.slug, ajustes: s.settings as Record<string, unknown>, borrador: s.draft as Record<string, unknown>, publicado: s.published, tablas: tablas.map((t) => ({ nombre: t.name, columnas: t.columns, filas: t.rows })) },
+        archivos,
+      );
+      return reply.type("application/zip").header("content-disposition", `attachment; filename="${s.slug}-mi-setup.zip"`).send(Buffer.from(zip));
+    });
+
+    /** Importar: paquete de Mi Setup o un sitio hecho (zip con .html o un .html suelto). */
+    app.post("/api/sitios/importar", { ...escribir, bodyLimit: 160 * 1024 * 1024 }, async (request) => {
+      const user = currentUser(request);
+      const archivo = await request.file({ limits: { fileSize: 150 * 1024 * 1024, files: 1 } });
+      if (!archivo) throw new HttpError(400, "Elige el archivo del sitio");
+      const buf = await archivo.toBuffer();
+      if (archivo.file.truncated) throw new HttpError(413, "El sitio pesa más de 150 MB");
+      const imp = leerImportacion(archivo.filename, new Uint8Array(buf));
+      const nombre = imp.tipo === "mi-setup" ? imp.datos.nombre : imp.nombre;
+      // Dirección libre: la del sitio original o una basada en el nombre, con número si ya existe.
+      const base =
+        (imp.tipo === "mi-setup" ? imp.datos.slug : nombre)
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 30) || "sitio";
+      let slug = base;
+      for (let n = 2; ; n++) {
+        const [existe] = await db.select({ id: sites.id }).from(sites).where(eq(sites.slug, slug));
+        if (!existe && SLUG_VALIDO.test(slug) && !SLUGS_RESERVADOS.has(slug)) break;
+        slug = `${base}-${n}`;
+        if (n > 500) throw new HttpError(409, "No encontré una dirección libre");
+      }
+      const [s] = await db.insert(sites).values({ ownerId: user.id, name: nombre.slice(0, 80), slug, draft: {}, settings: { titulo: nombre.slice(0, 80), moneda: "MXN", avisos: true } }).returning();
+      if (!s) throw new HttpError(500, "No se pudo crear");
+      await mkdir(dirSitio(s.id), { recursive: true });
+      const guardar = async (nombreArchivo: string, mime: string, datos: Uint8Array) => {
+        const guardado = crypto.randomUUID();
+        await writeFile(join(dirSitio(s.id), guardado), datos);
+        const [a] = await db.insert(siteAssets).values({ siteId: s.id, name: nombreArchivo.slice(0, 120), storedName: guardado, mime, size: datos.length }).returning();
+        return a!.id;
+      };
+      if (imp.tipo === "mi-setup") {
+        const ids = new Map<string, string>();
+        for (const a of imp.datos.archivos ?? []) {
+          const d = imp.archivos.get(a.id);
+          if (d && /^[\w.+/-]{3,100}$/.test(a.mime)) ids.set(a.id, await guardar(a.nombre, a.mime, d));
+        }
+        // Las direcciones del editor llevan el id del sitio viejo: se cambian por el nuevo.
+        const viejoSitio = /\/api\/sitios\/([0-9a-f-]{36})\/archivos\//.exec(JSON.stringify(imp.datos.borrador))?.[1];
+        if (viejoSitio) ids.set(viejoSitio, s.id);
+        await db
+          .update(sites)
+          .set({ draft: cambiarIds(imp.datos.borrador ?? {}, ids), settings: cambiarIds(imp.datos.ajustes ?? {}, ids), published: null })
+          .where(eq(sites.id, s.id));
+        for (const t of (imp.datos.tablas ?? []).slice(0, 50)) {
+          if (typeof t.nombre === "string" && /^[a-z0-9_-]{1,40}$/.test(t.nombre)) await db.insert(siteTables).values({ siteId: s.id, name: t.nombre, columns: t.columnas ?? [], rows: t.filas ?? [] });
+        }
+      } else {
+        const urls = new Map<string, string>();
+        for (const [ruta, a] of imp.archivos) {
+          if (!TIPOS_IMAGEN.test(a.mime) && !TIPOS_DESCARGA.test(a.mime)) continue;
+          urls.set(ruta, `/api/sitios/${s.id}/archivos/${await guardar(a.nombre, a.mime, a.datos)}`);
+        }
+        const paginas = imp.paginas.map((p) => ({ nombre: p.nombre.slice(0, 60), html: ponerArchivos(p.html, urls) }));
+        await db.update(sites).set({ draft: { importado: { paginas, css: ponerArchivos(imp.css, urls) } } }).where(eq(sites.id, s.id));
+      }
+      await deps.audit.record({ actorType: "usuario", actorUserId: user.id, action: "sitio_importado", module: "sitios", target: slug, outcome: "ok", ...clientInfo(request) });
+      const [final] = await db.select().from(sites).where(eq(sites.id, s.id));
+      return vistaSitio(final!);
     });
 
     // ---------------------------------------------------------- "Hazlo con IA"

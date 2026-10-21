@@ -986,6 +986,9 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
           <Boton icono={Download} disabled={!sitio.publicado} onClick={() => void descargar(`/api/sitios/${sitio.id}/exportar`, `${sitio.slug}.zip`).catch(avisarError)}>
             Exportar en ZIP
           </Boton>
+          <Boton icono={Download} onClick={() => void descargar(`/api/sitios/${sitio.id}/paquete`, `${sitio.slug}-mi-setup.zip`).catch(avisarError)}>
+            Exportar todo (para importar en otro Mi Setup)
+          </Boton>
           {sitio.publicado ? (
             <Boton
               onClick={async () => {
@@ -1090,6 +1093,20 @@ export default function Sitios() {
   const puede = usePuede("sitios", "escritura");
   const q = useQuery({ queryKey: ["sitios"], queryFn: () => api<Sitio[]>("/api/sitios") });
   const abrir = (id: string | null) => setParams(id ? { sitio: id } : {});
+  const archivoImportar = useRef<HTMLInputElement>(null);
+  const importar = useMutation({
+    mutationFn: (f: File) => {
+      const datos = new FormData();
+      datos.append("archivo", f);
+      return api<Sitio>("/api/sitios/importar", { formulario: datos });
+    },
+    onSuccess: (s) => {
+      avisar("Sitio importado. Revísalo y publícalo cuando quieras.");
+      invalidar();
+      abrir(s.id);
+    },
+    onError: avisarError,
+  });
 
   if (elegido) return <Detalle id={elegido} alVolver={() => abrir(null)} />;
   return (
@@ -1097,8 +1114,31 @@ export default function Sitios() {
       <Encabezado
         titulo="Sitios y apps"
         descripcion="Diseña páginas y apps arrastrando bloques y publícalas en tu dominio con un botón."
-        acciones={puede ? <Boton variante="primario" icono={Plus} onClick={() => setCrear(true)}>Nuevo sitio</Boton> : null}
+        acciones={
+          puede ? (
+            <>
+              <Boton icono={Upload} cargando={importar.isPending} onClick={() => archivoImportar.current?.click()}>
+                Importar sitio
+              </Boton>
+              <Boton variante="primario" icono={Plus} onClick={() => setCrear(true)}>
+                Nuevo sitio
+              </Boton>
+            </>
+          ) : null
+        }
       />
+      <input
+        ref={archivoImportar}
+        type="file"
+        accept=".zip,.html,.htm,application/zip,text/html"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) importar.mutate(f);
+        }}
+      />
+      <p className="-mt-2 text-xs text-tenue">«Importar sitio» acepta lo que exportas con «Exportar todo», o un sitio que ya tengas hecho (.zip con sus páginas .html o un .html suelto).</p>
       <ErrorCaja error={q.error} />
       {q.isLoading ? <Cargando /> : null}
       {q.data && !q.data.length ? <Vacio icono={Globe} texto="Crea tu primer sitio: la página de la pastelería, la de tu servidor de Minecraft o tu link in bio." /> : null}

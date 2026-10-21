@@ -203,6 +203,8 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios)
       const [a] = await db.select().from(siteAssets).where(and(eq(siteAssets.id, id), eq(siteAssets.siteId, s.id)));
       const ruta = a ? join(carpetaArchivos(deps), "sitios", s.id, a.storedName) : "";
       if (!a || !existsSync(ruta)) throw new HttpError(404, "No encontrado");
+      // Lo que no es imagen (PDF, ZIP, documentos…) siempre se descarga: nunca se abre como página del sitio.
+      if (!a.mime.startsWith("image/") || a.mime === "image/svg+xml") reply.header("content-disposition", `${a.mime === "image/svg+xml" ? "inline" : "attachment"}; filename="${a.name.replace(/[^\w. -]/g, "_")}"`);
       return reply.type(a.mime).header("cache-control", "public, max-age=86400").header("x-content-type-options", "nosniff").send(createReadStream(ruta));
     });
 

@@ -144,6 +144,122 @@ export async function subirImagenSitio(idSitio: string, f: File | Blob, nombre =
   return { id: r.id, url: `${API_BASE}${r.url}` };
 }
 
+type ComponenteGjs = { getAttributes(): Record<string, string>; addAttributes(a: Record<string, string>): void; removeAttributes(n: string[]): void; get(k: string): unknown };
+
+/** ¿A dónde lleva este botón o enlace? Página del sitio, enlace, archivo, WhatsApp o correo. */
+function DestinoBoton({ comp, idSitio, paginas, alCerrar }: { comp: ComponenteGjs; idSitio: string; paginas: { id: string; nombre: string }[]; alCerrar: () => void }) {
+  const actual = comp.getAttributes();
+  const [modo, setModo] = useState<"pagina" | "enlace" | "archivo" | "whatsapp" | "correo">(
+    actual.download !== undefined ? "archivo" : /wa\.me/.test(actual.href ?? "") ? "whatsapp" : (actual.href ?? "").startsWith("mailto:") ? "correo" : (actual.href ?? "").startsWith("/") ? "pagina" : "enlace",
+  );
+  const [pagina, setPagina] = useState(actual.href?.startsWith("/") ? actual.href : "/");
+  const [url, setUrl] = useState(/^https?:/.test(actual.href ?? "") && !/wa\.me/.test(actual.href ?? "") ? actual.href! : "");
+  const [nueva, setNueva] = useState(actual.target === "_blank");
+  const [telefono, setTelefono] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [correo, setCorreo] = useState((actual.href ?? "").replace(/^mailto:/, ""));
+  const [subiendo, setSubiendo] = useState(false);
+  const entrada = useRef<HTMLInputElement>(null);
+  const aplicar = (href: string, extra: Record<string, string> = {}, quitar: string[] = []) => {
+    comp.removeAttributes(["download", "target", "rel", ...quitar]);
+    comp.addAttributes({ href, ...extra });
+    avisar("Destino del botón guardado");
+    alCerrar();
+  };
+  const subir = async (f: File) => {
+    setSubiendo(true);
+    try {
+      const fd = new FormData();
+      fd.append("archivo", f, f.name);
+      const r = await api<{ id: string; url: string }>(`/api/sitios/${idSitio}/archivos`, { formulario: fd });
+      aplicar(`${API_BASE}${r.url}`, { download: f.name });
+    } catch (err) {
+      avisarError(err);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+  return (
+    <Modal abierto titulo="¿A dónde lleva este botón?" alCerrar={alCerrar} ancho="max-w-md">
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-1">
+          {(
+            [
+              ["pagina", "Otra página del sitio"],
+              ["enlace", "Un enlace"],
+              ["archivo", "Descargar un archivo"],
+              ["whatsapp", "WhatsApp"],
+              ["correo", "Correo"],
+            ] as const
+          ).map(([id, texto]) => (
+            <button key={id} type="button" onClick={() => setModo(id)} className={cx("rounded-full border px-3 py-1 text-xs", modo === id ? "border-acento bg-acento text-black" : "border-borde")}>
+              {texto}
+            </button>
+          ))}
+        </div>
+        {modo === "pagina" ? (
+          <>
+            <Selector value={pagina} onChange={(e) => setPagina(e.target.value)}>
+              {paginas.map((p, i) => {
+                const ruta = i === 0 ? "/" : `/${slug(p.nombre) || `pagina-${i}`}`;
+                return (
+                  <option key={p.id} value={ruta}>
+                    {p.nombre} ({ruta})
+                  </option>
+                );
+              })}
+            </Selector>
+            <Boton variante="primario" onClick={() => aplicar(pagina)}>
+              Guardar
+            </Boton>
+          </>
+        ) : null}
+        {modo === "enlace" ? (
+          <>
+            <Entrada value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" inputMode="url" autoFocus />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={nueva} onChange={(e) => setNueva(e.target.checked)} /> Abrir en otra pestaña
+            </label>
+            <Boton variante="primario" disabled={!/^https?:\/\/\S+\.\S+/.test(url.trim())} onClick={() => aplicar(url.trim(), nueva ? { target: "_blank", rel: "noopener" } : {})}>
+              Guardar
+            </Boton>
+          </>
+        ) : null}
+        {modo === "archivo" ? (
+          <>
+            <p className="text-sm text-tenue">Sube el archivo aquí mismo (PDF, menú, catálogo, ZIP, Word, Excel, audio o video; hasta 25 MB). Al tocar el botón, el visitante lo descarga.</p>
+            <input ref={entrada} type="file" className="hidden" onChange={(e) => (e.target.files?.[0] ? void subir(e.target.files[0]) : undefined, (e.target.value = ""))} />
+            <Boton variante="primario" cargando={subiendo} onClick={() => entrada.current?.click()}>
+              Elegir archivo
+            </Boton>
+          </>
+        ) : null}
+        {modo === "whatsapp" ? (
+          <>
+            <Entrada value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Número con lada, ej. 528112345678" inputMode="tel" />
+            <Entrada value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Mensaje que aparece escrito (opcional)" />
+            <Boton
+              variante="primario"
+              disabled={telefono.replace(/\D/g, "").length < 10}
+              onClick={() => aplicar(`https://wa.me/${telefono.replace(/\D/g, "")}${mensaje.trim() ? `?text=${encodeURIComponent(mensaje.trim())}` : ""}`, { target: "_blank", rel: "noopener" })}
+            >
+              Guardar
+            </Boton>
+          </>
+        ) : null}
+        {modo === "correo" ? (
+          <>
+            <Entrada type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="tu@correo.com" />
+            <Boton variante="primario" disabled={!/^\S+@\S+\.\S+$/.test(correo.trim())} onClick={() => aplicar(`mailto:${correo.trim()}`)}>
+              Guardar
+            </Boton>
+          </>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
 export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPublicar: (url: string) => void }) {
   const caja = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -158,6 +274,10 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
   const [ia, setIa] = useState<string | null>(null);
   const [iaCargando, setIaCargando] = useState(false);
   const temporizador = useRef<number | null>(null);
+  const editorListo = useRef(false);
+  const chico = typeof window !== "undefined" && window.innerWidth <= 760;
+  const [panelMovil, setPanelMovil] = useState(false);
+  const [destino, setDestino] = useState<ComponenteGjs | null>(null);
 
   const refrescarPaginas = useCallback(() => {
     const ed = editorRef.current;
@@ -183,7 +303,7 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
     if (!caja.current) return;
     const editor = grapesjs.init({
       container: caja.current,
-      height: "78vh",
+      height: chico ? "calc(100dvh - 17rem)" : "78vh",
       width: "auto",
       fromElement: false,
       storageManager: false,
@@ -200,6 +320,8 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
       canvas: { styles: [urlFuentes] },
       assetManager: { upload: false, autoAdd: false, uploadName: "archivo", multiUpload: true },
       selectorManager: { componentFirst: true },
+      // En pantallas táctiles arrastrar bloques es difícil: con un toque se agregan.
+      blockManager: { appendOnClick: chico || matchMedia("(pointer: coarse)").matches },
       undoManager: { trackSelection: false },
     });
     editorRef.current = editor;
@@ -210,9 +332,17 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
       .then((l) => editor.AssetManager.add(l.map((a) => ({ src: `${API_BASE}${a.url}`, name: a.nombre }))))
       .catch(() => undefined);
 
-    const b = sitio.borrador as { pages?: unknown[]; plantilla?: { html: string; css: string } };
+    const b = sitio.borrador as { pages?: unknown[]; plantilla?: { html: string; css: string }; importado?: { paginas: { nombre: string; html: string }[]; css: string } };
+    const conBase = (t: string) => t.replace(/(["'(])\/api\/sitios\//g, `$1${API_BASE}/api/sitios/`);
     if (Array.isArray(b.pages) && b.pages.length) editor.loadProjectData(b as never);
-    else if (b.plantilla) {
+    else if (b.importado?.paginas.length) {
+      // Sitio importado: cada .html se vuelve una página del editor.
+      const [inicio, ...resto] = b.importado.paginas;
+      editor.setComponents(conBase(inicio!.html));
+      editor.Pages.getAll()[0]?.set("name", inicio!.nombre);
+      for (const p of resto) editor.Pages.add({ name: p.nombre, component: conBase(p.html) });
+      editor.setStyle(conBase(b.importado.css));
+    } else if (b.plantilla) {
       editor.setComponents(b.plantilla.html);
       editor.setStyle(b.plantilla.css);
     }
@@ -227,7 +357,14 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
         if (n) c.set("label", n);
       });
       setListo(true);
+      editorListo.current = true;
       refrescarPaginas();
+      if (chico) {
+        editor.setDevice("Celular");
+        setDispositivo("Celular");
+        // Al tocar un botón del panel (bloques, estilos, capas…) se abre encima del lienzo.
+        caja.current?.querySelector(".gjs-pn-views")?.addEventListener("click", () => setPanelMovil(true));
+      }
     });
     // Guardado automático unos segundos después del último cambio.
     editor.on("update", () => {
@@ -236,6 +373,20 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
       temporizador.current = window.setTimeout(() => void guardar(), 2500);
     });
     editor.on("page", refrescarPaginas);
+    // Botones y enlaces: elegir a dónde llevan (página, enlace, archivo, WhatsApp, correo).
+    const esEnlace = (c: { get(k: string): unknown }) => c.get("tagName") === "a" || c.get("type") === "link";
+    editor.Commands.add("ms-destino", { run: (ed: Editor) => setDestino((ed.getSelected() as unknown as ComponenteGjs) ?? null) });
+    editor.on("component:selected", (c: { get(k: string): unknown; getTrait(n: string): unknown; addTrait(t: unknown, o?: unknown): void }) => {
+      if (esEnlace(c) && !c.getTrait("ms-destino")) {
+        c.addTrait({ type: "button", name: "ms-destino", label: "Destino", text: "¿A dónde lleva?", full: true, command: "ms-destino" }, { at: 0 });
+      }
+    });
+    // Al agregar un botón nuevo sin destino, se pregunta de una vez.
+    editor.on("component:add", (c: ComponenteGjs) => {
+      if (!editorListo.current || !esEnlace(c)) return;
+      const href = c.getAttributes().href ?? "";
+      if (!href || href === "#") window.setTimeout(() => setDestino(c), 150);
+    });
     return () => {
       if (temporizador.current) window.clearTimeout(temporizador.current);
       editor.destroy();
@@ -392,7 +543,15 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
           Publicar
         </Boton>
       </div>
-      <div className={cx("editor-sitio overflow-hidden rounded-tarjeta border border-borde")}>
+      {chico ? (
+        <div className="flex gap-1">
+          <Boton tamano="sm" variante={panelMovil ? "primario" : "secundario"} onClick={() => setPanelMovil(!panelMovil)}>
+            {panelMovil ? "Ver la página" : "Bloques y estilos"}
+          </Boton>
+          <span className="self-center text-xs text-tenue">Toca un bloque para agregarlo.</span>
+        </div>
+      ) : null}
+      <div className={cx("editor-sitio relative overflow-hidden rounded-tarjeta border border-borde", panelMovil && "panel-abierto")}>
         <div ref={caja} />
       </div>
       <p className="text-xs text-tenue">
@@ -400,6 +559,7 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
         guardan solos; los visitantes ven lo nuevo solo al tocar <strong>Publicar</strong>.
       </p>
 
+      {destino ? <DestinoBoton comp={destino} idSitio={sitio.id} paginas={paginas} alCerrar={() => setDestino(null)} /> : null}
       <Modal abierto={codigo !== null} titulo="Código de la página" alCerrar={() => setCodigo(null)} ancho="max-w-3xl">
         {codigo ? (
           <div className="space-y-3">
