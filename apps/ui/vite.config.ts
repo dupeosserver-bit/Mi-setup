@@ -26,6 +26,8 @@ export default defineConfig(({ mode }) => ({
       "libsodium-wrappers-sumo": createRequire(import.meta.url).resolve("libsodium-wrappers-sumo"),
     },
   },
+  // El motor de semillas (WebAssembly) busca su .wasm junto a su .js: no se pre-empaqueta.
+  optimizeDeps: { exclude: ["seedmaps-engine-wasm"] },
   server: {
     port: 5173,
     proxy: {

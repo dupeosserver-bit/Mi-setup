@@ -11,3 +11,9 @@ interface ImportMeta {
 
 /** Versión de la app (package.json), puesta por Vite al compilar. */
 declare const __VERSION_APP__: string;
+
+/** Motor de semillas (Cubiomes en WebAssembly): no trae tipos; los usa lib/semillas.ts. */
+declare module "seedmaps-engine-wasm" {
+  const crear: () => Promise<unknown>;
+  export default crear;
+}

@@ -77,6 +77,8 @@ export interface ServidoresLocales {
   modrinthBuscar(id: string, q: string, clase?: ClaseAddon | "modpacks", pagina?: number): Promise<Addon[]>;
   /** Modpack de Modrinth (.mrpack) en un servidor Fabric, Quilt, Forge o NeoForge. */
   modpackInstalar?(id: string, proyecto: string): Promise<{ nombre: string; archivos: number }>;
+  /** Modpacks para crear un servidor nuevo (0.11.2b o más nueva de la app de Windows). */
+  modpacksBuscar?(q: string, mc: string, pagina?: number): Promise<{ total: number; packs: (Addon & { cargadores: string[] })[] }>;
   modrinthInstalar(id: string, proyecto: string, clase?: ClaseAddon): Promise<string>;
   instalarDesdeUrl(id: string, url: string, nombre: string, clase?: ClaseAddon): Promise<string>;
   quitarAddon(id: string, nombre: string, clase?: ClaseAddon): Promise<boolean>;

@@ -32,7 +32,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
-import { Boton, Campo, Encabezado, Entrada, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Boton, Campo, Encabezado, Entrada, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { guardarBlob } from "../lib/guardar";
 import { confirmar } from "../lib/confirmar";
 import { lenguajeDe } from "../lib/monaco";
 import { escritorio, type ArchivosLocales, type EntradaLocal, type PlantillaProyecto } from "../lib/plataforma";
@@ -241,30 +242,126 @@ function NuevoProyecto({ fs, carpetas, alCrear, alCerrar }: { fs: ArchivosLocale
 }
 
 /** Editor sin archivos (navegador y celular): para practicar. */
+/** Archivo abierto desde este equipo (con permiso para guardarlo en su lugar si el navegador lo deja). */
+interface ArchivoSuelto {
+  nombre: string;
+  texto: string;
+  guardado: string;
+  manija: FileSystemFileHandle | null;
+}
+
+type VentanaConArchivos = Window & {
+  showOpenFilePicker?: (o?: unknown) => Promise<FileSystemFileHandle[]>;
+  showSaveFilePicker?: (o?: unknown) => Promise<FileSystemFileHandle>;
+};
+
+/**
+ * Editor para un archivo suelto de este equipo (PC, celular o navegador):
+ * abrir, editar y guardar. En la PC (Chrome/Edge y la app de Windows) se
+ * guarda en el mismo archivo; si el navegador no deja, se descarga.
+ */
 function BlocDeCodigo() {
+  const [archivo, setArchivo] = useState<ArchivoSuelto | null>(null);
   const [lenguaje, setLenguaje] = useState("javascript");
+  const entrada = useRef<HTMLInputElement>(null);
+  const w = window as VentanaConArchivos;
+  const chico = window.innerWidth < 640;
+  const cargar = (nombre: string, texto: string, manija: FileSystemFileHandle | null) => {
+    if (texto.includes("\u0000")) return avisar("Ese archivo no es de texto", "error");
+    setArchivo({ nombre, texto, guardado: texto, manija });
+    setLenguaje(lenguajeDe(nombre));
+  };
+  const abrir = async () => {
+    if (w.showOpenFilePicker) {
+      try {
+        const [m] = await w.showOpenFilePicker({ multiple: false });
+        if (!m) return;
+        const f = await m.getFile();
+        if (f.size > 5 * 1024 * 1024) return avisar("El archivo pasa de 5 MB", "error");
+        cargar(f.name, await f.text(), m);
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) avisarError(err);
+      }
+      return;
+    }
+    entrada.current?.click();
+  };
+  const guardar = async (como = false) => {
+    if (!archivo) return;
+    try {
+      let manija = como ? null : archivo.manija;
+      if (!manija && w.showSaveFilePicker) manija = await w.showSaveFilePicker({ suggestedName: archivo.nombre });
+      if (manija) {
+        const escritor = await (manija as FileSystemFileHandle & { createWritable: () => Promise<FileSystemWritableFileStream> }).createWritable();
+        await escritor.write(archivo.texto);
+        await escritor.close();
+        setArchivo({ ...archivo, guardado: archivo.texto, manija, nombre: manija.name });
+        avisar(`Guardado en ${manija.name}`);
+      } else {
+        // Celular o navegador sin permiso de escritura: se guarda una copia (Descargas o Documentos/MiSetup).
+        await guardarBlob(new Blob([archivo.texto], { type: "text/plain;charset=utf-8" }), archivo.nombre);
+        setArchivo({ ...archivo, guardado: archivo.texto });
+      }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) avisarError(err);
+    }
+  };
   return (
     <Tarjeta
-      titulo="Bloc de código"
+      titulo={archivo ? `${archivo.nombre}${archivo.texto !== archivo.guardado ? " ●" : ""}` : "Abrir un archivo"}
       icono={Code2}
       acciones={
-        <Selector className="w-auto" value={lenguaje} onChange={(e) => setLenguaje(e.target.value)}>
-          {["javascript", "typescript", "python", "html", "css", "json", "java", "sql", "markdown"].map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </Selector>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Boton tamano="sm" icono={FolderOpen} onClick={() => void abrir()}>
+            Abrir
+          </Boton>
+          <Boton tamano="sm" variante="primario" icono={Save} disabled={!archivo} onClick={() => void guardar()}>
+            Guardar
+          </Boton>
+          <Boton tamano="sm" variante="fantasma" disabled={!archivo} onClick={() => void guardar(true)}>
+            Guardar como
+          </Boton>
+          <Selector className="h-8 w-auto text-xs" value={lenguaje} onChange={(e) => setLenguaje(e.target.value)} aria-label="Lenguaje">
+            {["javascript", "typescript", "python", "html", "css", "json", "java", "yaml", "ini", "shell", "sql", "markdown", "plaintext"].map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </Selector>
+        </div>
       }
     >
-      <div className="h-[60vh] overflow-hidden rounded-xl border border-borde">
-        <Editor theme="vs-dark" language={lenguaje} defaultValue={"// Escribe aquí. Para abrir archivos de tu PC usa la app de Windows.\n"} options={{ fontSize: 14, minimap: { enabled: false } }} />
+      <input
+        ref={entrada}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          if (f.size > 5 * 1024 * 1024) return avisar("El archivo pasa de 5 MB", "error");
+          void f.text().then((t) => cargar(f.name, t, null));
+        }}
+      />
+      <div className="h-[calc(100dvh-16rem)] min-h-80 overflow-hidden rounded-xl border border-borde sm:h-[65vh]">
+        <Editor
+          theme="vs-dark"
+          language={lenguaje}
+          value={archivo?.texto ?? ""}
+          onChange={(v) => setArchivo((a) => (a ? { ...a, texto: v ?? "" } : { nombre: "nuevo.txt", texto: v ?? "", guardado: "", manija: null }))}
+          options={{ fontSize: chico ? 13 : 14, minimap: { enabled: !chico }, wordWrap: "on", automaticLayout: true, lineNumbersMinChars: chico ? 2 : 4, folding: !chico, scrollBeyondLastLine: false }}
+        />
       </div>
+      <p className="mt-2 text-xs text-tenue">
+        {w.showSaveFilePicker ? "Guardar escribe en el mismo archivo de tu equipo (el navegador te pide permiso la primera vez)." : "En el celular, Guardar deja una copia en Documentos/MiSetup (o en Descargas en el navegador)."}
+      </p>
     </Tarjeta>
   );
 }
 
 function Ide({ fs }: { fs: ArchivosLocales }) {
+  const chico = typeof window !== "undefined" && window.innerWidth < 768;
+  const [verArbol, setVerArbol] = useState(!chico);
   // ?carpeta=… (p. ej. desde Host local) abre directo esa carpeta si es una de las tuyas.
   const [params] = useSearchParams();
   const pedida = params.get("carpeta");
@@ -521,8 +618,11 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
         </div>
       ) : null}
 
-      <div className="grid h-[72vh] min-h-96 grid-cols-1 overflow-hidden rounded-tarjeta border border-borde md:grid-cols-[240px_1fr]">
-        <div className="flex min-h-0 flex-col border-b border-borde bg-superficie md:border-b-0 md:border-r">
+      <Boton className="md:hidden" tamano="sm" icono={FolderOpen} onClick={() => setVerArbol(!verArbol)}>
+        {verArbol ? "Ocultar archivos" : "Ver archivos"}
+      </Boton>
+      <div className={cx("grid h-[calc(100dvh-15rem)] min-h-96 grid-cols-1 overflow-hidden rounded-tarjeta border border-borde md:h-[72vh] md:grid-cols-[240px_1fr]", verArbol ? "grid-rows-[40%_1fr] md:grid-rows-1" : "")}>
+        <div className={cx("min-h-0 flex-col border-b border-borde bg-superficie md:flex md:border-b-0 md:border-r", verArbol ? "flex" : "hidden")}>
           <div className="flex items-center gap-1 border-b border-borde p-1">
             <span className="min-w-0 flex-1 truncate px-1 text-xs font-medium">{raiz ? nombreDe(raiz) : ""}</span>
             <button type="button" title="Nuevo archivo" className="p-1 hover:text-acento" onClick={() => void crearEn("archivo")}>
@@ -594,7 +694,7 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
                 value={actual.texto}
                 onMount={montar}
                 onChange={(v) => setArchivos((l) => l.map((x) => (x.ruta === actual.ruta ? { ...x, texto: v ?? "" } : x)))}
-                options={{ fontSize: 14, minimap: { enabled: true }, automaticLayout: true, tabSize: 4, wordWrap: "on" }}
+                options={{ fontSize: chico ? 13 : 14, minimap: { enabled: !chico }, automaticLayout: true, tabSize: 4, wordWrap: "on", lineNumbersMinChars: chico ? 2 : 4 }}
               />
             ) : (
               <div className="grid h-full place-items-center text-sm text-tenue">Elige un archivo para editarlo.</div>
@@ -667,13 +767,24 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
 
 export default function Codigo() {
   const fs = escritorio()?.archivosLocales ?? null;
+  const [vista, setVista] = useState<"proyectos" | "archivo">("proyectos");
   return (
     <div className="space-y-4">
       <Encabezado
         titulo="Código"
-        descripcion={fs ? "Tu editor tipo VS Code: abre carpetas de tu PC, crea plugins, mods y datapacks, compila y comprime sin salir de Mi Setup." : "Editor de código. Para abrir y compilar archivos de tu PC usa la app de Windows."}
+        descripcion={fs ? "Tu editor tipo VS Code: abre carpetas de tu PC, crea plugins, mods y datapacks, compila y comprime sin salir de Mi Setup." : "Abre un archivo de tu equipo, edítalo y guárdalo. Para proyectos completos y compilar usa la app de Windows."}
       />
-      {fs ? <Ide fs={fs} /> : <BlocDeCodigo />}
+      {fs ? (
+        <Pestanas
+          valor={vista}
+          alCambiar={setVista}
+          opciones={[
+            { id: "proyectos", texto: "Proyectos" },
+            { id: "archivo", texto: "Abrir un archivo" },
+          ]}
+        />
+      ) : null}
+      {fs && vista === "proyectos" ? <Ide fs={fs} /> : <BlocDeCodigo />}
     </div>
   );
 }

@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld("miSetup", {
     addons: (id: string, clase?: string) => ipcRenderer.invoke("srv:addons", id, clase),
     modrinthBuscar: (id: string, q: string, clase?: string, pagina?: number) => ipcRenderer.invoke("srv:modrinthBuscar", id, q, clase, pagina),
     modpackInstalar: (id: string, proyecto: string) => ipcRenderer.invoke("srv:modpackInstalar", id, proyecto),
+    modpacksBuscar: (q: string, mc: string, pagina?: number) => ipcRenderer.invoke("srv:modpacksBuscar", q, mc, pagina),
     modrinthInstalar: (id: string, proyecto: string, clase?: string) => ipcRenderer.invoke("srv:modrinthInstalar", id, proyecto, clase),
     instalarDesdeUrl: (id: string, url: string, nombre: string, clase?: string) => ipcRenderer.invoke("srv:instalarDesdeUrl", id, url, nombre, clase),
     quitarAddon: (id: string, nombre: string, clase?: string) => ipcRenderer.invoke("srv:quitarAddon", id, nombre, clase),

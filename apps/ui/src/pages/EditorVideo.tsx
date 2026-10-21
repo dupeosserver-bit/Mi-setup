@@ -60,8 +60,78 @@ interface Clip {
   voltearH: boolean;
   voltearV: boolean;
   giro: number;
-  /** Segundos que se solapa con el clip anterior (fundido cruzado). */
+  /** Segundos que se solapa con el clip anterior (transición). */
   transicion: number;
+  /** Cómo entra el clip durante la transición. */
+  tipoTransicion?: TipoTransicion;
+  /** Efecto durante todo el clip. */
+  efecto?: Efecto;
+  /** Zonas que se difuminan (marca de agua), en proporción del cuadro (0 a 1). */
+  difuminar?: Zona[];
+}
+export type TipoTransicion = "fundido" | "deslizar-izq" | "deslizar-der" | "deslizar-arriba" | "zoom" | "barrido" | "negro" | "blanco";
+export type Efecto = "ninguno" | "zoom-lento" | "zoom-salida" | "temblor" | "vineta" | "vhs" | "glitch" | "latido";
+export interface Zona {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+export const TRANSICIONES: Record<TipoTransicion, string> = {
+  fundido: "Fundido",
+  "deslizar-izq": "Deslizar a la izquierda",
+  "deslizar-der": "Deslizar a la derecha",
+  "deslizar-arriba": "Deslizar hacia arriba",
+  zoom: "Zoom",
+  barrido: "Barrido",
+  negro: "Pasar por negro",
+  blanco: "Destello blanco",
+};
+export const EFECTOS: Record<Efecto, string> = {
+  ninguno: "Ninguno",
+  "zoom-lento": "Acercar lento (Ken Burns)",
+  "zoom-salida": "Alejar lento",
+  temblor: "Cámara en mano",
+  vineta: "Viñeta (bordes oscuros)",
+  vhs: "VHS / retro",
+  glitch: "Glitch",
+  latido: "Latido (al ritmo)",
+};
+/** Calidades de exportación: alto del video y bits por segundo. */
+export const CALIDADES = {
+  "480": { texto: "480p (ligero)", lado: 480, bits: 2_500_000 },
+  "720": { texto: "720p HD", lado: 720, bits: 5_000_000 },
+  "1080": { texto: "1080p Full HD", lado: 1080, bits: 10_000_000 },
+  "1440": { texto: "1440p 2K", lado: 1440, bits: 16_000_000 },
+  "2160": { texto: "2160p 4K", lado: 2160, bits: 35_000_000 },
+} as const;
+export type Calidad = keyof typeof CALIDADES;
+
+/**
+ * Cómo se dibuja el clip que entra: progreso k (0 → 1) de la transición.
+ * Devuelve opacidad, desplazamiento (en proporción del cuadro), escala,
+ * ancho visible (barrido) y un velo de color encima.
+ */
+export function pasoTransicion(tipo: TipoTransicion, k: number): { alfa: number; dx: number; dy: number; escala: number; recorte: number; velo: { color: string; alfa: number } | null } {
+  const base = { alfa: 1, dx: 0, dy: 0, escala: 1, recorte: 1, velo: null as { color: string; alfa: number } | null };
+  const suave = k * k * (3 - 2 * k);
+  switch (tipo) {
+    case "fundido":
+      return { ...base, alfa: k };
+    case "deslizar-izq":
+      return { ...base, dx: 1 - suave };
+    case "deslizar-der":
+      return { ...base, dx: -(1 - suave) };
+    case "deslizar-arriba":
+      return { ...base, dy: 1 - suave };
+    case "zoom":
+      return { ...base, alfa: k, escala: 1.35 - 0.35 * suave };
+    case "barrido":
+      return { ...base, recorte: suave };
+    case "negro":
+    case "blanco":
+      return { ...base, alfa: k < 0.5 ? 0 : 1, velo: { color: tipo === "negro" ? "#000" : "#fff", alfa: 1 - Math.abs(2 * k - 1) } };
+  }
 }
 interface ClipAudio {
   id: string;
@@ -101,6 +171,58 @@ const id = () => crypto.randomUUID();
 const dur = (c: Clip) => Math.max(0.1, (c.salida - c.entrada) / c.velocidad);
 const mmss = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 const filtroCss = (f: Filtros) => `brightness(${f.brillo}) contrast(${f.contraste}) saturate(${f.saturacion}) grayscale(${f.grises}) sepia(${f.sepia})${f.desenfoque ? ` blur(${f.desenfoque}px)` : ""}`;
+
+/** Capas de efecto que van encima del clip (viñeta, VHS, glitch). */
+function efectoEncima(g: CanvasRenderingContext2D, efecto: Efecto, t: number, W: number, H: number) {
+  if (efecto === "vineta") {
+    const r = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    r.addColorStop(0, "rgba(0,0,0,0)");
+    r.addColorStop(1, "rgba(0,0,0,0.7)");
+    g.fillStyle = r;
+    g.fillRect(0, 0, W, H);
+  } else if (efecto === "vhs") {
+    g.save();
+    g.globalAlpha = 0.12;
+    g.fillStyle = "#000";
+    for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 2);
+    g.globalAlpha = 0.08;
+    g.fillStyle = "#ff0040";
+    g.fillRect(0, ((t * 120) % (H + 40)) - 40, W, 30);
+    g.restore();
+  } else if (efecto === "glitch") {
+    // Cada medio segundo, unos cortes horizontales se recorren de lado.
+    const fase = Math.floor(t * 8);
+    if (fase % 4 === 0) {
+      for (let i = 0; i < 6; i++) {
+        const y = ((fase * 97 + i * 211) % 100) / 100 * H;
+        const alto = H * 0.03;
+        const corrimiento = (((fase + i) % 2 ? 1 : -1) * W) / 40;
+        g.drawImage(g.canvas, 0, y, W, alto, corrimiento, y, W, alto);
+      }
+    }
+  }
+}
+
+/**
+ * Quita una marca de agua sin dañar mucho el video: la zona se cubre con lo
+ * que la rodea (estirado) y se difumina. Solo para videos tuyos o con permiso.
+ */
+export function difuminarZona(g: CanvasRenderingContext2D, c: HTMLCanvasElement, z: Zona, W: number, H: number) {
+  const x = z.x * W;
+  const y = z.y * H;
+  const w = Math.max(2, z.w * W);
+  const h = Math.max(2, z.h * H);
+  const m = Math.max(8, Math.min(w, h) * 0.35);
+  g.save();
+  g.beginPath();
+  g.rect(x, y, w, h);
+  g.clip();
+  // 1) se estira el borde alrededor hacia adentro; 2) se difumina.
+  g.filter = `blur(${Math.round(Math.max(6, Math.min(w, h) / 6))}px)`;
+  g.drawImage(c, Math.max(0, x - m), Math.max(0, y - m), Math.min(W, w + 2 * m), Math.min(H, h + 2 * m), x, y, w, h);
+  g.drawImage(c, x, y, w, h, x, y, w, h);
+  g.restore();
+}
 
 function medirMedio(archivo: File): Promise<Medio> {
   const url = URL.createObjectURL(archivo);
@@ -190,7 +312,12 @@ export default function EditorVideo() {
   const [audios, setAudios] = useState<ClipAudio[]>([]);
   const [textos, setTextos] = useState<TextoVideo[]>([]);
   const [formato, setFormato] = useState<Formato>("16:9");
-  const [calidad, setCalidad] = useState<"720" | "1080">("720");
+  const [calidad, setCalidad] = useState<Calidad>("720");
+  const [fps, setFps] = useState<24 | 30 | 60>(30);
+  const [zonaModo, setZonaModo] = useState(false);
+  const [permisoMarca, setPermisoMarca] = useState(false);
+  const zonaInicio = useRef<{ x: number; y: number } | null>(null);
+  const [zonaTemporal, setZonaTemporal] = useState<Zona | null>(null);
   const [fundidos, setFundidos] = useState({ entrada: false, salida: false });
   const [seleccion, setSeleccion] = useState<Seleccion>(null);
   const [tiempo, setTiempoEstado] = useState(0);
@@ -204,7 +331,7 @@ export default function EditorVideo() {
   // Medidas del lienzo según formato y calidad.
   const [W, H] = useMemo(() => {
     const [a, b] = FORMATOS[formato];
-    const lado = calidad === "1080" ? 1080 : 720;
+    const lado = CALIDADES[calidad].lado;
     return a >= b ? [Math.round((lado * a) / b / 2) * 2, lado] : [lado, Math.round((lado * b) / a / 2) * 2];
   }, [formato, calidad]);
 
@@ -323,20 +450,48 @@ export default function EditorVideo() {
         if (!m) continue;
         const fuente = m.tipo === "video" ? elementos.current.get(`c:${p.clip.id}`) : imagenDe(m);
         if (!fuente) continue;
-        const alfa = p.solape > 0 && t < p.inicio + p.solape ? (t - p.inicio) / p.solape : 1;
+        const k = p.solape > 0 && t < p.inicio + p.solape ? (t - p.inicio) / p.solape : 1;
+        const tr = pasoTransicion(p.clip.tipoTransicion ?? "fundido", k);
         const rotado = p.clip.giro % 180 !== 0;
         const sw = rotado ? m.alto : m.ancho;
         const sh = rotado ? m.ancho : m.alto;
         if (!sw || !sh) continue;
         const escala = p.clip.ajuste === "cubrir" ? Math.max(W / sw, H / sh) : Math.min(W / sw, H / sh);
+        // Efecto del clip según su avance (0 → 1).
+        const avance = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio)));
+        const efecto = p.clip.efecto ?? "ninguno";
+        let zoomEfecto = efecto === "zoom-lento" ? 1 + 0.15 * avance : efecto === "zoom-salida" ? 1.15 - 0.15 * avance : efecto === "latido" ? 1 + 0.03 * Math.max(0, Math.sin(t * Math.PI * 4)) : 1;
+        let mx = 0;
+        let my = 0;
+        if (efecto === "temblor") {
+          mx = Math.sin(t * 7.3) * W * 0.006 + Math.sin(t * 13.1) * W * 0.003;
+          my = Math.cos(t * 6.1) * H * 0.006;
+          zoomEfecto = 1.03;
+        }
         g.save();
-        g.globalAlpha = alfa;
-        g.filter = filtroCss(p.clip.filtros);
-        g.translate(W / 2, H / 2);
+        if (tr.recorte < 1) {
+          g.beginPath();
+          g.rect(0, 0, W * tr.recorte, H);
+          g.clip();
+        }
+        g.globalAlpha = tr.alfa;
+        g.filter = filtroCss(p.clip.filtros) + (efecto === "vhs" ? " saturate(1.3) contrast(1.1)" : "");
+        g.translate(W / 2 + tr.dx * W + mx, H / 2 + tr.dy * H + my);
+        g.scale(tr.escala * zoomEfecto, tr.escala * zoomEfecto);
         g.rotate((p.clip.giro * Math.PI) / 180);
         g.scale(p.clip.voltearH ? -1 : 1, p.clip.voltearV ? -1 : 1);
         g.drawImage(fuente as CanvasImageSource, (-m.ancho * escala) / 2, (-m.alto * escala) / 2, m.ancho * escala, m.alto * escala);
         g.restore();
+        efectoEncima(g, efecto, t, W, H);
+        // Marca de agua: la zona se rellena con lo de alrededor, difuminado.
+        for (const z of p.clip.difuminar ?? []) difuminarZona(g, c, z, W, H);
+        if (tr.velo && tr.velo.alfa > 0) {
+          g.save();
+          g.globalAlpha = tr.velo.alfa;
+          g.fillStyle = tr.velo.color;
+          g.fillRect(0, 0, W, H);
+          g.restore();
+        }
       }
       g.filter = "none";
       g.globalAlpha = 1;
@@ -560,10 +715,11 @@ export default function EditorVideo() {
     await ctx.resume();
     setExportando(0);
     const mime = await elegirMime(destinoExport.current!.stream.getAudioTracks());
-    const flujo = lienzo.current!.captureStream(30);
+    const flujo = lienzo.current!.captureStream(fps);
     destinoExport.current!.stream.getAudioTracks().forEach((t) => flujo.addTrack(t));
     const trozos: Blob[] = [];
-    const rec = new MediaRecorder(flujo, { mimeType: mime, videoBitsPerSecond: calidad === "1080" ? 10_000_000 : 5_000_000, audioBitsPerSecond: 160_000 });
+    const bits = Math.round(CALIDADES[calidad].bits * (fps === 60 ? 1.5 : fps === 24 ? 0.85 : 1));
+    const rec = new MediaRecorder(flujo, { mimeType: mime, videoBitsPerSecond: bits, audioBitsPerSecond: 192_000 });
     rec.ondataavailable = (e) => e.data.size && trozos.push(e.data);
     const detenido = new Promise<void>((ok) => (rec.onstop = () => ok()));
     tiempoRef.current = 0;
@@ -631,9 +787,17 @@ export default function EditorVideo() {
           <option value="1:1">Cuadrado 1:1</option>
           <option value="4:5">Retrato 4:5</option>
         </Selector>
-        <Selector className="w-auto" value={calidad} onChange={(e) => setCalidad(e.target.value as "720" | "1080")} aria-label="Calidad">
-          <option value="720">720p</option>
-          <option value="1080">1080p</option>
+        <Selector className="w-auto" value={calidad} onChange={(e) => setCalidad(e.target.value as Calidad)} aria-label="Calidad">
+          {(Object.keys(CALIDADES) as Calidad[]).map((c) => (
+            <option key={c} value={c}>
+              {CALIDADES[c].texto}
+            </option>
+          ))}
+        </Selector>
+        <Selector className="w-auto" value={String(fps)} onChange={(e) => setFps(Number(e.target.value) as 24 | 30 | 60)} aria-label="Cuadros por segundo">
+          <option value="24">24 fps (cine)</option>
+          <option value="30">30 fps</option>
+          <option value="60">60 fps (fluido)</option>
         </Selector>
         <label className="flex items-center gap-1 text-xs text-tenue">
           <input type="checkbox" checked={fundidos.entrada} onChange={(e) => setFundidos({ ...fundidos, entrada: e.target.checked })} /> Aparecer
@@ -676,7 +840,41 @@ export default function EditorVideo() {
 
         <div className="space-y-2">
           <div className="flex justify-center rounded-tarjeta border border-borde bg-black p-2">
-            <canvas ref={lienzo} width={W} height={H} className="max-h-[48vh] max-w-full rounded" style={{ aspectRatio: `${W} / ${H}` }} />
+            <div className="relative">
+              <canvas
+                ref={lienzo}
+                width={W}
+                height={H}
+                className={cx("max-h-[48vh] max-w-full rounded", zonaModo && "cursor-crosshair touch-none")}
+                style={{ aspectRatio: `${W} / ${H}` }}
+                onPointerDown={(e) => {
+                  if (!zonaModo) return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  zonaInicio.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!zonaModo || !zonaInicio.current) return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+                  const a = zonaInicio.current;
+                  setZonaTemporal({ x: Math.min(a.x, x), y: Math.min(a.y, y), w: Math.abs(x - a.x), h: Math.abs(y - a.y) });
+                }}
+                onPointerUp={() => {
+                  if (zonaModo && zonaTemporal && selClip && zonaTemporal.w > 0.01 && zonaTemporal.h > 0.01) {
+                    cambiarClip(selClip.id, { difuminar: [...(selClip.difuminar ?? []), zonaTemporal] });
+                    setZonaModo(false);
+                    avisar("Zona marcada: se difumina en todo este clip");
+                  }
+                  zonaInicio.current = null;
+                  setZonaTemporal(null);
+                }}
+              />
+              {zonaTemporal ? (
+                <span className="pointer-events-none absolute border-2 border-dashed border-acento bg-acento/20" style={{ left: `${zonaTemporal.x * 100}%`, top: `${zonaTemporal.y * 100}%`, width: `${zonaTemporal.w * 100}%`, height: `${zonaTemporal.h * 100}%` }} />
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-1">
             <Boton tamano="icono" variante="fantasma" icono={SkipBack} aria-label="Al inicio" onClick={() => irA(0)} />
@@ -731,14 +929,50 @@ export default function EditorVideo() {
               </Campo>
               {linea[0]?.clip.id !== selClip.id ? (
                 <Campo etiqueta="Transición con el clip anterior">
-                  <Selector value={String(selClip.transicion)} onChange={(e) => cambiarClip(selClip.id, { transicion: Number(e.target.value) })}>
-                    <option value="0">Corte directo</option>
-                    <option value="0.5">Fundido 0.5 s</option>
-                    <option value="1">Fundido 1 s</option>
-                    <option value="2">Fundido 2 s</option>
-                  </Selector>
+                  <div className="grid grid-cols-2 gap-1">
+                    <Selector value={String(selClip.transicion)} onChange={(e) => cambiarClip(selClip.id, { transicion: Number(e.target.value) })} aria-label="Duración de la transición">
+                      <option value="0">Corte directo</option>
+                      <option value="0.5">0.5 s</option>
+                      <option value="1">1 s</option>
+                      <option value="2">2 s</option>
+                    </Selector>
+                    <Selector value={selClip.tipoTransicion ?? "fundido"} disabled={!selClip.transicion} onChange={(e) => cambiarClip(selClip.id, { tipoTransicion: e.target.value as TipoTransicion })} aria-label="Tipo de transición">
+                      {Object.entries(TRANSICIONES).map(([v, n]) => (
+                        <option key={v} value={v}>
+                          {n}
+                        </option>
+                      ))}
+                    </Selector>
+                  </div>
                 </Campo>
               ) : null}
+              <Campo etiqueta="Efecto">
+                <Selector value={selClip.efecto ?? "ninguno"} onChange={(e) => cambiarClip(selClip.id, { efecto: e.target.value as Efecto })}>
+                  {Object.entries(EFECTOS).map(([v, n]) => (
+                    <option key={v} value={v}>
+                      {n}
+                    </option>
+                  ))}
+                </Selector>
+              </Campo>
+              <div className="rounded-xl border border-borde p-2">
+                <p className="mb-1 font-medium">Quitar marca de agua</p>
+                <p className="mb-2 text-tenue">Solo para videos tuyos o con permiso del dueño. Quitar la marca de un video ajeno puede violar sus derechos de autor.</p>
+                <label className="mb-2 flex items-start gap-2">
+                  <input type="checkbox" className="mt-0.5 accent-acento" checked={permisoMarca} onChange={(e) => setPermisoMarca(e.target.checked)} />
+                  <span>Confirmo que el video es mío o tengo permiso.</span>
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  <Boton tamano="sm" variante={zonaModo ? "primario" : "secundario"} disabled={!permisoMarca} onClick={() => setZonaModo(!zonaModo)}>
+                    {zonaModo ? "Dibuja el cuadro en el video…" : "Marcar la zona"}
+                  </Boton>
+                  {(selClip.difuminar ?? []).length ? (
+                    <Boton tamano="sm" variante="fantasma" icono={Trash2} onClick={() => cambiarClip(selClip.id, { difuminar: [] })}>
+                      Quitar zonas ({selClip.difuminar!.length})
+                    </Boton>
+                  ) : null}
+                </div>
+              </div>
               <div>
                 <p className="mb-1 font-medium">Filtros</p>
                 <div className="mb-2 flex flex-wrap gap-1">

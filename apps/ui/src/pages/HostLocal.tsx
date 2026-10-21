@@ -3,6 +3,8 @@
  * Minecraft Paper/Fabric/Forge/Vanilla con Java automático, consola, ajustes,
  * mods y plugins (Modrinth/CurseForge), playit.gg y pasar a tu VPS.
  */
+import { Paginas } from "../components/Paginas";
+import { Semillas } from "../components/Semillas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Boxes,
@@ -149,6 +151,129 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
           {crear.isPending ? (progreso ?? "Preparando…") : esMc ? "Crear y descargar" : "Elegir carpeta y crear"}
         </Boton>
         {esMc ? <p className="text-xs text-tenue">La primera vez baja Java (unos 200 MB) y el servidor. Queda en Documentos\MiSetup Servidores.</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
+/** Servidor nuevo a partir de un modpack: eliges la versión y solo salen modpacks de esa versión. */
+function CrearDesdeModpack({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s: ServidorLocal) => void; alCerrar: () => void }) {
+  const [mc, setMc] = useState("");
+  const [texto, setTexto] = useState("");
+  const [buscado, setBuscado] = useState("");
+  const [pagina, setPagina] = useState(0);
+  const [elegido, setElegido] = useState<(Addon & { cargadores: string[] }) | null>(null);
+  const [cargador, setCargador] = useState("");
+  const [ram, setRam] = useState(6144);
+  const [eula, setEula] = useState(false);
+  const [progreso] = useProgreso(srv);
+  // Versiones de Minecraft (las de Fabric cubren todas las de los modpacks).
+  const versiones = useQuery({ queryKey: ["host-local", "versiones", "fabric"], queryFn: () => srv.versiones("fabric"), staleTime: 30 * 60_000 });
+  useEffect(() => {
+    if (!mc && versiones.data?.length) setMc(versiones.data.find((v) => v === "1.20.1") ?? versiones.data[0]!);
+  }, [versiones.data]);
+  const packs = useQuery({
+    queryKey: ["host-local", "modpacks", mc, buscado, pagina],
+    queryFn: () => srv.modpacksBuscar!(buscado, mc, pagina),
+    enabled: Boolean(mc),
+  });
+  const crear = useMutation({
+    mutationFn: async () => {
+      if (!elegido) throw new Error("Elige un modpack");
+      const tipo = cargador as TipoServidor;
+      const lista = await srv.versiones(tipo);
+      const version = lista.find((v) => v === mc || v.split(/[-+ ]/)[0] === mc);
+      if (!version) throw new Error(`${TIPOS[tipo]?.nombre ?? tipo} no tiene servidor para Minecraft ${mc}`);
+      const s = await srv.crear({ nombre: elegido.titulo.slice(0, 40), tipo, version, ramMb: ram, puerto: 25565 + Math.floor(Math.random() * 50), eula });
+      if (!s) throw new Error("No se creó el servidor");
+      await srv.modpackInstalar!(s.id, elegido.id);
+      return s;
+    },
+    onSuccess: alCrear,
+    onError: avisarError,
+  });
+  return (
+    <Modal abierto titulo="Crear desde un modpack" alCerrar={alCerrar} ancho="sm:max-w-2xl">
+      <div className="space-y-3">
+        {!elegido ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Selector className="w-40" value={mc} onChange={(e) => (setMc(e.target.value), setPagina(0))} aria-label="Versión de Minecraft">
+                {(versiones.data ?? []).map((v) => (
+                  <option key={v} value={v}>
+                    Minecraft {v}
+                  </option>
+                ))}
+              </Selector>
+              <form
+                className="flex min-w-0 flex-1 gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setBuscado(texto.trim());
+                  setPagina(0);
+                }}
+              >
+                <Entrada className="min-w-0 flex-1" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={`Buscar modpacks para ${mc}…`} />
+                <Boton type="submit" icono={Search} aria-label="Buscar" />
+              </form>
+            </div>
+            {packs.isLoading ? <Cargando /> : null}
+            <ErrorCaja error={packs.error} />
+            {packs.data && !packs.data.packs.length ? <Vacio icono={Package} texto={`No hay modpacks para ${mc} con esa búsqueda.`} /> : null}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {packs.data?.packs.map((p) => (
+                <button key={p.id} type="button" onClick={() => (setElegido(p), setCargador(p.cargadores[0] ?? ""))} className="flex gap-3 rounded-xl border border-borde bg-fondo p-2 text-left hover:bg-tarjeta">
+                  {p.icono ? <img src={p.icono} alt="" className="h-12 w-12 shrink-0 rounded-lg" loading="lazy" /> : <Package className="h-12 w-12 shrink-0 p-2 text-tenue" />}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{p.titulo}</p>
+                    <p className="line-clamp-2 text-xs text-tenue">{p.descripcion}</p>
+                    <p className="text-[11px] text-tenue">
+                      {p.cargadores.map((c) => TIPOS[c as TipoServidor]?.nombre ?? c).join(", ")} · {p.descargas.toLocaleString("es-MX")} descargas
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <Paginas pagina={pagina + 1} total={packs.data ? Math.max(1, Math.ceil(Math.min(packs.data.total, 2400) / 24)) : undefined} alCambiar={(p) => setPagina(p - 1)} />
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 rounded-xl bg-fondo p-3">
+              {elegido.icono ? <img src={elegido.icono} alt="" className="h-12 w-12 rounded-lg" /> : null}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{elegido.titulo}</p>
+                <p className="text-xs text-tenue">Minecraft {mc}</p>
+              </div>
+              <Boton tamano="sm" variante="fantasma" onClick={() => setElegido(null)}>
+                Cambiar
+              </Boton>
+            </div>
+            <Campo etiqueta="Cargador">
+              <Selector value={cargador} onChange={(e) => setCargador(e.target.value)}>
+                {elegido.cargadores.map((c) => (
+                  <option key={c} value={c}>
+                    {TIPOS[c as TipoServidor]?.nombre ?? c}
+                  </option>
+                ))}
+              </Selector>
+            </Campo>
+            <Campo etiqueta={`Memoria RAM: ${(ram / 1024).toFixed(1)} GB (los modpacks piden más)`}>
+              <input type="range" min={2048} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
+            </Campo>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={eula} onChange={(e) => setEula(e.target.checked)} className="mt-1" />
+              <span>
+                Acepto la{" "}
+                <button type="button" className="underline" onClick={() => abrirExterno("https://aka.ms/MinecraftEULA")}>
+                  EULA de Minecraft
+                </button>
+              </span>
+            </label>
+            <Boton variante="primario" className="w-full" cargando={crear.isPending} disabled={!eula || !cargador} onClick={() => crear.mutate()}>
+              {crear.isPending ? (progreso ?? "Preparando…") : "Crear servidor con este modpack"}
+            </Boton>
+          </>
+        )}
       </div>
     </Modal>
   );
@@ -872,6 +997,7 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
   const lista = useQuery({ queryKey: ["host-local", "lista"], queryFn: () => srv.lista() });
   const [elegido, setElegido] = useState<string | null>(null);
   const [crear, setCrear] = useState(false);
+  const [desdePack, setDesdePack] = useState(false);
   const [servidores, setServidores] = useState<ServidorLocal[]>([]);
   useEffect(() => {
     if (lista.data) setServidores(lista.data);
@@ -925,6 +1051,11 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
         <Boton variante="primario" icono={Plus} onClick={() => setCrear(true)}>
           Crear servidor
         </Boton>
+        {srv.modpacksBuscar && srv.modpackInstalar ? (
+          <Boton icono={Package} onClick={() => setDesdePack(true)}>
+            Crear desde un modpack
+          </Boton>
+        ) : null}
       </div>
       <ErrorCaja error={lista.error} />
       {lista.isLoading ? <Cargando /> : null}
@@ -959,6 +1090,18 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
           ) : null}
         </div>
       ) : null}
+      {desdePack ? (
+        <CrearDesdeModpack
+          srv={srv}
+          alCerrar={() => setDesdePack(false)}
+          alCrear={(s) => {
+            setDesdePack(false);
+            cambiar(s);
+            setElegido(s.id);
+            avisar("Servidor con modpack listo. Tócale Encender.");
+          }}
+        />
+      ) : null}
       {crear ? (
         <Crear
           srv={srv}
@@ -977,14 +1120,19 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
 
 export default function HostLocal() {
   const srv = escritorio()?.servidoresLocales ?? null;
+  const [vista, setVista] = useState<"servidores" | "semillas">("servidores");
   return (
     <div className="space-y-4">
       <Encabezado titulo="Servidores en mi PC" descripcion="Crea servidores de Minecraft (y otros juegos) en tu computadora: consola, mods, plugins y amigos sin abrir puertos." />
-      {srv ? (
-        <Panel srv={srv} />
-      ) : (
-        <PanelRemoto />
-      )}
+      <Pestanas
+        valor={vista}
+        alCambiar={setVista}
+        opciones={[
+          { id: "servidores", texto: "Servidores" },
+          { id: "semillas", texto: "Semillas" },
+        ]}
+      />
+      {vista === "semillas" ? <Semillas /> : srv ? <Panel srv={srv} /> : <PanelRemoto />}
     </div>
   );
 }

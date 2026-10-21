@@ -1,10 +1,12 @@
 /**
  * Documentos y PDF, todo en tu equipo (nada se sube): unir PDFs, sacar o borrar
- * páginas, girar, fotos a PDF (también con la cámara) y firmar con el dedo.
+ * páginas, girar, fotos a PDF (también con la cámara) y firmar (con el dedo, escrita o
+ * con imagen) en el lugar que elijas de un PDF o una foto.
  */
 import { Camera, Combine, Download, FileText, PenLine, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { PDFDocument, degrees } from "pdf-lib";
 import { useEffect, useRef, useState } from "react";
+import { FirmarDocumento } from "../components/FirmarDocumento";
 import { guardarBlob } from "../lib/guardar";
 import { Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
 
@@ -191,6 +193,23 @@ function FotosAPdf() {
 }
 
 function Firmar() {
+  const [modo, setModo] = useState<"colocar" | "rapida">("colocar");
+  return (
+    <div className="space-y-3">
+      <Pestanas
+        valor={modo}
+        alCambiar={setModo}
+        opciones={[
+          { id: "colocar", texto: "Ponerla donde quiera (PDF o foto)" },
+          { id: "rapida", texto: "Firma rápida en PDF" },
+        ]}
+      />
+      {modo === "colocar" ? <FirmarDocumento /> : <FirmaRapida />}
+    </div>
+  );
+}
+
+function FirmaRapida() {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [pagina, setPagina] = useState("1");
   const [posicion, setPosicion] = useState<"abajo-derecha" | "abajo-izquierda" | "abajo-centro">("abajo-derecha");

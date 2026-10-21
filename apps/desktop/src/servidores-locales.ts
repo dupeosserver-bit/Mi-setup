@@ -562,6 +562,34 @@ export function registrarServidoresLocales(deLaApp: (e: IpcMainEvent | IpcMainIn
     return d.hits.map((h) => ({ id: h.project_id, titulo: h.title, descripcion: h.description, icono: h.icon_url, descargas: h.downloads, autor: h.author, url: `https://modrinth.com/${tipoProyecto}/${h.slug}` }));
   });
 
+  /** Modpacks de Modrinth para crear un servidor nuevo: solo los de esa versión de Minecraft y de un cargador con servidor. */
+  manejar("srv:modpacksBuscar", async (q, mc, pagina) => {
+    const cargadoresPack = ["fabric", "quilt", "forge", "neoforge"];
+    const version = typeof mc === "string" && /^[\w.-]{1,20}$/.test(mc) ? mc : "";
+    const facets = [["project_type:modpack"], cargadoresPack.map((c) => `categories:${c}`), ...(version ? [[`versions:${version}`]] : [])];
+    const n = typeof pagina === "number" && pagina >= 0 && pagina < 400 ? Math.floor(pagina) : 0;
+    const url = new URL("https://api.modrinth.com/v2/search");
+    url.searchParams.set("query", typeof q === "string" ? q.slice(0, 100) : "");
+    url.searchParams.set("facets", JSON.stringify(facets));
+    url.searchParams.set("limit", "24");
+    url.searchParams.set("offset", String(n * 24));
+    url.searchParams.set("index", q ? "relevance" : "downloads");
+    const d = await json<{ total_hits: number; hits: { project_id: string; title: string; description: string; icon_url: string | null; downloads: number; author: string; slug: string; categories: string[]; versions: string[] }[] }>(url.toString());
+    return {
+      total: d.total_hits,
+      packs: d.hits.map((h) => ({
+        id: h.project_id,
+        titulo: h.title,
+        descripcion: h.description,
+        icono: h.icon_url,
+        descargas: h.downloads,
+        autor: h.author,
+        url: `https://modrinth.com/modpack/${h.slug}`,
+        cargadores: h.categories.filter((c) => cargadoresPack.includes(c)),
+      })),
+    };
+  });
+
   manejar("srv:modrinthInstalar", async (id, proyecto, clase) => {
     const s = obtener(id);
     const c = claseDe(s, clase);

@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { CodigoQr, ESTILO_BASICO, type CodigoQrRef, type EstiloQr } from "../components/CodigoQr";
 import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { esconderEnEmoji, revelarDeEmoji } from "../lib/emojis";
+import { FORMAS_PROPIAS, seLee } from "../lib/qrFormas";
 import { API_BASE } from "../lib/api";
 import { escritorio } from "../lib/plataforma";
 import { guardarBlob } from "../lib/guardar";
@@ -263,6 +264,13 @@ function EstudioQr() {
                   <option value="extra-rounded">Muy redondeados</option>
                   <option value="classy">Elegantes</option>
                   <option value="classy-rounded">Elegantes redondos</option>
+                  <optgroup label="Figuras">
+                    {Object.entries(FORMAS_PROPIAS).map(([id, texto]) => (
+                      <option key={id} value={id}>
+                        {texto}
+                      </option>
+                    ))}
+                  </optgroup>
                 </Selector>
               </Campo>
             </div>
@@ -326,7 +334,8 @@ function EstudioQr() {
                   SVG (imprenta)
                 </Boton>
               </div>
-              <p className="max-w-[260px] text-center text-xs text-tenue">Pruébalo con la cámara de tu celular antes de imprimirlo.</p>
+              <LecturaQr qr={qr} datos={contenido} estilo={estilo} />
+              <p className="max-w-[260px] text-center text-xs text-tenue">Pruébalo también con la cámara de tu celular antes de imprimirlo.</p>
             </>
           ) : null}
         </div>
@@ -421,6 +430,27 @@ export function documentoDe(c: { html: string; css: string; js: string }): strin
 }
 
 const TAMANOS = { celular: { ancho: 375, icono: Smartphone }, tableta: { ancho: 768, icono: Tablet }, pc: { ancho: 1280, icono: Monitor } } as const;
+
+/** Revisa sola (con un lector de QR) que el diseño se siga leyendo. */
+function LecturaQr({ qr, datos, estilo }: { qr: React.RefObject<CodigoQrRef | null>; datos: string; estilo: EstiloQr }) {
+  const [estado, setEstado] = useState<"revisando" | "ok" | "mal">("revisando");
+  useEffect(() => {
+    setEstado("revisando");
+    const t = setTimeout(() => {
+      void (async () => {
+        const blob = await qr.current?.comoBlob();
+        setEstado(blob && (await seLee(blob, datos).catch(() => false)) ? "ok" : "mal");
+      })();
+    }, 600);
+    return () => clearTimeout(t);
+  }, [datos, estilo]);
+  if (estado === "revisando") return <p className="text-xs text-tenue">Revisando que se lea…</p>;
+  return estado === "ok" ? (
+    <p className="text-xs text-ok">✔ Se lee bien</p>
+  ) : (
+    <p className="max-w-[260px] text-center text-xs text-peligro">No se pudo leer con este diseño: prueba otra forma, más contraste o un logo más chico.</p>
+  );
+}
 
 /**
  * Marco aislado con la página. Se adapta al ancho disponible: si el tamaño

@@ -34,6 +34,8 @@ import {
   Type as TextoIcono,
   Undo2,
   Circle as CirculoIcono,
+  Eraser,
+  Pipette,
   FilePlus2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -46,7 +48,7 @@ import { fmtBytes } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
 
 type Objeto = FabricObject & { nombre?: string; ajustes?: Ajustes };
-type Herramienta = "seleccionar" | "pincel" | "texto" | "rectangulo" | "circulo" | "triangulo" | "linea";
+type Herramienta = "seleccionar" | "pincel" | "borrador" | "cuentagotas" | "texto" | "rectangulo" | "circulo" | "triangulo" | "linea";
 interface Ajustes {
   brillo: number;
   contraste: number;
@@ -174,6 +176,7 @@ export default function EditorFotos() {
   const recorte = useRef<Rect | null>(null);
   const herramientaRef = useRef<Herramienta>("seleccionar");
   const dibujo = useRef({ color: "#ef4444", grosor: 8 });
+  const tomarColor = useRef<(hex: string) => void>(() => undefined);
 
   const [tam, setTam] = useState({ w: 1080, h: 1080 });
   const [zoom, setZoom] = useState(0.5);
@@ -235,8 +238,23 @@ export default function EditorFotos() {
     c.on("selection:created", refrescarCapas);
     c.on("selection:updated", refrescarCapas);
     c.on("selection:cleared", refrescarCapas);
+    c.on("path:created", (e) => {
+      if (herramientaRef.current !== "borrador") return;
+      const trazo = (e as unknown as { path: Objeto }).path;
+      trazo.set({ globalCompositeOperation: "destination-out", selectable: false });
+      trazo.nombre = "Borrador";
+      c.requestRenderAll();
+    });
     c.on("mouse:down", (e) => {
       const h = herramientaRef.current;
+      if (h === "cuentagotas") {
+        const p = c.getViewportPoint(e.e);
+        const escala = c.getRetinaScaling();
+        const px = c.getContext().getImageData(Math.round(p.x * escala), Math.round(p.y * escala), 1, 1).data;
+        const hex = `#${[px[0]!, px[1]!, px[2]!].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+        tomarColor.current(hex);
+        return;
+      }
       if (h === "texto" && !e.target) {
         const p = c.getScenePoint(e.e);
         const t = new IText("Texto", { left: p.x, top: p.y, fontSize: 64, fill: dibujo.current.color, fontFamily: "Inter" }) as IText & Objeto;
@@ -272,20 +290,26 @@ export default function EditorFotos() {
     herramientaRef.current = herramienta;
     const c = lienzo.current;
     if (!c) return;
-    c.isDrawingMode = herramienta === "pincel";
-    if (herramienta === "pincel") {
+    c.isDrawingMode = herramienta === "pincel" || herramienta === "borrador";
+    if (c.isDrawingMode) {
       const b = new PencilBrush(c);
-      b.color = dibujo.current.color;
+      // El borrador pinta «hacia afuera»: lo que toca se vuelve transparente.
+      b.color = herramienta === "borrador" ? "rgba(0,0,0,1)" : dibujo.current.color;
       b.width = dibujo.current.grosor;
       c.freeDrawingBrush = b;
     }
-    c.defaultCursor = herramienta === "texto" ? "text" : "default";
+    c.defaultCursor = herramienta === "texto" ? "text" : herramienta === "cuentagotas" ? "crosshair" : "default";
   }, [herramienta]);
 
+  tomarColor.current = (hex) => {
+    setColor(hex);
+    setHerramienta("pincel");
+    avisar(`Color tomado: ${hex}`);
+  };
   useEffect(() => {
     dibujo.current = { color, grosor };
     const c = lienzo.current;
-    if (c?.freeDrawingBrush) {
+    if (c?.freeDrawingBrush && herramientaRef.current !== "borrador") {
       c.freeDrawingBrush.color = color;
       c.freeDrawingBrush.width = grosor;
     }
@@ -603,6 +627,14 @@ export default function EditorFotos() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         void duplicar();
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Atajos de Photoshop: V mover, B pincel, E borrador, I cuentagotas, T texto, R rectángulo, L línea.
+        const atajos: Record<string, Herramienta> = { v: "seleccionar", b: "pincel", e: "borrador", i: "cuentagotas", t: "texto", r: "rectangulo", l: "linea" };
+        const h = atajos[e.key.toLowerCase()];
+        if (h) {
+          e.preventDefault();
+          elegirHerramienta(h);
+        }
       }
     };
     window.addEventListener("keydown", alTeclear);
@@ -630,14 +662,16 @@ export default function EditorFotos() {
     refrescarCapas();
   };
 
-  const HERRAMIENTAS: { id: Herramienta; icono: typeof Square; texto: string }[] = [
-    { id: "seleccionar", icono: MousePointer2, texto: "Seleccionar y mover" },
-    { id: "pincel", icono: Paintbrush, texto: "Pincel" },
-    { id: "texto", icono: TextoIcono, texto: "Texto (toca el lienzo)" },
-    { id: "rectangulo", icono: Square, texto: "Rectángulo" },
+  const HERRAMIENTAS: { id: Herramienta; icono: typeof Square; texto: string; atajo?: string }[] = [
+    { id: "seleccionar", icono: MousePointer2, texto: "Seleccionar y mover", atajo: "V" },
+    { id: "pincel", icono: Paintbrush, texto: "Pincel", atajo: "B" },
+    { id: "borrador", icono: Eraser, texto: "Borrador", atajo: "E" },
+    { id: "cuentagotas", icono: Pipette, texto: "Cuentagotas (toma un color del lienzo)", atajo: "I" },
+    { id: "texto", icono: TextoIcono, texto: "Texto (toca el lienzo)", atajo: "T" },
+    { id: "rectangulo", icono: Square, texto: "Rectángulo", atajo: "R" },
     { id: "circulo", icono: CirculoIcono, texto: "Círculo" },
     { id: "triangulo", icono: TrianguloIcono, texto: "Triángulo" },
-    { id: "linea", icono: Minus, texto: "Línea" },
+    { id: "linea", icono: Minus, texto: "Línea", atajo: "L" },
   ];
 
   return (
@@ -670,23 +704,26 @@ export default function EditorFotos() {
           {nombre} · {tam.w}×{tam.h}
         </span>
       </div>
+      {ocupado ? <p className="text-xs text-tenue">{ocupado}</p> : null}
 
-      <div className="flex flex-wrap items-center gap-1 rounded-tarjeta border border-borde bg-superficie p-1.5">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[auto_1fr_300px]">
+      {/* Herramientas: barra vertical en PC (como Photoshop) y fila deslizable en el celular. */}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-tarjeta border border-borde bg-superficie p-1.5 lg:h-fit lg:w-14 lg:flex-col lg:overflow-visible">
         {HERRAMIENTAS.map((h) => (
-          <Boton key={h.id} tamano="icono" variante={herramienta === h.id ? "primario" : "fantasma"} icono={h.icono} aria-label={h.texto} title={h.texto} onClick={() => elegirHerramienta(h.id)} />
+          <Boton key={h.id} tamano="icono" variante={herramienta === h.id ? "primario" : "fantasma"} icono={h.icono} aria-label={h.texto} title={`${h.texto}${h.atajo ? ` (${h.atajo})` : ""}`} onClick={() => elegirHerramienta(h.id)} />
         ))}
-        <span className="mx-1 h-5 w-px bg-borde" />
-        <label className="flex items-center gap-1 text-xs text-tenue" title="Color">
-          Color
+        <span className="mx-1 h-5 w-px shrink-0 bg-borde lg:mx-0 lg:my-1 lg:h-px lg:w-8" />
+        <label className="flex shrink-0 items-center gap-1 text-xs text-tenue lg:flex-col" title="Color">
+          <span className="lg:hidden">Color</span>
           <input type="color" value={color} onChange={(e) => { setColor(e.target.value); if (sel && !esImagen(sel)) cambiar({ fill: e.target.value }); }} className="h-7 w-9 cursor-pointer rounded border border-borde bg-transparent" />
         </label>
-        {herramienta === "pincel" ? (
-          <label className="flex items-center gap-1 text-xs text-tenue">
-            Grosor
-            <input type="range" min={1} max={80} value={grosor} onChange={(e) => setGrosor(Number(e.target.value))} className="w-24 accent-acento" />
+        {herramienta === "pincel" || herramienta === "borrador" ? (
+          <label className="flex shrink-0 items-center gap-1 text-xs text-tenue lg:flex-col" title="Grosor">
+            <span>{grosor}px</span>
+            <input type="range" min={1} max={150} value={grosor} onChange={(e) => setGrosor(Number(e.target.value))} className="w-24 accent-acento lg:w-12" />
           </label>
         ) : null}
-        <span className="mx-1 h-5 w-px bg-borde" />
+        <span className="mx-1 h-5 w-px shrink-0 bg-borde lg:mx-0 lg:my-1 lg:h-px lg:w-8" />
         <Boton tamano="icono" variante="fantasma" icono={ImagePlus} aria-label="Agregar imagen" title="Agregar imagen" onClick={() => setModal("abrir")} />
         <Boton tamano="icono" variante="fantasma" icono={Crop} aria-label="Recortar" title="Recortar" onClick={iniciarRecorte} />
         <Boton tamano="icono" variante="fantasma" icono={Scissors} aria-label="Quitar fondo" title="Quitar fondo de la imagen elegida" onClick={() => void quitarFondo()} />
@@ -701,10 +738,8 @@ export default function EditorFotos() {
             </Boton>
           </>
         ) : null}
-        {ocupado ? <span className="ml-2 text-xs text-tenue">{ocupado}</span> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
         <div ref={contenedor} className="flex min-h-[40vh] items-start justify-center overflow-auto rounded-tarjeta border border-borde p-3" style={{ background: "repeating-conic-gradient(#2a2a2e 0% 25%, #232327 0% 50%) 0 0 / 20px 20px" }}>
           <div className="shadow-2xl">
             <canvas ref={elemento} />
@@ -712,7 +747,7 @@ export default function EditorFotos() {
         </div>
 
         <div className="space-y-3">
-          <div className="flex gap-1 text-sm">
+          <div className="flex gap-1 text-sm lg:hidden">
             <button type="button" onClick={() => setPanel("propiedades")} className={cx("flex-1 rounded-xl border px-3 py-1.5", panel === "propiedades" ? "border-acento bg-tarjeta" : "border-borde")}>
               Propiedades
             </button>
@@ -721,7 +756,7 @@ export default function EditorFotos() {
             </button>
           </div>
 
-          {panel === "capas" ? (
+          <div className={cx(panel === "capas" ? "" : "hidden", "lg:block")}>
             <Tarjeta titulo="Capas">
               {capas.length === 0 ? <p className="text-xs text-tenue">Todavía no hay capas: agrega texto, formas o una imagen.</p> : null}
               <ul className="max-h-[50vh] space-y-1 overflow-auto">
@@ -755,7 +790,8 @@ export default function EditorFotos() {
                 ))}
               </ul>
             </Tarjeta>
-          ) : (
+          </div>
+          <div className={cx(panel === "capas" ? "hidden" : "", "lg:block")}>
             <Tarjeta titulo={sel ? nombreDe(sel) : "Propiedades"}>
               {!sel ? <p className="text-xs text-tenue">Elige algo del lienzo para cambiar su color, tamaño, filtros y más.</p> : null}
               {sel ? (
@@ -872,7 +908,7 @@ export default function EditorFotos() {
                 </div>
               ) : null}
             </Tarjeta>
-          )}
+          </div>
         </div>
       </div>
 
