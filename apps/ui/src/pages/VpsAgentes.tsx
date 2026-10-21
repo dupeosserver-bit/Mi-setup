@@ -10,6 +10,7 @@ import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
 import { SelectorServidor, useServidores } from "../lib/vps";
+import { localeActual } from "../lib/idioma";
 
 interface Agente {
   id: string;
@@ -156,7 +157,7 @@ function BuscarGithub() {
                 {r.nombre}
               </button>
               <span className="flex items-center gap-1 text-xs text-tenue">
-                <Star className="h-3 w-3" /> {r.estrellas.toLocaleString("es-MX")}
+                <Star className="h-3 w-3" /> {r.estrellas.toLocaleString(localeActual())}
               </span>
             </div>
             <p className="mt-1 line-clamp-2 text-xs text-tenue">{r.descripcion}</p>

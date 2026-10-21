@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Tarjeta, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
+import { localeActual } from "../lib/idioma";
 
 interface Elemento {
   id: string;
@@ -71,7 +72,7 @@ export default function Calendario() {
       <Encabezado titulo="Calendario" descripcion="Eventos, recordatorios, suscripciones, cobros y vencimientos juntos." />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <Tarjeta
-          titulo={mes.toLocaleDateString("es-MX", { month: "long", year: "numeric" })}
+          titulo={mes.toLocaleDateString(localeActual(), { month: "long", year: "numeric" })}
           icono={CalendarDays}
           acciones={
             <div className="flex gap-1">
@@ -141,7 +142,7 @@ export default function Calendario() {
           </div>
         </Tarjeta>
 
-        <Tarjeta titulo={new Date(`${dia}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}>
+        <Tarjeta titulo={new Date(`${dia}T12:00:00`).toLocaleDateString(localeActual(), { weekday: "long", day: "numeric", month: "long" })}>
           <div className="space-y-2">
             {!delDia.length ? <Vacio texto="Nada este día." /> : null}
             {delDia.map((e) => (
@@ -150,7 +151,7 @@ export default function Calendario() {
                 <div className="min-w-0 flex-1">
                   <p className="break-words">{e.titulo}</p>
                   <p className="text-xs text-tenue">
-                    {TIPOS[e.tipo]} · {new Date(e.fecha).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                    {TIPOS[e.tipo]} · {new Date(e.fecha).toLocaleTimeString(localeActual(), { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
                 {e.editable && puede ? <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Borrar" onClick={() => borrar.mutate(e.id)} /> : null}

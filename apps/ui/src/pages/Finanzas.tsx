@@ -7,6 +7,7 @@ import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Selector
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { fmtDinero, fmtFecha } from "../lib/formato";
+import { localeActual } from "../lib/idioma";
 
 interface Resumen {
   moneda: string;
@@ -27,7 +28,7 @@ interface Movimiento {
 }
 
 const CATEGORIAS = { gasto: ["VPS", "Dominios", "Licencias", "Publicidad", "Software", "Otros"], ingreso: ["Hosting", "Donaciones", "Tienda", "Otros"] };
-const mesCorto = (m: string) => new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(new Date(`${m}-15T00:00:00Z`));
+const mesCorto = (m: string) => new Intl.DateTimeFormat(localeActual(), { month: "short", year: "2-digit" }).format(new Date(`${m}-15T00:00:00Z`));
 
 function Nuevo({ alTerminar }: { alTerminar: () => void }) {
   const [d, setD] = useState({ tipo: "gasto" as "gasto" | "ingreso", monto: "", moneda: "MXN", categoria: "VPS", descripcion: "", fecha: new Date().toISOString().slice(0, 10) });

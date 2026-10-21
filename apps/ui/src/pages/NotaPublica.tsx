@@ -5,6 +5,7 @@ import { useParams } from "react-router-dom";
 import { Cargando, ErrorCaja } from "../components/ui";
 import { api } from "../lib/api";
 import { aHtml } from "../lib/markdownNotas";
+import { localeActual } from "../lib/idioma";
 
 export default function NotaPublica() {
   const { token = "" } = useParams();
@@ -31,7 +32,7 @@ export default function NotaPublica() {
               <div className="min-w-0">
                 <h1 className="truncate font-titulo text-xl font-semibold">{q.data.titulo || "Nota"}</h1>
                 <p className="text-xs text-tenue">
-                  De {q.data.autor} · actualizada {new Date(q.data.actualizada).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+                  De {q.data.autor} · actualizada {new Date(q.data.actualizada).toLocaleString(localeActual(), { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               </div>
             </header>

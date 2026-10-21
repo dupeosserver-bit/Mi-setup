@@ -21,6 +21,7 @@ import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { EditorNota, type Nota } from "../components/EditorNota";
 import { fondoNota } from "../lib/markdownNotas";
+import { localeActual } from "../lib/idioma";
 
 
 const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: string }[] = [
@@ -29,7 +30,7 @@ const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: st
   {
     nombre: "Diario",
     icono: "📔",
-    titulo: new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }),
+    titulo: new Date().toLocaleDateString(localeActual(), { weekday: "long", day: "numeric", month: "long" }),
     contenido: "## ¿Cómo me siento?\n\n## Lo que hice\n- \n\n## Agradezco\n- \n",
   },
   { nombre: "Lista de compras", icono: "🛒", titulo: "Compras", contenido: "- [ ] \n- [ ] \n- [ ] \n" },

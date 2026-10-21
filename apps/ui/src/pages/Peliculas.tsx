@@ -8,6 +8,7 @@ import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Pesta
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 type TipoTmdb = "movie" | "tv";
 interface Resumen {
@@ -51,7 +52,7 @@ const CANALES_GRATIS = [
   { nombre: "Plex (gratis)", url: "https://watch.plex.tv/es/on-demand" },
 ] as const;
 
-const fechaBonita = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+const fechaBonita = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "long", year: "numeric" });
 
 function Poster({ r, alAbrir }: { r: { titulo: string; poster: string | null; fecha?: string | null; calificacion?: number | null; tipo: TipoTmdb }; alAbrir: () => void }) {
   return (

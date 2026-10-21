@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Cargando, ErrorCaja, Insignia } from "../components/ui";
 import { api } from "../lib/api";
+import { localeActual } from "../lib/idioma";
 
 interface CobroPublico {
   nombre: string;
@@ -13,8 +14,8 @@ interface CobroPublico {
   cobros: { pago: string; moneda: string; fecha: string; monto: number; estado: "pagado" | "pendiente" | "debe" }[];
 }
 
-const dinero = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fecha = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+const dinero = (n: number) => `$${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fecha = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "long", year: "numeric" });
 const TEXTO = { pagado: "Pagado", pendiente: "Por pagar", debe: "Vencido" } as const;
 const TONO = { pagado: "ok", pendiente: "neutro", debe: "peligro" } as const;
 

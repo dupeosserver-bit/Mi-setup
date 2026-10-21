@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 interface Estimacion {
   publicarUsd: number;
@@ -103,7 +104,7 @@ export default function X() {
                 <div key={m.id} className="rounded-xl bg-tarjeta p-3 text-sm">
                   <p className="text-xs text-tenue">
                     @{m.autor}
-                    {m.fecha ? ` · ${new Date(m.fecha).toLocaleString("es-MX")}` : ""}
+                    {m.fecha ? ` · ${new Date(m.fecha).toLocaleString(localeActual())}` : ""}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap break-words">{m.texto}</p>
                 </div>

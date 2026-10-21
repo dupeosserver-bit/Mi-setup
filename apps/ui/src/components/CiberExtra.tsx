@@ -343,7 +343,7 @@ export function CorreosGoogle() {
       >
         <ErrorCaja error={cuentas.error} />
         {cuentas.data && !cuentas.data.configurado ? (
-          <p className="text-sm text-tenue">Falta configurar: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (Ajustes → Servicios y claves → YouTube; activa también la Gmail API y agrega la dirección de retorno /api/google/correo/callback).</p>
+          <p className="text-sm text-tenue">Falta configurar: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (Ajustes → Servicios y claves → Google; activa también la Gmail API y agrega la dirección de retorno /api/google/correo/callback).</p>
         ) : null}
         {cuentas.data?.configurado && !cuentas.data.cuentas.length ? <Vacio icono={Mail} texto="Conecta una o varias cuentas de Gmail para revisar correos peligrosos." /> : null}
         <div className="space-y-4">

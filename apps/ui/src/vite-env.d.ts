@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   /** URL de la API cuando la UI no se sirve desde el mismo dominio (app de Android). */
   readonly VITE_API_URL?: string;
+  /** "publica" compila la edición de la comunidad (sin los apartados personales). */
+  readonly VITE_EDICION?: string;
 }
 
 interface ImportMeta {

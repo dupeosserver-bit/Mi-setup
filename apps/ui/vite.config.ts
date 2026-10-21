@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
     __VERSION_APP__: JSON.stringify(
       ((p: { version: string; etapa?: string }) => `${p.version}${p.etapa ?? ""}`)(JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string; etapa?: string }),
     ),
-    ...(mode === "movil" ? { "import.meta.env.VITE_API_URL": JSON.stringify(process.env["MI_SETUP_API"] ?? "https://setup.mexicanland.net") } : {}),
+    ...(mode.startsWith("movil") ? { "import.meta.env.VITE_API_URL": JSON.stringify(process.env["MI_SETUP_API"] ?? "https://setup.mexicanland.net") } : {}),
   },
   resolve: {
     alias: {

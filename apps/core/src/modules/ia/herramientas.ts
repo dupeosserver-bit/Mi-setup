@@ -56,7 +56,8 @@ function comandoRevision(i: { revision: RevisionVps; contenedor?: string | undef
 export interface ContextoHerramientas {
   readonly deps: ModuleDeps;
   readonly servidores: Servidores;
-  readonly ptero: PteroClient;
+  /** null en la edición pública (no trae Pterodactyl). */
+  readonly ptero: PteroClient | null;
 }
 
 function definir<T>(h: Herramienta<T>): Herramienta {
@@ -69,6 +70,11 @@ const objeto = (properties: Record<string, unknown>, required: string[]) => ({
   required,
   additionalProperties: false,
 });
+
+function pteroDe(ctx: ContextoHerramientas): PteroClient {
+  if (!ctx.ptero) throw new Error("Esta edición no trae Pterodactyl");
+  return ctx.ptero;
+}
 
 export function crearHerramientas(ctx: ContextoHerramientas, extras: Herramienta[] = []): Herramienta[] {
   const { deps } = ctx;
@@ -211,7 +217,7 @@ export function crearHerramientas(ctx: ContextoHerramientas, extras: Herramienta
       peligroso: () => false,
       alimentaIa: true,
       ejecutar: async (_user, i) => {
-        const r = await ctx.ptero.peticion<{ attributes: unknown }>(`/api/client/servers/${i.servidorId}/resources`);
+        const r = await pteroDe(ctx).peticion<{ attributes: unknown }>(`/api/client/servers/${i.servidorId}/resources`);
         return r.attributes;
       },
     }),
@@ -233,7 +239,7 @@ export function crearHerramientas(ctx: ContextoHerramientas, extras: Herramienta
       },
       peligroso: (i) => i.senal === "kill",
       ejecutar: async (_user, i) => {
-        await ctx.ptero.peticion(`/api/client/servers/${i.servidorId}/power`, { metodo: "POST", cuerpo: { signal: i.senal } });
+        await pteroDe(ctx).peticion(`/api/client/servers/${i.servidorId}/power`, { metodo: "POST", cuerpo: { signal: i.senal } });
         return { ok: true };
       },
     }),

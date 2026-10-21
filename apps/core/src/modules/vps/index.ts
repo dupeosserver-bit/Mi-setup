@@ -1,4 +1,4 @@
-/** Módulo VPS: servidores, terminal, rendimiento, alertas, comandos, archivos y bots. */
+/** Módulo VPS: servidores, terminal, rendimiento, alertas, comandos y archivos (los bots se registran en personales.ts). */
 import type { FastifyInstance } from "fastify";
 import type { Job } from "../../jobs.js";
 import type { ModuleDeps } from "../common.js";
@@ -6,7 +6,6 @@ import { alertasRoutes, revisarAlertas } from "./alertas.js";
 import { archivosRoutes } from "./archivos.js";
 import { archivosExtraRoutes } from "./archivos-extra.js";
 import { agentesRoutes } from "./agentes.js";
-import { botsRoutes } from "./bots.js";
 import { comandosRoutes } from "./comandos.js";
 import { historialRoutes } from "./historial.js";
 import { registrarMetricasVps } from "./metricas.js";
@@ -29,7 +28,6 @@ export function vpsModule(deps: ModuleDeps) {
     await app.register(historialRoutes(deps));
     await app.register(archivosRoutes(deps, servidores));
     await app.register(archivosExtraRoutes(deps, servidores));
-    await app.register(botsRoutes(deps, servidores));
     await app.register(seguridadRoutes(deps, servidores));
     await app.register(energiaRoutes(deps, servidores));
     await app.register(agentesRoutes(deps, servidores));

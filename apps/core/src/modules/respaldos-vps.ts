@@ -298,6 +298,7 @@ export function respaldosVpsRoutes(deps: ModuleDeps, servidores: Servidores) {
     app.post("/api/respaldos/vps", crear, async (request) => {
       const user = soloMaestra(request);
       const d = z.object({ servidorId: z.string().uuid(), tipo: z.enum(["carpeta", "vps", "base", "pterodactyl"]), ruta: z.string().max(300).optional() }).parse(request.body);
+      if (d.tipo === "pterodactyl" && deps.config.env.EDICION === "publica") throw new HttpError(400, "Esta edición no trae Pterodactyl");
       const ruta = d.tipo === "carpeta" ? validarCarpeta(d.ruta ?? "") : undefined;
       const nombre = nombreRespaldo(d.tipo, deps.now(), ruta);
       const script = scriptRespaldo(d.tipo, nombre, ruta ? { ruta } : {});

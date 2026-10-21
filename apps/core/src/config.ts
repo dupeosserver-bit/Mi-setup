@@ -17,6 +17,8 @@ export const envBase = z.object({
     HOST: z.string().default("127.0.0.1"),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+    /** Edición: "personal" (todo) o "publica" (la de la comunidad). La fija la imagen de Docker al compilar. */
+    EDICION: z.enum(["personal", "publica"]).default("personal"),
 
     DOMAIN: z.string().default("mexicanland.net"),
     APP_HOST: z.string().default("setup.mexicanland.net"),

@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
 import { Boton, Cargando, Entrada, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisar, avisarError } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 interface Resultado {
   id: string;
@@ -25,7 +26,7 @@ interface Respuesta {
 
 const GRUPOS = { comparar: "Comparar en todas", tiendas: "Tiendas en México", tecnologia: "Tecnología", importado: "Importado (tarda más)" } as const;
 
-const dinero = (n: number, moneda: string) => n.toLocaleString("es-MX", { style: "currency", currency: moneda || "MXN", maximumFractionDigits: 0 });
+const dinero = (n: number, moneda: string) => n.toLocaleString(localeActual(), { style: "currency", currency: moneda || "MXN", maximumFractionDigits: 0 });
 
 export function Compras() {
   const puedeVigilar = usePuede("novedades", "escritura");

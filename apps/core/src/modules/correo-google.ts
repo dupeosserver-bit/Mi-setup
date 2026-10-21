@@ -19,7 +19,7 @@ import { HttpError, missingConfig } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { clientInfo, idParams, requireCipher, type ModuleDeps } from "./common.js";
 import type { IaSimple } from "./ia/simple.js";
-import { pagina, pedirJson } from "./redes/oauth.js";
+import { pagina, pedirJson } from "./http-json.js";
 
 const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"];
 const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");

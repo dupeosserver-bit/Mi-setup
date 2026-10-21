@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { CorreosGoogle, MiCuenta } from "../components/CiberExtra";
 import { Boton, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
+import { localeActual } from "../lib/idioma";
 
 type Estado = "ok" | "aviso" | "mal";
 interface Revision {
@@ -138,7 +139,7 @@ function ContrasenaFiltrada() {
       {resultado !== null ? (
         resultado > 0 ? (
           <p className="mt-3 rounded-xl bg-peligro/10 p-3 text-sm text-peligro">
-            Apareció {resultado.toLocaleString("es-MX")} veces en filtraciones. No la uses: cámbiala donde la tengas.
+            Apareció {resultado.toLocaleString(localeActual())} veces en filtraciones. No la uses: cámbiala donde la tengas.
           </p>
         ) : (
           <p className="mt-3 rounded-xl bg-ok/10 p-3 text-sm text-ok">No aparece en filtraciones conocidas. Aun así, usa una distinta en cada sitio.</p>

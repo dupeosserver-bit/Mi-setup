@@ -15,7 +15,7 @@ import type { ModuleDeps } from "./common.js";
 import { conCache } from "./novedades.js";
 import { interpretarFeed } from "./noticias.js";
 import { descargarTextoSeguro } from "./red-segura.js";
-import { pedirJson } from "./redes/oauth.js";
+import { pedirJson } from "./http-json.js";
 
 const NAVEGADOR = { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36" };
 const SIMBOLO = z.string().trim().toUpperCase().regex(/^\^?[A-Z0-9.=-]{1,20}$/, "Símbolo inválido");

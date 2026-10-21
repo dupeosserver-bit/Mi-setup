@@ -8,6 +8,7 @@ import { MiniGrafica, Cambio } from "../components/MiniGrafica";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Selector, Tarjeta, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
+import { localeActual } from "../lib/idioma";
 
 interface Moneda {
   id: string;
@@ -58,8 +59,8 @@ function ExplorarCripto({ moneda, misIds, alAgregar, alAbrir }: { moneda: "mxn" 
     queryKey: ["cripto", "mercado", moneda, orden, pagina],
     queryFn: () => api<{ total: number; monedas: MonedaMercado[] }>(`/api/cripto/mercado?moneda=${moneda}&orden=${orden}&pagina=${pagina}`),
   });
-  const fmt = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), maximumFractionDigits: 6 });
-  const fmtCorto = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), notation: "compact" });
+  const fmt = new Intl.NumberFormat(localeActual(), { style: "currency", currency: moneda.toUpperCase(), maximumFractionDigits: 6 });
+  const fmtCorto = new Intl.NumberFormat(localeActual(), { style: "currency", currency: moneda.toUpperCase(), notation: "compact" });
   const paginas = Math.max(1, Math.ceil((q.data?.total ?? 0) / 25));
   return (
     <Tarjeta titulo="Explorar el mercado">
@@ -145,8 +146,8 @@ export default function Cripto() {
     onError: avisarError,
   });
   const ids = (lista.data ?? []).map((m) => m.id);
-  const fmt = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), maximumFractionDigits: 6 });
-  const fmtCorto = new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda.toUpperCase(), notation: "compact" });
+  const fmt = new Intl.NumberFormat(localeActual(), { style: "currency", currency: moneda.toUpperCase(), maximumFractionDigits: 6 });
+  const fmtCorto = new Intl.NumberFormat(localeActual(), { style: "currency", currency: moneda.toUpperCase(), notation: "compact" });
 
   return (
     <div className="space-y-4">

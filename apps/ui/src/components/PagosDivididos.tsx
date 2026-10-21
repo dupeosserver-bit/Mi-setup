@@ -16,14 +16,15 @@ import { guardarBlob } from "../lib/guardar";
 import { imagenDeCobro } from "../lib/imagenCobro";
 import { ResultadoNegociacion } from "./IaExtras";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
-const dinero = (n: number, moneda = "MXN") => `${moneda === "MXN" ? "$" : `${moneda} `}${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dinero = (n: number, moneda = "MXN") => `${moneda === "MXN" ? "$" : `${moneda} `}${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["finanzas-personales"] });
 const hoyLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" });
 
 interface Cobro {
   id: string;

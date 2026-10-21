@@ -9,6 +9,7 @@ import type { Preferencias } from "@mi-setup/shared";
 import { api } from "./api";
 import { grabarAudio } from "./grabadora";
 import { esMovil } from "./plataforma";
+import { localeActual } from "./idioma";
 
 type PrefVoz = Preferencias["voz"];
 
@@ -50,7 +51,7 @@ export async function hablar(texto: string, voz: PrefVoz): Promise<void> {
     const voces = await vocesEspanol();
     const indice = voz.nombre ? voces.findIndex((v) => v.name === voz.nombre) : -1;
     await TextToSpeech.stop().catch(() => undefined);
-    await TextToSpeech.speak({ text: limpio, lang: "es-MX", rate: voz.velocidad, pitch: voz.tono, ...(indice >= 0 ? { voice: indice } : {}) });
+    await TextToSpeech.speak({ text: limpio, lang: localeActual(), rate: voz.velocidad, pitch: voz.tono, ...(indice >= 0 ? { voice: indice } : {}) });
     return;
   }
   if (!("speechSynthesis" in window)) throw new Error("Este dispositivo no puede leer en voz alta");
@@ -58,7 +59,7 @@ export async function hablar(texto: string, voz: PrefVoz): Promise<void> {
   const u = new SpeechSynthesisUtterance(limpio);
   const voces = await esperarVoces();
   u.voice = voces.find((v) => v.name === voz.nombre) ?? voces.find((v) => v.lang.startsWith("es")) ?? null;
-  u.lang = u.voice?.lang ?? "es-MX";
+  u.lang = u.voice?.lang ?? localeActual();
   u.rate = voz.velocidad;
   u.pitch = voz.tono;
   speechSynthesis.speak(u);
@@ -86,7 +87,7 @@ export async function escuchar(): Promise<string> {
     if (!available) throw new Error("Este celular no tiene reconocimiento de voz");
     const permiso = await SpeechRecognition.requestPermissions();
     if (permiso.speechRecognition !== "granted") throw new Error("Permite el micrófono para dictar");
-    const r = await SpeechRecognition.start({ language: "es-MX", maxResults: 1, partialResults: false, popup: true });
+    const r = await SpeechRecognition.start({ language: localeActual(), maxResults: 1, partialResults: false, popup: true });
     return r.matches?.[0] ?? "";
   }
   const Clase = (window as unknown as { SpeechRecognition?: new () => ReconocedorWeb; webkitSpeechRecognition?: new () => ReconocedorWeb }).SpeechRecognition ??
@@ -94,7 +95,7 @@ export async function escuchar(): Promise<string> {
   if (!Clase) throw new Error("Dictado no disponible aquí. Usa el dictado de Windows (tecla Windows + H) en el cuadro de texto.");
   return new Promise((resolver, rechazar) => {
     const rec = new Clase();
-    rec.lang = "es-MX";
+    rec.lang = localeActual();
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     let texto = "";
@@ -131,7 +132,7 @@ export async function dictar(alTexto: (texto: string, final: boolean) => void, a
     const empezar = () => {
       ultimo = "";
       // Con resultados parciales responde al momento; lo dicho llega por «partialResults».
-      void SpeechRecognition.start({ language: "es-MX", maxResults: 1, partialResults: true, popup: false }).catch(() => undefined);
+      void SpeechRecognition.start({ language: localeActual(), maxResults: 1, partialResults: true, popup: false }).catch(() => undefined);
     };
     const parcial = await SpeechRecognition.addListener("partialResults", (d: { matches?: string[] }) => {
       ultimo = d.matches?.[0] ?? "";
@@ -157,7 +158,7 @@ export async function dictar(alTexto: (texto: string, final: boolean) => void, a
   const esElectron = /Electron/i.test(navigator.userAgent);
   if (Clase && !esElectron) {
     const rec = new Clase();
-    rec.lang = "es-MX";
+    rec.lang = localeActual();
     rec.continuous = true;
     rec.interimResults = true;
     let activo = true;

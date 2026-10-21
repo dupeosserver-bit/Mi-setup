@@ -9,6 +9,7 @@ import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Selector, Ta
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { fmtFecha } from "../lib/formato";
+import { localeActual } from "../lib/idioma";
 
 interface Cotizacion {
   simbolo: string;
@@ -118,7 +119,7 @@ function ExplorarAcciones({ mios, alAgregar, alAbrir }: { mios: string[]; alAgre
                     <span className="text-xs text-tenue">{a.simbolo}</span>
                   </button>
                 </td>
-                <td className="text-right">{a.precio !== null ? `${a.precio.toLocaleString("es-MX", { maximumFractionDigits: 2 })} ${a.moneda ?? ""}` : "—"}</td>
+                <td className="text-right">{a.precio !== null ? `${a.precio.toLocaleString(localeActual(), { maximumFractionDigits: 2 })} ${a.moneda ?? ""}` : "—"}</td>
                 <td className="text-right">
                   <Cambio valor={a.cambio} />
                 </td>
@@ -216,7 +217,7 @@ export default function Inversiones() {
             ) : (
               <>
                 <p className="mt-2 text-xl font-bold">
-                  {c.precio?.toLocaleString("es-MX", { maximumFractionDigits: 2 }) ?? "—"} <span className="text-sm font-normal text-tenue">{c.moneda}</span>
+                  {c.precio?.toLocaleString(localeActual(), { maximumFractionDigits: 2 }) ?? "—"} <span className="text-sm font-normal text-tenue">{c.moneda}</span>
                 </p>
                 <div className="flex items-center gap-2 text-sm">
                   <Cambio valor={c.cambio} etiqueta="vs. día anterior" />

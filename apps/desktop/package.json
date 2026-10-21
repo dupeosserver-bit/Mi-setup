@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.json && electron . --dev",
     "start": "tsc -p tsconfig.json && electron .",
-    "dist": "tsc -p tsconfig.json && node dist/verificar-icono.js && electron-builder --win nsis --publish never"
+    "dist": "tsc -p tsconfig.json && node dist/verificar-icono.js && electron-builder --win nsis --publish never",
+    "dist:publica": "tsc -p tsconfig.json && node ../../scripts/edicion-publica.mjs desktop dist && node dist/verificar-icono.js && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@lydell/node-pty": "1.1.0",

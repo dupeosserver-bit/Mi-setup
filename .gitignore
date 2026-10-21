@@ -19,3 +19,5 @@ MiSetup.apk
 
 # Vista previa con las fotos incrustadas (se genera desde docs/sitio-web/preview.html)
 docs/sitio-web/preview-completo.html
+!apps/ui/.env.publica
+!apps/ui/.env.movil-publica

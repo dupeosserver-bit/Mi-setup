@@ -7,6 +7,7 @@ import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Selector, Tarje
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { fmtFecha } from "../lib/formato";
+import { localeActual } from "../lib/idioma";
 
 interface Datos {
   base: string;
@@ -59,9 +60,9 @@ function Convertidor({ monedas }: { monedas: Record<string, string> }) {
       </div>
       {conv.data ? (
         <p className="mt-4 text-2xl font-bold">
-          {n.toLocaleString("es-MX")} {de} = {conv.data.resultado.toLocaleString("es-MX", { maximumFractionDigits: 4 })} {a}
+          {n.toLocaleString(localeActual())} {de} = {conv.data.resultado.toLocaleString(localeActual(), { maximumFractionDigits: 4 })} {a}
           <span className="ml-2 text-sm font-normal text-tenue">
-            1 {de} = {conv.data.tasa.toLocaleString("es-MX", { maximumFractionDigits: 6 })} {a}
+            1 {de} = {conv.data.tasa.toLocaleString(localeActual(), { maximumFractionDigits: 6 })} {a}
           </span>
         </p>
       ) : null}
@@ -126,7 +127,7 @@ export default function Divisas() {
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="text-xl font-bold">{hoy?.toLocaleString("es-MX", { maximumFractionDigits: 4 }) ?? "—"}</p>
+                  <p className="text-xl font-bold">{hoy?.toLocaleString(localeActual(), { maximumFractionDigits: 4 }) ?? "—"}</p>
                   <Cambio valor={inicio && hoy ? ((hoy - inicio) / inicio) * 100 : null} etiqueta="en 30 días" />
                   <MiniGrafica serie={serie} />
                 </div>

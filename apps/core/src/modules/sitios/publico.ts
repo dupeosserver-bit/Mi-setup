@@ -13,7 +13,7 @@ import { siteAssets, siteEntries, siteMembers, sites, siteStats, siteTables, use
 import { HttpError } from "../../http-error.js";
 import type { ModuleDeps } from "../common.js";
 import { carpetaArchivos } from "../herramientas.js";
-import { PteroClient } from "../ptero.js";
+import type { PteroClient } from "../ptero.js";
 import { limpiarHost, type DetectorSitios } from "./detector.js";
 import { RUNTIME, SERVICE_WORKER } from "./runtime.js";
 
@@ -112,7 +112,12 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios)
   const cache = new Map<string, { sitio: FilaSitio | null; hasta: number; version: number }>();
   const limites = new Map<string, { n: number; desde: number }>();
   const cacheBloques = new Map<string, { valor: unknown; hasta: number }>();
-  const ptero = new PteroClient(deps.config.env);
+  // En la edición pública no hay Pterodactyl (ni su código): el bloque de servidores sale apagado.
+  let ptero: PteroClient | null | undefined;
+  const pteroCliente = async () => {
+    if (ptero === undefined) ptero = deps.config.env.EDICION === "publica" ? null : new (await import("../ptero.js")).PteroClient(deps.config.env);
+    return ptero;
+  };
 
   async function sitioDe(request: FastifyRequest): Promise<FilaSitio> {
     const host = limpiarHost(request.headers.host);
@@ -300,7 +305,8 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios)
         valor = {
           servidores: await Promise.all(
             lista.slice(0, 10).map(async (sv) => {
-              const r = await ptero.peticion<{ attributes: { current_state: string } }>(`/api/client/servers/${encodeURIComponent(sv.id)}/resources`).catch(() => null);
+              const cliente = await pteroCliente();
+              const r = await cliente?.peticion<{ attributes: { current_state: string } }>(`/api/client/servers/${encodeURIComponent(sv.id)}/resources`).catch(() => null);
               return { nombre: sv.nombre, direccion: sv.direccion ?? "", encendido: r?.attributes.current_state === "running" };
             }),
           ),

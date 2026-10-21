@@ -24,6 +24,10 @@ export interface DefClave {
   readonly reinicio?: boolean;
 }
 
+/** Grupos de claves de apartados que solo trae la edición personal (la pública no los muestra). */
+const GRUPOS_PERSONALES = new Set(["Pterodactyl", "Discord", "X (Twitter)", "Twitch", "Kick", "TikTok (clips)", "Host local (mods)", "Control remoto"]);
+export const claveEnEdicion = (c: DefClave, edicion: string) => edicion !== "publica" || !GRUPOS_PERSONALES.has(c.grupo);
+
 export const CLAVES: readonly DefClave[] = [
   { nombre: "ANTHROPIC_API_KEY", etiqueta: "Clave de API de Claude", grupo: "IA", secreto: true, ayuda: "console.anthropic.com → API Keys → Create Key." },
   { nombre: "AI_MODEL", etiqueta: "Modelo por defecto", grupo: "IA", secreto: false, ayuda: "Ej. claude-sonnet-5-5. Cada usuario puede elegir otro en Ajustes → Voz e IA." },
@@ -41,8 +45,8 @@ export const CLAVES: readonly DefClave[] = [
   { nombre: "X_COSTO_LECTURA_USD", etiqueta: "Costo estimado por mención leída", grupo: "X (Twitter)", secreto: false, ayuda: "Revisa tu tarifa en developer.x.com." },
   { nombre: "TWITCH_CLIENT_ID", etiqueta: "Client ID", grupo: "Twitch", secreto: false, ayuda: "dev.twitch.tv → Your Console → Applications." },
   { nombre: "TWITCH_CLIENT_SECRET", etiqueta: "Client Secret", grupo: "Twitch", secreto: true, ayuda: "Mismo lugar (New Secret)." },
-  { nombre: "GOOGLE_CLIENT_ID", etiqueta: "Client ID", grupo: "YouTube", secreto: false, ayuda: "console.cloud.google.com → Credenciales → ID de cliente OAuth (web)." },
-  { nombre: "GOOGLE_CLIENT_SECRET", etiqueta: "Client Secret", grupo: "YouTube", secreto: true, ayuda: "Mismo lugar." },
+  { nombre: "GOOGLE_CLIENT_ID", etiqueta: "Client ID", grupo: "Google", secreto: false, ayuda: "console.cloud.google.com → Credenciales → ID de cliente OAuth (web)." },
+  { nombre: "GOOGLE_CLIENT_SECRET", etiqueta: "Client Secret", grupo: "Google", secreto: true, ayuda: "Mismo lugar." },
   { nombre: "KICK_CLIENT_ID", etiqueta: "Client ID", grupo: "Kick", secreto: false, ayuda: "kick.com → Settings → Developer." },
   { nombre: "KICK_CLIENT_SECRET", etiqueta: "Client Secret", grupo: "Kick", secreto: true, ayuda: "Mismo lugar." },
   { nombre: "TMDB_API_KEY", etiqueta: "Clave de TMDB", grupo: "Películas y series", secreto: true, ayuda: "Gratis: themoviedb.org → crea tu cuenta → Ajustes → API → Solicitar clave (tipo Developer). Copia la \"Clave de la API\"." },
@@ -106,7 +110,7 @@ export function clavesRoutes(deps: ModuleDeps) {
       const soloLectura = yo.role !== "maestra";
       if (soloLectura && !(await politicaDe(deps, yo.id)).verServicios) throw new HttpError(403, "Sin permiso para ver los servicios", "sin_permiso");
       const resultado = [];
-      for (const c of CLAVES) {
+      for (const c of CLAVES.filter((x) => claveEnEdicion(x, deps.config.env.EDICION))) {
         const enBase = Boolean((await getSetting<{ cifrado: string }>(deps.db, clave(c.nombre)))?.cifrado);
         const actual = deps.config.env[c.nombre];
         const texto = actual === undefined || actual === null ? "" : String(actual);

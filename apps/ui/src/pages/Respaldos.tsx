@@ -6,6 +6,7 @@ import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Inter
 import { api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { copiarSeguro } from "../lib/boveda/utilidades";
+import { PUBLICA } from "../edicion";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { fmtBytes, fmtFechaHora, haceCuanto } from "../lib/formato";
 import { RespaldosServidor } from "./Pterodactyl";
@@ -298,7 +299,7 @@ function CrearRespaldo() {
             </div>
           ) : null}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Opcion icono={Boxes} titulo="Todo Pterodactyl" texto="Los archivos de todos tus servidores de juego, la configuración de Wings y el panel." cargando={enCurso === "pterodactyl"} onClick={() => crear.mutate({ tipo: "pterodactyl" })} />
+            {PUBLICA ? null : <Opcion icono={Boxes} titulo="Todo Pterodactyl" texto="Los archivos de todos tus servidores de juego, la configuración de Wings y el panel." cargando={enCurso === "pterodactyl"} onClick={() => crear.mutate({ tipo: "pterodactyl" })} />}
             <Opcion icono={Database} titulo="Base de datos de Mi Setup" texto="Una copia ahora mismo de tus notas, finanzas, sitios y demás." cargando={enCurso === "base"} onClick={() => crear.mutate({ tipo: "base" })} />
             <Opcion
               icono={Server}
@@ -322,7 +323,7 @@ function CrearRespaldo() {
               </div>
             </div>
           </div>
-          <RespaldoJuego />
+          {PUBLICA ? null : <RespaldoJuego />}
           {d && d.disco.libre < 5 * 1024 ** 3 ? (
             <p className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-2 text-xs">
               <TriangleAlert className="h-4 w-4 shrink-0 text-amber-400" /> Queda poco espacio en el VPS. Descarga los respaldos viejos y bórralos del VPS.
@@ -506,7 +507,7 @@ export default function Respaldos() {
             ))}
           </ul>
         </Tarjeta>
-        {verPtero ? <ServidoresJuego /> : null}
+        {!PUBLICA && verPtero ? <ServidoresJuego /> : null}
         <Tarjeta titulo="Mis datos" icono={FileJson}>
           <p className="text-sm text-tenue">Descarga todo lo tuyo (notas, tareas, finanzas, suscripciones, calendario, enlaces, prompts y tu lista por ver) en un archivo. Guárdalo en tu PC o en la nube.</p>
           <Boton className="mt-3" icono={Download} onClick={() => void descargar("/api/respaldos/mis-datos", `mis-datos-${new Date().toISOString().slice(0, 10)}.json`).catch(avisarError)}>

@@ -3,7 +3,7 @@
  * roles tipo Discord (nombre, color y permisos), desactivar y restablecer
  * contraseña. Los permisos de una cuenta = los suyos + los de sus roles.
  */
-import { MODULES, MODULE_IDS, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
+import { MODULES, MODULE_IDS, moduloEnEdicion, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Crown, KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
 import { useState } from "react";
@@ -37,7 +37,7 @@ interface Rol {
   miembros: number;
 }
 
-const OTORGABLES = MODULE_IDS.filter((m) => !MODULES[m].masterOnly);
+const OTORGABLES = MODULE_IDS.filter((m) => !MODULES[m].masterOnly && moduloEnEdicion(m));
 const NIVEL: Record<PermissionLevel, string> = { ninguno: "Sin acceso", lectura: "Ver", escritura: "Editar", administrar: "Administrar" };
 
 function useRoles() {

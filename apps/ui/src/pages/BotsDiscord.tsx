@@ -14,6 +14,7 @@ import { copiarSeguro } from "../lib/boveda/utilidades";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 interface BotResumen {
   id: string;
@@ -243,7 +244,7 @@ export default function BotsDiscord() {
               {b.botNombre ?? "Sin conectar"}
               {b.cliente ? ` · ${b.cliente}` : ""}
             </p>
-            <p className={`mt-2 text-[11px] ${b.vencido ? "text-peligro" : "text-tenue"}`}>{b.vence ? (b.vencido ? "Servicio vencido" : `Vence ${new Date(b.vence).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}`) : "Sin vencimiento"}</p>
+            <p className={`mt-2 text-[11px] ${b.vencido ? "text-peligro" : "text-tenue"}`}>{b.vence ? (b.vencido ? "Servicio vencido" : `Vence ${new Date(b.vence).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" })}`) : "Sin vencimiento"}</p>
             {b.compartido ? <p className="text-[11px] text-tenue">Con enlace para el cliente</p> : null}
             {b.error ? <p className="mt-1 truncate text-[11px] text-peligro">{b.error}</p> : null}
           </button>

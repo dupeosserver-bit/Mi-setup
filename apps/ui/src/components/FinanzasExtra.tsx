@@ -9,8 +9,9 @@ import { useRef, useState } from "react";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, Interruptor, Modal, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
-const dinero = (n: number, moneda = "MXN") => `${moneda === "MXN" ? "$" : `${moneda} `}${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dinero = (n: number, moneda = "MXN") => `${moneda === "MXN" ? "$" : `${moneda} `}${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["finanzas-personales"] });
 const hoyLocal = () => {
   const d = new Date();

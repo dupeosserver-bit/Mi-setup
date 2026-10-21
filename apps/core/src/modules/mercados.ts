@@ -12,7 +12,7 @@ import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import type { ModuleDeps } from "./common.js";
 import { conCache } from "./novedades.js";
-import { pedirJson } from "./redes/oauth.js";
+import { pedirJson } from "./http-json.js";
 import { getSetting, setSetting } from "./settings.js";
 
 const CRIPTO_INICIAL = ["bitcoin", "ethereum", "solana", "tether", "ripple", "dogecoin"];

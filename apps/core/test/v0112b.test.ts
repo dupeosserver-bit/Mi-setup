@@ -444,3 +444,27 @@ describe("0.11.2b · sitios: exportar e importar", () => {
     expect(d.borrador.importado.paginas[0]!.html).not.toContain("<script");
   });
 });
+
+describe("0.11.2b · edición pública", () => {
+  it("no trae Pterodactyl, Redes, Host local, Casa ni Control remoto", async () => {
+    const { can, fijarEdicion, sanitizePermissionMap } = await import("@mi-setup/shared");
+    dir = await mkdtemp(join(tmpdir(), "v0112b-"));
+    try {
+      ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir, EDICION: "publica" }) });
+      await seedUser(ctx.db, { email: "m@x.test", password: "clave-de-prueba-123", permissions: { notas: "lectura", pterodactyl: "lectura", casa: "lectura" } });
+      const h = bearer((await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "m@x.test", password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
+      for (const url of ["/api/ptero/servidores", "/api/casa", "/api/hostlocal/servidores", "/api/redes/cuentas", "/api/control-remoto"]) {
+        expect((await ctx.app.inject({ method: "GET", url, headers: h })).statusCode, url).toBe(404);
+      }
+      expect(ctx.gestorBots).toBeNull();
+      // Ni la maestra los tiene, y no se pueden asignar.
+      expect(can({ role: "maestra", isActive: true, permissions: {} }, "pterodactyl", "lectura")).toBe(false);
+      expect(can({ role: "maestra", isActive: true, permissions: {} }, "notas", "administrar")).toBe(true);
+      expect(sanitizePermissionMap({ casa: "lectura", notas: "lectura" })).toEqual({ notas: "lectura" });
+      // Lo demás sigue funcionando.
+      expect((await ctx.app.inject({ method: "GET", url: "/api/notas", headers: h })).statusCode).toBe(200);
+    } finally {
+      fijarEdicion("personal");
+    }
+  });
+});

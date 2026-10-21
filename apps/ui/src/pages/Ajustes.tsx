@@ -7,10 +7,12 @@ import {
   FUENTES_APP,
   FUENTES_TERMINAL,
   MODELOS_IA,
+  IDIOMAS_APP,
   TEMAS_APP,
   TEMAS_TERMINAL,
   type FuenteApp,
   type FuenteTerminal,
+  type IdiomaApp,
   type ModeloIa,
   type TemaApp,
   type TemaTerminal,
@@ -33,6 +35,7 @@ import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiom
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
 import { tipoDispositivo } from "../lib/plataforma";
+import { idiomaGuardado } from "../lib/idioma";
 import { TEMAS_XTERM, useFlotantes, useGuardarPreferencias, usePreferencias, type ModoFlotantes } from "../lib/preferencias";
 import { hablar, vocesEspanol } from "../lib/voz";
 
@@ -296,9 +299,13 @@ function Apariencia() {
                 </Boton>
               </div>
             </Campo>
-            <Campo etiqueta="Idioma" ayuda="Por ahora la app está solo en español.">
-              <Selector value="es" disabled>
-                <option value="es">Español</option>
+            <Campo etiqueta="Idioma" ayuda="Cambia los textos de toda la app. Tus notas y datos se quedan como los escribiste.">
+              <Selector value={prefs.idioma ?? idiomaGuardado()} onChange={(e) => guardar((p) => ({ ...p, idioma: e.target.value as IdiomaApp }))}>
+                {Object.entries(IDIOMAS_APP).map(([id, nombre]) => (
+                  <option key={id} value={id}>
+                    {nombre}
+                  </option>
+                ))}
               </Selector>
             </Campo>
           </div>

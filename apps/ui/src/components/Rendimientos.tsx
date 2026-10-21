@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
 import { Boton, Campo, Cargando, Entrada, ErrorCaja, FaltaConfigurar, Insignia, Interruptor, Modal, Pestanas, Tarjeta, avisar, avisarError, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 interface Respuesta {
   actualizado: string | null;
@@ -20,7 +21,7 @@ interface Respuesta {
   tasas: TasaVigente[];
 }
 
-const dinero = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dinero = (n: number) => `$${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PERIODOS: { id: Periodo; texto: string }[] = [
   { id: "semana", texto: "Por semana" },
   { id: "mes", texto: "Por mes" },
@@ -33,7 +34,7 @@ const ESTADO: Record<TasaVigente["estado"], { texto: string; tono: "ok" | "neutr
   manual: { texto: "Tuya", tono: "neutro" },
   "sin-dato": { texto: "Sin dato", tono: "peligro" },
 };
-const fecha = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+const fecha = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" });
 
 export function Rendimientos() {
   const puede = usePuede("finanzas_personales", "escritura");
@@ -125,7 +126,7 @@ export function Rendimientos() {
       {!d.banxico ? <FaltaConfigurar variable="BANXICO_TOKEN" detalle="Para la tasa de CETES de cada día (token gratis de Banxico)." /> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-tenue">
         <span>
-          {d.actualizado ? `Revisadas el ${new Date(d.actualizado).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })} (se revisan solas cada día).` : "Todavía no se revisan."}
+          {d.actualizado ? `Revisadas el ${new Date(d.actualizado).toLocaleString(localeActual(), { dateStyle: "medium", timeStyle: "short" })} (se revisan solas cada día).` : "Todavía no se revisan."}
           {d.tasaObjetivo ? ` Tasa objetivo de Banxico: ${d.tasaObjetivo.tasa} %.` : ""}
         </span>
         {puede ? (

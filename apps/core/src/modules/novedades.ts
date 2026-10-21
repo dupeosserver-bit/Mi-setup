@@ -12,7 +12,7 @@ import { appSettings, priceHistory, priceWatches } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { idParams, type ModuleDeps } from "./common.js";
-import { pedirJson } from "./redes/oauth.js";
+import { pedirJson } from "./http-json.js";
 import { descargarTextoSeguro } from "./red-segura.js";
 
 // ---------------------------------------------------------------- caché simple en memoria

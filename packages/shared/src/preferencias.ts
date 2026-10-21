@@ -18,6 +18,17 @@ export const TEMAS_APP = {
 } as const;
 export type TemaApp = keyof typeof TEMAS_APP;
 
+/** Idiomas de la interfaz (el nombre va en su propio idioma). */
+export const IDIOMAS_APP = {
+  es: "Español",
+  en: "English",
+  pt: "Português",
+  fr: "Français",
+  de: "Deutsch",
+  it: "Italiano",
+} as const;
+export type IdiomaApp = keyof typeof IDIOMAS_APP;
+
 export const FUENTES_APP = {
   inter: { nombre: "Inter", css: "Inter, system-ui, sans-serif" },
   roboto: { nombre: "Roboto", css: "Roboto, system-ui, sans-serif" },
@@ -78,8 +89,12 @@ export const preferenciasSchema = z.object({
   fuente: z.enum(claves(FUENTES_APP)).default("inter"),
   /** Porcentaje de zoom de la interfaz. */
   zoom: z.number().int().min(70).max(150).default(100),
+  /** Idioma de la interfaz; sin elegir, se usa el del dispositivo. */
+  idioma: z.enum(claves(IDIOMAS_APP)).optional(),
   /** Ya vio el tutorial de bienvenida (se muestra una vez por cuenta). */
   tutorialVisto: z.boolean().default(false),
+  /** Última versión cuyas novedades ya vio en el tutorial (ej. "0.11.2b"). */
+  novedadesVistas: z.string().max(20).optional(),
   /** Fondo de pantalla: qué tan transparentes son los paneles (%) y cuánto se oscurece la imagen (%). */
   vidrio: z
     .object({

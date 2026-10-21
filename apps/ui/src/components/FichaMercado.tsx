@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { haceCuanto } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
 import { Boton, Cargando, ErrorCaja, Insignia, Modal, Pestanas, Vacio, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 // Mismo orden de colores en todas las gráficas (validado para daltonismo).
 const C1 = "#3987e5";
@@ -45,10 +46,10 @@ export const SITIOS_CRIPTO = [
 ];
 
 const compacto = (n: number | null | undefined, moneda?: string | null) =>
-  n === null || n === undefined ? "—" : `${moneda === "USD" ? "US$" : moneda === "MXN" ? "$" : ""}${n.toLocaleString("es-MX", { notation: "compact", maximumFractionDigits: 2 })}${moneda && !["USD", "MXN"].includes(moneda) ? ` ${moneda}` : ""}`;
-const numero = (n: number | null | undefined, d = 2) => (n === null || n === undefined ? "—" : n.toLocaleString("es-MX", { maximumFractionDigits: d }));
-const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toLocaleString("es-MX", { maximumFractionDigits: 2 })} %`);
-const fecha = (f: string | null) => (f ? new Date(`${f.slice(0, 10)}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : "—");
+  n === null || n === undefined ? "—" : `${moneda === "USD" ? "US$" : moneda === "MXN" ? "$" : ""}${n.toLocaleString(localeActual(), { notation: "compact", maximumFractionDigits: 2 })}${moneda && !["USD", "MXN"].includes(moneda) ? ` ${moneda}` : ""}`;
+const numero = (n: number | null | undefined, d = 2) => (n === null || n === undefined ? "—" : n.toLocaleString(localeActual(), { maximumFractionDigits: d }));
+const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n.toLocaleString(localeActual(), { maximumFractionDigits: 2 })} %`);
+const fecha = (f: string | null) => (f ? new Date(`${f.slice(0, 10)}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 function Dato({ texto, valor, ayuda }: { texto: string; valor: ReactNode; ayuda?: string }) {
   return (
@@ -107,12 +108,12 @@ function GraficaPrecio({ url, moneda }: { url: (r: Rango) => string; moneda: str
                 tickLine={false}
                 axisLine={false}
                 minTickGap={30}
-                tickFormatter={(t: number) => new Date(t).toLocaleDateString("es-MX", corto ? { weekday: "short", hour: "2-digit" } : { month: "short", year: "2-digit" })}
+                tickFormatter={(t: number) => new Date(t).toLocaleDateString(localeActual(), corto ? { weekday: "short", hour: "2-digit" } : { month: "short", year: "2-digit" })}
               />
               <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={56} tickLine={false} axisLine={false} tickFormatter={(v: number) => numero(v, 2)} orientation="right" />
               <Tooltip
                 contentStyle={tooltip}
-                labelFormatter={(t: number) => new Date(t).toLocaleString("es-MX", { dateStyle: "medium", ...(corto ? { timeStyle: "short" } : {}) })}
+                labelFormatter={(t: number) => new Date(t).toLocaleString(localeActual(), { dateStyle: "medium", ...(corto ? { timeStyle: "short" } : {}) })}
                 formatter={(v: number) => [`${numero(v, 4)} ${moneda ?? ""}`, "Precio"]}
               />
               <Area type="monotone" dataKey="v" stroke={C1} strokeWidth={2} fill="url(#relleno-precio)" dot={false} activeDot={{ r: 4 }} />
@@ -316,7 +317,7 @@ export function FichaAccion({ simbolo, alCerrar }: { simbolo: string; alCerrar: 
               <Seccion titulo={`Acerca de ${r.nombre}`}>
                 <p className="text-sm leading-relaxed text-tenue">{r.perfil.descripcion}</p>
                 <p className="mt-2 text-xs text-tenue">
-                  {[r.perfil.sector, r.perfil.industria, r.perfil.pais, r.perfil.empleados ? `${r.perfil.empleados.toLocaleString("es-MX")} empleados` : null].filter(Boolean).join(" · ")}
+                  {[r.perfil.sector, r.perfil.industria, r.perfil.pais, r.perfil.empleados ? `${r.perfil.empleados.toLocaleString(localeActual())} empleados` : null].filter(Boolean).join(" · ")}
                 </p>
               </Seccion>
             ) : null}
@@ -353,7 +354,7 @@ export function FichaCripto({ id, moneda, alCerrar }: { id: string; moneda: "mxn
   const c = q.data;
   const e = c?.estadisticas;
   const M = moneda.toUpperCase();
-  const dinero = (n: unknown) => (typeof n === "number" ? n.toLocaleString("es-MX", { style: "currency", currency: M, maximumFractionDigits: n < 1 ? 6 : 2 }) : "—");
+  const dinero = (n: unknown) => (typeof n === "number" ? n.toLocaleString(localeActual(), { style: "currency", currency: M, maximumFractionDigits: n < 1 ? 6 : 2 }) : "—");
   return (
     <Modal abierto titulo={c ? `${c.nombre} (${c.simbolo})` : id} alCerrar={alCerrar} ancho="sm:max-w-3xl">
       <div className="space-y-4">

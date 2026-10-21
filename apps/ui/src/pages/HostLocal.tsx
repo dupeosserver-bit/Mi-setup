@@ -34,6 +34,7 @@ import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
 import { abrirExterno, escritorio, type Addon, type ClaseAddon, type ServidoresLocales, type ServidorLocal, type TipoServidor } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 const TIPOS: Record<TipoServidor, { nombre: string; detalle: string; grupo: string }> = {
   paper: { grupo: "Plugins", nombre: "Paper", detalle: "El más usado: rápido y con plugins (EssentialsX, WorldEdit, LuckPerms…)." },
@@ -228,7 +229,7 @@ function CrearDesdeModpack({ srv, alCrear, alCerrar }: { srv: ServidoresLocales;
                     <p className="truncate text-sm font-medium">{p.titulo}</p>
                     <p className="line-clamp-2 text-xs text-tenue">{p.descripcion}</p>
                     <p className="text-[11px] text-tenue">
-                      {p.cargadores.map((c) => TIPOS[c as TipoServidor]?.nombre ?? c).join(", ")} · {p.descargas.toLocaleString("es-MX")} descargas
+                      {p.cargadores.map((c) => TIPOS[c as TipoServidor]?.nombre ?? c).join(", ")} · {p.descargas.toLocaleString(localeActual())} descargas
                     </p>
                   </div>
                 </button>
@@ -606,7 +607,7 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
               </button>
               <p className="line-clamp-2 text-xs text-tenue">{a.descripcion}</p>
               <p className="text-[11px] text-tenue">
-                {a.autor} · {a.descargas.toLocaleString("es-MX")} descargas
+                {a.autor} · {a.descargas.toLocaleString(localeActual())} descargas
               </p>
             </div>
             <Boton tamano="sm" icono={Download} disabled={instalar.isPending} onClick={() => instalar.mutate(a)}>

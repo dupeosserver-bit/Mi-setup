@@ -129,7 +129,7 @@ describe("bots de Discord: administración", () => {
     await ctx!.app.inject({ method: "POST", url: `/api/bots/${b.id}/encender`, headers: h });
     ctx!.advance(25 * 3600_000);
     // Es lo que hace la tarea que corre cada 5 minutos.
-    const apagados = await ctx!.gestorBots.apagarVencidos();
+    const apagados = await ctx!.gestorBots!.apagarVencidos();
     expect(apagados).toBe(1);
     // Pasó un día: la sesión anterior ya venció, se entra de nuevo.
     const e = await ctx!.app.inject({ method: "POST", url: `/api/bots/${b.id}/encender`, headers: await entrar("dueno@x.test") });

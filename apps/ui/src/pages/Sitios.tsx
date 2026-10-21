@@ -38,9 +38,11 @@ import { subirImagenSitio } from "../components/EditorSitio";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { API_BASE, api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
+import { PUBLICA } from "../edicion";
 import { queryClient, usePuede } from "../lib/consultas";
 import { PLANTILLAS_SITIOS } from "../lib/plantillasSitios";
 import { abrirExterno } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 const EditorSitio = lazy(() => import("../components/EditorSitio").then((m) => ({ default: m.EditorSitio })));
 
@@ -87,7 +89,7 @@ const aSlug = (t: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-const fecha = (f: string) => new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+const fecha = (f: string) => new Date(f).toLocaleString(localeActual(), { dateStyle: "medium", timeStyle: "short" });
 const invalidar = (id?: string) => void queryClient.invalidateQueries({ queryKey: id ? ["sitios", id] : ["sitios"] });
 
 // ---------------------------------------------------------------- crear
@@ -778,7 +780,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   const [dominio, setDominio] = useState(sitio.dominio ?? "");
   const [a, setA] = useState<Ajustes>(sitio.ajustes);
   const [editor, setEditor] = useState("");
-  const verPtero = usePuede("pterodactyl");
+  const verPtero = usePuede("pterodactyl") && !PUBLICA;
   const archivos = useQuery({ queryKey: ["sitios", sitio.id, "archivos"], queryFn: () => api<Archivo[]>(`/api/sitios/${sitio.id}/archivos`) });
   const ptero = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string; direccion?: string }[]>("/api/ptero/servidores"), enabled: verPtero, retry: false });
   const editores = useQuery({ queryKey: ["sitios", sitio.id, "editores"], queryFn: () => api<{ id: string; correo: string; nombre: string }[]>(`/api/sitios/${sitio.id}/editores`) });

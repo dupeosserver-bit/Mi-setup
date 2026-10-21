@@ -5,6 +5,7 @@ import { ChatIa } from "../components/ChatIa";
 import { Negociar } from "../components/IaExtras";
 import { Cargando, FaltaConfigurar, Pestanas, Vacio } from "../components/ui";
 import { TarjetaPropuesta, usePropuestas, useUsoIa } from "../lib/ia";
+import { localeActual } from "../lib/idioma";
 
 function Cola({ soloPendientes }: { soloPendientes: boolean }) {
   const propuestas = usePropuestas();
@@ -16,7 +17,7 @@ function Cola({ soloPendientes }: { soloPendientes: boolean }) {
       {lista.map((p) => (
         <div key={p.id}>
           <TarjetaPropuesta p={p} />
-          <p className="mt-1 text-xs text-tenue">{new Date(p.creada).toLocaleString("es-MX")}</p>
+          <p className="mt-1 text-xs text-tenue">{new Date(p.creada).toLocaleString(localeActual())}</p>
         </div>
       ))}
     </div>

@@ -18,6 +18,7 @@ import { esMovil } from "../lib/plataforma";
 import { confirmar } from "../lib/confirmar";
 import { usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
+import { localeActual } from "../lib/idioma";
 
 interface Datos {
   nombre: string;
@@ -143,7 +144,7 @@ function HistorialGeneradas() {
               <p className="truncate font-mono text-sm">{ver === g.id ? g.valor.contrasena : "••••••••••••••••"}</p>
               <p className="text-xs text-tenue">
                 {g.valor.para ? `${g.valor.para} · ` : ""}
-                {new Date(g.valor.fecha).toLocaleString("es-MX")}
+                {new Date(g.valor.fecha).toLocaleString(localeActual())}
               </p>
             </div>
             <Boton tamano="icono" variante="fantasma" icono={ver === g.id ? EyeOff : Eye} onClick={() => setVer(ver === g.id ? null : g.id)} aria-label="Mostrar u ocultar" />
@@ -616,7 +617,7 @@ function Revision() {
           <div key={p.item.id} className="rounded-tarjeta border border-borde bg-superficie p-3">
             <div className="flex flex-wrap items-center gap-2">
               <p className="min-w-0 flex-1 truncate text-sm font-medium">{p.item.valor.nombre}</p>
-              {p.filtrada ? <Insignia tono="peligro">Filtrada {p.filtrada.toLocaleString("es-MX")} veces</Insignia> : null}
+              {p.filtrada ? <Insignia tono="peligro">Filtrada {p.filtrada.toLocaleString(localeActual())} veces</Insignia> : null}
               {p.sitioFiltrado ? <Insignia tono="peligro">El sitio tuvo una filtración ({p.sitioFiltrado})</Insignia> : null}
               {p.repetida ? <Insignia tono="aviso">Repetida en {p.repetida} más</Insignia> : null}
               {p.debil ? <Insignia tono="aviso">Débil</Insignia> : null}

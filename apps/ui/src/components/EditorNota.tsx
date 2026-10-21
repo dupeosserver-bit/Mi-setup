@@ -57,6 +57,7 @@ import { alternarCasilla } from "../lib/notas";
 import { COLORES_NOTA, aHtml, fmtTamano, fondoNota, quitarAdjunto, type ColorNota } from "../lib/markdownNotas";
 import { abrirExterno } from "../lib/plataforma";
 import { Boton, Entrada, Modal, Selector, avisar, avisarError, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 export interface Nota {
   id: string;
@@ -295,7 +296,7 @@ function CompartirNota({ nota, titulo, contenido, adjuntos, alCerrar }: { nota: 
                 <Entrada readOnly value={enlace.data.url} onFocus={(e) => e.target.select()} />
                 <Boton tamano="icono" icono={Copy} aria-label="Copiar enlace" onClick={() => void navigator.clipboard.writeText(enlace.data!.url!).then(() => avisar("Enlace copiado"))} />
               </div>
-              <p className="text-xs text-tenue">{enlace.data.vence ? `Vence ${new Date(enlace.data.vence).toLocaleDateString("es-MX")}` : "No vence"}. Quien lo tenga puede leer la nota (no editarla).</p>
+              <p className="text-xs text-tenue">{enlace.data.vence ? `Vence ${new Date(enlace.data.vence).toLocaleDateString(localeActual())}` : "No vence"}. Quien lo tenga puede leer la nota (no editarla).</p>
               <Boton tamano="sm" variante="peligro" cargando={quitar.isPending} onClick={() => quitar.mutate()}>
                 Dejar de compartir
               </Boton>

@@ -63,6 +63,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { PUBLICA } from "./edicion";
 
 export interface ModuloUi {
   readonly id: ModuleId;
@@ -94,9 +95,9 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   vps_comandos: m("vps_comandos", "/vps/comandos", ListChecks, lazy(() => import("./pages/VpsComandos"))),
   vps_archivos: m("vps_archivos", "/vps/archivos", FolderTree, lazy(() => import("./pages/VpsArchivos"))),
   vps_seguridad: m("vps_seguridad", "/vps/seguridad", ShieldAlert, lazy(() => import("./pages/VpsSeguridad"))),
-  vps_bots: m("vps_bots", "/vps/bots", Bot, lazy(() => import("./pages/VpsBots"))),
+  vps_bots: m("vps_bots", "/vps/bots", Bot, PUBLICA ? Pendiente : lazy(() => import("./pages/VpsBots"))),
 
-  pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server, lazy(() => import("./pages/Pterodactyl"))),
+  pterodactyl: m("pterodactyl", "/panel/pterodactyl", Server, PUBLICA ? Pendiente : lazy(() => import("./pages/Pterodactyl"))),
   vencimientos: m("vencimientos", "/panel/vencimientos", CalendarClock, lazy(() => import("./pages/Vencimientos"))),
   clientes: m("clientes", "/panel/clientes", Users, lazy(() => import("./pages/Clientes"))),
   finanzas: m("finanzas", "/panel/finanzas", Wallet, lazy(() => import("./pages/Finanzas"))),
@@ -113,10 +114,10 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   auditoria: m("auditoria", "/seguridad/actividad", ScrollText, lazy(() => import("./pages/Auditoria"))),
   cuentas: m("cuentas", "/seguridad/cuentas", UserCog, lazy(() => import("./pages/Cuentas"))),
 
-  streams: m("streams", "/redes/streams", Radio, lazy(() => import("./pages/Streams"))),
-  x: m("x", "/redes/x", AtSign, lazy(() => import("./pages/X"))),
-  discord: m("discord", "/redes/discord", MessageCircle, lazy(() => import("./pages/Discord"))),
-  streamer: m("streamer", "/redes/streamer", Tv, lazy(() => import("./pages/Streamer"))),
+  streams: m("streams", "/redes/streams", Radio, PUBLICA ? Pendiente : lazy(() => import("./pages/Streams"))),
+  x: m("x", "/redes/x", AtSign, PUBLICA ? Pendiente : lazy(() => import("./pages/X"))),
+  discord: m("discord", "/redes/discord", MessageCircle, PUBLICA ? Pendiente : lazy(() => import("./pages/Discord"))),
+  streamer: m("streamer", "/redes/streamer", Tv, PUBLICA ? Pendiente : lazy(() => import("./pages/Streamer"))),
 
   novedades: m("novedades", "/novedades", Sparkles, lazy(() => import("./pages/Novedades"))),
   // Viven como pestañas de Novedades; sus rutas viejas siguen funcionando.
@@ -126,11 +127,11 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   divisas: { ...m("divisas", "/divisas", ArrowLeftRight, lazy(() => import("./pages/Divisas"))), enMenu: false },
   herramientas: m("herramientas", "/herramientas", Wrench, lazy(() => import("./pages/Herramientas"))),
   codigo: m("codigo", "/programacion/codigo", Code2, lazy(() => import("./pages/Codigo"))),
-  host_local: m("host_local", "/host-local", Boxes, lazy(() => import("./pages/HostLocal"))),
+  host_local: m("host_local", "/host-local", Boxes, PUBLICA ? Pendiente : lazy(() => import("./pages/HostLocal"))),
   sitios: m("sitios", "/sitios", Globe2, lazy(() => import("./pages/Sitios"))),
   editor_fotos: m("editor_fotos", "/estudio/fotos", ImageIcon, lazy(() => import("./pages/EditorFotos"))),
   editor_video: m("editor_video", "/estudio/video", Scissors, lazy(() => import("./pages/EditorVideo"))),
-  bots_discord: m("bots_discord", "/redes/bots", Bot, lazy(() => import("./pages/BotsDiscord"))),
+  bots_discord: m("bots_discord", "/redes/bots", Bot, PUBLICA ? Pendiente : lazy(() => import("./pages/BotsDiscord"))),
   ejercicios: m("ejercicios", "/programacion/ejercicios", GraduationCap, lazy(() => import("./pages/Ejercicios"))),
   documentos: m("documentos", "/herramientas/documentos", FileText, lazy(() => import("./pages/Documentos"))),
   convertidor: m("convertidor", "/herramientas/convertidor", Repeat, lazy(() => import("./pages/Convertidor"))),
@@ -139,8 +140,8 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   peliculas: m("peliculas", "/entretenimiento/peliculas", Clapperboard, lazy(() => import("./pages/Peliculas"))),
   musica: m("musica", "/entretenimiento/musica", Music, lazy(() => import("./pages/Musica"))),
   videos: m("videos", "/entretenimiento/videos", Film, lazy(() => import("./pages/Videos"))),
-  casa: m("casa", "/casa", House, lazy(() => import("./pages/Casa"))),
-  control_remoto: m("control_remoto", "/control-remoto", MonitorUp, lazy(() => import("./pages/ControlRemoto"))),
+  casa: m("casa", "/casa", House, PUBLICA ? Pendiente : lazy(() => import("./pages/Casa"))),
+  control_remoto: m("control_remoto", "/control-remoto", MonitorUp, PUBLICA ? Pendiente : lazy(() => import("./pages/ControlRemoto"))),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ia_creativa: m("ia_creativa", "/ia/creativa", Wand2, lazy(() => import("./pages/IaCreativa"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),

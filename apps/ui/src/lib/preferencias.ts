@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type PointerEvent as EventoPuntero } from 
 import { create } from "zustand";
 import { api } from "./api";
 import { queryClient } from "./consultas";
+import { idiomaGuardado, ponerIdioma } from "./idioma";
 import { useSesion } from "./sesion";
 
 const CLAVE = "mi-setup.prefs";
@@ -25,6 +26,7 @@ function leerLocal(): Preferencias {
 }
 
 let quitarEscucha: (() => void) | null = null;
+let idiomaPuesto: string | null = null;
 
 /**
  * Fondo de pantalla con paneles transparentes: mezcla el color del tema con transparente.
@@ -63,6 +65,10 @@ export function aplicarPreferencias(p: Preferencias): void {
   raiz.style.setProperty("--fuente", FUENTES_APP[p.fuente].css);
   // El zoom escala el tamaño base: toda la interfaz usa rem, así que crece o se achica entera.
   raiz.style.fontSize = `${(16 * p.zoom) / 100}px`;
+  if (p.idioma && p.idioma !== idiomaPuesto) {
+    idiomaPuesto = p.idioma;
+    void ponerIdioma(p.idioma);
+  }
   try {
     localStorage.setItem(CLAVE, JSON.stringify(p));
   } catch {
@@ -72,7 +78,8 @@ export function aplicarPreferencias(p: Preferencias): void {
 
 /** Al arrancar: aplica lo último guardado en este dispositivo (sin esperar al servidor). */
 export function aplicarPreferenciasGuardadas(): void {
-  aplicarPreferencias(leerLocal());
+  // El idioma elegido en este dispositivo manda al arrancar (también en la pantalla de entrar).
+  aplicarPreferencias({ ...leerLocal(), idioma: idiomaGuardado() });
 }
 
 export function usePreferencias() {

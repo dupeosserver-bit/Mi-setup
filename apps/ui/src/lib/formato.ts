@@ -1,6 +1,8 @@
-const fechaHora = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
-const soloFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
-const hora = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+import { localeActual } from "./idioma";
+
+const fechaHora = new Intl.DateTimeFormat(localeActual(), { dateStyle: "medium", timeStyle: "short" });
+const soloFecha = new Intl.DateTimeFormat(localeActual(), { dateStyle: "medium" });
+const hora = new Intl.DateTimeFormat(localeActual(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 export const fmtFechaHora = (v: string | number | Date | null | undefined) => (v ? fechaHora.format(new Date(v)) : "—");
 export const fmtFecha = (v: string | number | Date | null | undefined) => (v ? soloFecha.format(new Date(v)) : "—");
@@ -22,7 +24,7 @@ export const fmtBps = (bps: number | null | undefined) => (bps === null || bps =
 export const fmtPct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v.toFixed(0)} %`);
 
 export function fmtDinero(monto: number | string, moneda = "MXN"): string {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda }).format(Number(monto));
+  return new Intl.NumberFormat(localeActual(), { style: "currency", currency: moneda }).format(Number(monto));
 }
 
 export function fmtDuracion(segundos: number | null | undefined): string {

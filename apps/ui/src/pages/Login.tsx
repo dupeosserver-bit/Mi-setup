@@ -1,11 +1,12 @@
-import type { LoginResponse } from "@mi-setup/shared";
+import { IDIOMAS_APP, type IdiomaApp, type LoginResponse } from "@mi-setup/shared";
 import { LogIn, Server } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo, useAparienciaPublica } from "../components/Logo";
-import { Boton, Campo, Entrada, ErrorCaja } from "../components/ui";
+import { Boton, Campo, Entrada, ErrorCaja, Selector } from "../components/ui";
 import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, api, cambiarServidor, servidoresRecordados } from "../lib/api";
 import { queryClient } from "../lib/consultas";
+import { idiomaGuardado, ponerIdioma } from "../lib/idioma";
 import { nombrePorDefecto } from "../lib/plataforma";
 import { useSesion } from "../lib/sesion";
 
@@ -134,7 +135,33 @@ export default function Login() {
           Entrar
         </Boton>
         {PUEDE_CAMBIAR_SERVIDOR ? <Servidor /> : null}
+        <Idioma />
       </form>
+    </div>
+  );
+}
+
+/** Idioma de esta pantalla (al entrar se usa el de tu cuenta si ya elegiste uno). */
+function Idioma() {
+  const [idioma, setIdioma] = useState<IdiomaApp>(idiomaGuardado);
+  return (
+    <div className="flex justify-center">
+      <Selector
+        aria-label="Idioma"
+        className="h-8 w-40 text-xs"
+        value={idioma}
+        onChange={(e) => {
+          const nuevo = e.target.value as IdiomaApp;
+          setIdioma(nuevo);
+          void ponerIdioma(nuevo);
+        }}
+      >
+        {Object.entries(IDIOMAS_APP).map(([id, nombre]) => (
+          <option key={id} value={id}>
+            {nombre}
+          </option>
+        ))}
+      </Selector>
     </div>
   );
 }

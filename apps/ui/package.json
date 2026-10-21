@@ -8,8 +8,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:publica": "vite build --mode publica",
     "build:movil": "vite build --mode movil",
+    "build:movil-publica": "vite build --mode movil-publica",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "i18n": "node scripts/textos-faltantes.mjs",
     "test": "vitest run",
     "preview": "vite preview"
   },

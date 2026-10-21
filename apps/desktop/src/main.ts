@@ -24,7 +24,6 @@ import {
 import { autoUpdater } from "electron-updater";
 import { leerMetricas, leerSistema } from "./metricas";
 import { registrarArchivosLocales } from "./archivos-locales";
-import { registrarServidoresLocales } from "./servidores-locales";
 import { registrarTerminalLocal } from "./terminal-local";
 import { abrirNavegadorPrivado, abrirPanel, abrirVistaPrevia } from "./ventanas";
 
@@ -309,7 +308,12 @@ function crearBandeja(): void {
 function registrarIpc(): void {
   cerrarTerminales = registrarTerminalLocal(deLaApp, () => ventana).cerrarTodas;
   registrarArchivosLocales(deLaApp, () => ventana);
-  servidoresLocales = registrarServidoresLocales(deLaApp, () => ventana);
+  // Servidores en mi PC: solo en la edición personal (la pública no trae ese archivo).
+  if (existsSync(join(__dirname, "servidores-locales.js"))) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { registrarServidoresLocales } = require("./servidores-locales") as typeof import("./servidores-locales");
+    servidoresLocales = registrarServidoresLocales(deLaApp, () => ventana);
+  }
   ipcMain.on("version", (e) => {
     e.returnValue = versionConEtapa();
   });

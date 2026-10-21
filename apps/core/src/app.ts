@@ -3,6 +3,7 @@ import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import { fijarEdicion } from "@mi-setup/shared";
 import { ZodError } from "zod";
 import { createDbAuditWriter, type AuditWriter } from "./audit/audit.js";
 import { AuthService } from "./auth/service.js";
@@ -17,6 +18,7 @@ import { aplicarClavesGuardadas, clavesRoutes } from "./modules/claves.js";
 import { rolesRoutes, sembrarRoles } from "./modules/roles.js";
 import { bovedaRoutes } from "./modules/boveda.js";
 import type { ModuleDeps } from "./modules/common.js";
+import type { FabricaMotor, GestorBots, ValidarToken } from "./modules/bots-discord/index.js";
 import { chatRoutes } from "./modules/chat.js";
 import { descargasRoutes } from "./modules/descargas.js";
 import { herramientasRoutes, limpiarCompartidos } from "./modules/herramientas.js";
@@ -32,11 +34,8 @@ import { entretenimientoRoutes } from "./modules/entretenimiento.js";
 import { ciberseguridadRoutes } from "./modules/ciberseguridad.js";
 import { comprasRoutes } from "./modules/compras.js";
 import { ejerciciosRoutes } from "./modules/ejercicios.js";
-import { botsDiscordModule, type FabricaMotor, type GestorBots, type ValidarToken } from "./modules/bots-discord/index.js";
-import { clipsRoutes, limpiarFuentes } from "./modules/clips.js";
 import { cloudflareRoutes } from "./modules/cloudflare.js";
 import { estudioRoutes } from "./modules/estudio.js";
-import { hostLocalRoutes } from "./modules/hostlocal.js";
 import { crearDetectorSitios, sitiosModule } from "./modules/sitios/index.js";
 import { imagenesRoutes } from "./modules/imagenes.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
@@ -44,9 +43,7 @@ import { iaRoutes } from "./modules/ia/rutas.js";
 import { novedadesRoutes, revisarPrecios } from "./modules/novedades.js";
 import { mercadosRoutes } from "./modules/mercados.js";
 import { noticiasRoutes } from "./modules/noticias.js";
-import { controlRemotoRoutes } from "./modules/control-remoto.js";
 import { cuentasRoutes } from "./modules/cuentas.js";
-import { redesModule } from "./modules/redes/index.js";
 import type { ClienteIa } from "./modules/ia/servicio.js";
 import { equiposModule } from "./modules/equipos.js";
 import { notasRoutes } from "./modules/notas.js";
@@ -56,8 +53,6 @@ import { seguridadCuentaRoutes } from "./modules/seguridad-cuenta.js";
 import { correoGoogleRoutes } from "./modules/correo-google.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
 import { negocioRoutes, recordarCobros } from "./modules/negocio.js";
-import { pteroRoutes } from "./modules/ptero.js";
-import { pteroAdminRoutes } from "./modules/ptero-admin.js";
 import { respaldosRoutes } from "./modules/respaldos.js";
 import { respaldosAutomaticos, respaldosVpsRoutes } from "./modules/respaldos-vps.js";
 import { revisarVencimientos, vencimientosRoutes } from "./modules/vencimientos.js";
@@ -99,13 +94,15 @@ export interface App {
   /** Tareas periódicas; index.ts las arranca. */
   readonly jobs: Job[];
   /** Gestor de los bots de Discord encendidos (pruebas y cierre ordenado). */
-  readonly gestorBots: GestorBots;
+  readonly gestorBots: GestorBots | null;
   /** Se llama después de migrar: aplica las claves guardadas en Ajustes y crea los roles iniciales. */
   readonly preparar: () => Promise<void>;
 }
 
 export async function buildApp(appDeps: AppDeps): Promise<App> {
   const { config, db, logger = true } = appDeps;
+  // Permisos: en la edición pública los apartados personales no existen para nadie.
+  fijarEdicion(config.env.EDICION);
   const now = appDeps.now ?? (() => new Date());
 
   // Sitios publicados (nombre.DOMINIO o dominio propio): se atienden en /__sitio/… (módulo sitios).
@@ -228,18 +225,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(ciberseguridadRoutes(deps));
   await app.register(comprasRoutes(deps, iaSimple));
   await app.register(ejerciciosRoutes(deps));
-  await app.register(hostLocalRoutes(deps));
   await app.register(cloudflareRoutes(deps));
   await app.register(estudioRoutes(deps));
-  await app.register(clipsRoutes(deps, appDeps.clienteIa));
-  const bots = botsDiscordModule(deps, { ...(appDeps.fabricaBots ? { fabrica: appDeps.fabricaBots } : {}), ...(appDeps.validarTokenBot ? { validarToken: appDeps.validarTokenBot } : {}) });
-  await app.register(bots.routes);
-  app.addHook("onClose", async () => bots.gestor.detenerTodos());
-  jobs.push(
-    { nombre: "bots-encender", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => bots.gestor.encenderPendientes() },
-    { nombre: "bots-vencimiento", cadaMs: 5 * 60_000, alInicio: true, run: async () => void (await bots.gestor.apagarVencidos()) },
-  );
-  jobs.push({ nombre: "limpiar-clips", cadaMs: 6 * 60 * 60_000, alInicio: false, run: () => limpiarFuentes(deps) });
   await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa));
   await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
@@ -251,28 +238,34 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(respaldosVpsRoutes(deps, vps.servidores));
   jobs.push({ nombre: "respaldos-automaticos", cadaMs: 15 * 60_000, alInicio: false, run: () => respaldosAutomaticos(deps, vps.servidores) });
 
-  const ptero = pteroRoutes(deps);
-  await app.register(ptero.routes);
-  await app.register(pteroAdminRoutes(deps, ptero.ptero, vps.servidores));
+  // Edición personal: Pterodactyl, Redes y streams, Host local, Casa y Control remoto.
+  // La pública ni siquiera trae ese código (se borra al compilar la imagen).
+  const personales =
+    config.env.EDICION === "publica"
+      ? null
+      : await (await import("./modules/personales.js")).registrarPersonales(app, deps, jobs, {
+          servidores: vps.servidores,
+          ...(appDeps.clienteIa ? { clienteIa: appDeps.clienteIa } : {}),
+          ...(appDeps.fabricaBots ? { fabricaBots: appDeps.fabricaBots } : {}),
+          ...(appDeps.validarTokenBot ? { validarTokenBot: appDeps.validarTokenBot } : {}),
+        });
+
   await app.register(vencimientosRoutes(deps));
   await app.register(negocioRoutes(deps));
   await app.register(respaldosRoutes(deps));
   await app.register(bovedaRoutes(deps));
   await app.register(correoRoutes(deps));
-  const redes = redesModule(deps);
-  await app.register(redes.routes);
   await app.register(novedadesRoutes(deps));
   await app.register(mercadosRoutes(deps));
   await app.register(mercadosDetalleRoutes(deps));
   await app.register(noticiasRoutes(deps));
   await app.register(cuentasRoutes(deps));
-  await app.register(controlRemotoRoutes(deps));
   jobs.push({ nombre: "vigilante-precios", cadaMs: 3 * 60 * 60_000, alInicio: false, run: () => revisarPrecios(deps) });
   await app.register(
     iaRoutes(deps, {
-      contexto: { servidores: vps.servidores, ptero: ptero.ptero },
-      extras: redes.herramientas,
-      contextos: [redes.contexto],
+      contexto: { servidores: vps.servidores, ptero: personales?.ptero ?? null },
+      extras: personales?.herramientas ?? [],
+      contextos: personales?.contextos ?? [],
       ...(appDeps.clienteIa ? { cliente: appDeps.clienteIa } : {}),
       ...(appDeps.clienteIaLocal ? { clienteLocal: appDeps.clienteIaLocal } : {}),
     }),
@@ -289,5 +282,5 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
     await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
   };
 
-  return { app, auth, hub, deps, jobs, gestorBots: bots.gestor, preparar };
+  return { app, auth, hub, deps, jobs, gestorBots: personales?.gestorBots ?? null, preparar };
 }

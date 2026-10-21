@@ -10,3 +10,4 @@ export * from "./impuestos.js";
 export * from "./versiones.js";
 export * from "./finanzas.js";
 export * from "./rendimientos.js";
+export * from "./edicion.js";

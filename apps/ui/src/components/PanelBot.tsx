@@ -9,6 +9,7 @@ import { Bot, ExternalLink, Plus, Power, RefreshCw, Save, Square, Trash2 } from 
 import { useEffect, useMemo, useState } from "react";
 import { abrirExterno } from "../lib/plataforma";
 import { AreaTexto, Boton, Campo, Entrada, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 export interface Servidor {
   id: string;
@@ -184,7 +185,7 @@ export function PanelBot({ bot, api, cliente = false }: { bot: BotDetalle; api: 
         </div>
         {bot.vence ? (
           <p className={cx("mt-2 text-xs", bot.vencido ? "text-peligro" : "text-tenue")}>
-            {bot.vencido ? "El servicio venció: el bot está apagado." : `El servicio vence el ${new Date(bot.vence).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}.`}
+            {bot.vencido ? "El servicio venció: el bot está apagado." : `El servicio vence el ${new Date(bot.vence).toLocaleDateString(localeActual(), { day: "numeric", month: "long", year: "numeric" })}.`}
           </p>
         ) : null}
         {bot.error ? <p className="mt-2 rounded-xl bg-peligro/10 p-2 text-xs text-peligro">{bot.error}</p> : null}

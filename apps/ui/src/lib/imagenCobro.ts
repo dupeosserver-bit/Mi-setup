@@ -1,7 +1,7 @@
-/**
- * Imagen (PNG) con la lista de cobros de una persona, para mandarla por
+/** * Imagen (PNG) con la lista de cobros de una persona, para mandarla por
  * WhatsApp. Se dibuja en el dispositivo; no pasa por el servidor.
  */
+import { localeActual } from "./idioma";
 
 export interface LineaCobro {
   pago: string;
@@ -10,8 +10,8 @@ export interface LineaCobro {
   estado: "pagado" | "pendiente" | "debe";
 }
 
-const dinero = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+const dinero = (n: number) => `$${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" });
 
 function recortar(ctx: CanvasRenderingContext2D, texto: string, ancho: number): string {
   if (ctx.measureText(texto).width <= ancho) return texto;

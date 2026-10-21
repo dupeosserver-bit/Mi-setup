@@ -9,15 +9,16 @@ import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../lib/api";
 import { Boton, Cargando, ErrorCaja, Pestanas, Tarjeta } from "./ui";
+import { localeActual } from "../lib/idioma";
 
 export const COLOR_INGRESOS = "#3987e5";
 export const COLOR_GASTOS = "#d95926";
 export const COLOR_AHORRO = "#199e70";
 
-const dinero = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const corto = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })}k` : `$${Math.round(n)}`);
+const dinero = (n: number) => `$${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const corto = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toLocaleString(localeActual(), { maximumFractionDigits: 1 })}k` : `$${Math.round(n)}`);
 const estiloTooltip = { background: "var(--superficie, #1e1e1e)", border: "1px solid var(--borde, #333)", borderRadius: 12, fontSize: 12 };
-const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+const fechaCorta = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short" });
 
 interface Semana {
   desde: string;
@@ -115,7 +116,7 @@ interface Tendencia {
 }
 
 const etiqueta = (clave: string, periodo: Periodo) =>
-  periodo === "12m" ? new Date(`${clave}-15T12:00:00`).toLocaleDateString("es-MX", { month: "short" }) : fechaCorta(clave);
+  periodo === "12m" ? new Date(`${clave}-15T12:00:00`).toLocaleDateString(localeActual(), { month: "short" }) : fechaCorta(clave);
 
 export function TendenciaFinanzas() {
   const [periodo, setPeriodo] = useState<Periodo>("12m");

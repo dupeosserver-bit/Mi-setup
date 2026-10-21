@@ -56,6 +56,7 @@ import { fmtFecha, fmtFechaHora, haceCuanto } from "../lib/formato";
 import { abrirExterno, escritorio, leerSistema } from "../lib/plataforma";
 import { useNavigate } from "react-router-dom";
 import { ubicacionActual } from "../lib/ubicacion";
+import { localeActual } from "../lib/idioma";
 
 // ---------------------------------------------------------------- clima
 
@@ -361,7 +362,7 @@ function Clima() {
               return (
                 <div key={dia} className="rounded-tarjeta border border-borde bg-superficie p-3 text-center text-sm">
                   <p className="text-tenue">
-                    {new Date(`${dia}T12:00:00`).toLocaleDateString("es-MX", {
+                    {new Date(`${dia}T12:00:00`).toLocaleDateString(localeActual(), {
                       weekday: "short",
                       day: "numeric",
                     })}
@@ -474,7 +475,7 @@ function useMonedaJuegos() {
     const t = tasas.data?.tasas;
     if (!t?.[desde] || !t[moneda]) return null;
     const enMoneda = (valor / t[desde]) * t[moneda];
-    return enMoneda.toLocaleString("es-MX", {
+    return enMoneda.toLocaleString(localeActual(), {
       style: "currency",
       currency: moneda,
       maximumFractionDigits: moneda === "CLP" || moneda === "COP" || moneda === "ARS" ? 0 : 2,
@@ -558,7 +559,7 @@ function OfertasSteamRegion() {
               <p className="truncate text-sm font-medium">{o.nombre}</p>
               <p className="text-sm">
                 <b>
-                  {o.precio.toLocaleString("es-MX")} {o.moneda}
+                  {o.precio.toLocaleString(localeActual())} {o.moneda}
                 </b>{" "}
                 <Insignia tono="ok">-{o.descuento}%</Insignia>
               </p>
@@ -689,7 +690,7 @@ function ListaSteam({ tipo, alElegir }: { tipo: "populares" | "mas-jugados" | "m
               <p className="truncate text-sm font-medium">{j.nombre}</p>
               <p className="text-xs text-tenue">
                 {j.valoracion !== null ? `${j.valoracion} % positivas` : ""}
-                {tipo === "mas-jugados" || tipo === "populares" ? ` · ${j.jugadores.toLocaleString("es-MX")} jugando` : ""}
+                {tipo === "mas-jugados" || tipo === "populares" ? ` · ${j.jugadores.toLocaleString(localeActual())} jugando` : ""}
                 {j.precioUsd !== null ? ` · ${j.precioUsd === 0 ? "Gratis" : (convertir(j.precioUsd, "USD") ?? `${j.precioUsd} USD`)}` : ""}
               </p>
             </div>
@@ -727,7 +728,7 @@ function PreciosPorRegion({ id }: { id: number }) {
           <li key={r.region} className="flex items-center gap-2 py-1.5">
             <span className="w-32 shrink-0">{REGIONES_STEAM[r.region] ?? r.region}</span>
             <span className="flex-1 text-tenue">
-              {r.precio!.toLocaleString("es-MX")} {r.moneda}
+              {r.precio!.toLocaleString(localeActual())} {r.moneda}
               {r.descuento ? ` (-${r.descuento}%)` : ""}
             </span>
             <span className="font-medium">{r.moneda ? (convertir(r.precio!, r.moneda) ?? "—") : "—"}</span>
@@ -1081,10 +1082,10 @@ function FichaSteam({ id }: { id: number }) {
         </div>
       </Tarjeta>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {dato("Jugando ahora", j.jugadoresAhora !== null ? j.jugadoresAhora.toLocaleString("es-MX") : null)}
-        {dato("Pico de ayer", j.picoAyer !== null ? j.picoAyer.toLocaleString("es-MX") : null)}
+        {dato("Jugando ahora", j.jugadoresAhora !== null ? j.jugadoresAhora.toLocaleString(localeActual()) : null)}
+        {dato("Pico de ayer", j.picoAyer !== null ? j.picoAyer.toLocaleString(localeActual()) : null)}
         {dato("Reseñas positivas", j.resenas ? `${j.resenas.porcentaje} %` : null)}
-        {dato("Precio", j.precio === null ? null : j.precio === 0 ? "Gratis" : `$${j.precio.toLocaleString("es-MX")} MXN${j.descuento ? ` (-${j.descuento}%)` : ""}`)}
+        {dato("Precio", j.precio === null ? null : j.precio === 0 ? "Gratis" : `$${j.precio.toLocaleString(localeActual())} MXN${j.descuento ? ` (-${j.descuento}%)` : ""}`)}
         {dato("Dueños (aprox.)", j.duenos)}
         {dato("Horas promedio", j.horasPromedio !== null ? `${j.horasPromedio} h` : null)}
         {dato("Metacritic", j.metacritic !== null ? String(j.metacritic) : null)}
@@ -1169,7 +1170,7 @@ function Steam() {
                   <img src={r.imagen} alt={r.nombre} referrerPolicy="no-referrer" className="h-12 w-24 shrink-0 rounded-lg object-cover" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.nombre}</p>
-                    <p className="text-xs text-tenue">{r.precio === null ? "Gratis o sin precio" : `$${r.precio.toLocaleString("es-MX")} ${r.moneda ?? ""}`}</p>
+                    <p className="text-xs text-tenue">{r.precio === null ? "Gratis o sin precio" : `$${r.precio.toLocaleString(localeActual())} ${r.moneda ?? ""}`}</p>
                   </div>
                 </button>
               ))}
@@ -1417,10 +1418,10 @@ function Precios() {
             }
           >
             <div className="flex flex-wrap items-baseline gap-3">
-              <p className={cx("text-2xl font-bold", w.precio === null && "text-tenue")}>{w.precio === null ? "—" : w.precio.toLocaleString("es-MX")}</p>
+              <p className={cx("text-2xl font-bold", w.precio === null && "text-tenue")}>{w.precio === null ? "—" : w.precio.toLocaleString(localeActual())}</p>
               {w.objetivo !== null ? (
                 <Insignia tono={w.precio !== null && w.precio <= w.objetivo ? "ok" : "aviso"}>
-                  Objetivo: {w.objetivo.toLocaleString("es-MX")}
+                  Objetivo: {w.objetivo.toLocaleString(localeActual())}
                   {w.precio !== null && w.precio <= w.objetivo ? " ✓" : ""}
                 </Insignia>
               ) : null}
@@ -1493,7 +1494,7 @@ function Precios() {
           {prueba ? (
             <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm">
               <p>
-                Precio encontrado: <b className="text-lg">{prueba.precio.toLocaleString("es-MX")}</b>
+                Precio encontrado: <b className="text-lg">{prueba.precio.toLocaleString(localeActual())}</b>
               </p>
               <p className="text-xs text-tenue">
                 Leído: "{prueba.texto}" · {prueba.metodo}. Si no es el precio correcto (por ejemplo, es el tachado), usa las opciones avanzadas.

@@ -14,6 +14,7 @@ import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { interpretarFilas, type FilaImportada } from "../lib/finanzas";
 import { Impuestos, PagosDivididos, TicketConFoto } from "../components/FinanzasExtra";
+import { localeActual } from "../lib/idioma";
 
 interface Movimiento {
   id: string;
@@ -60,13 +61,13 @@ function useCategorias(tipo?: "gasto" | "ingreso"): string[] {
 }
 
 const CATEGORIAS = ["Comida", "Transporte", "Casa", "Servicios", "Suscripciones", "Salud", "Diversión", "Ropa", "Educación", "Trabajo", "Sueldo", "Ventas", "Otros"];
-const dinero = (n: number) => `$${n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const dinero = (n: number) => `$${n.toLocaleString(localeActual(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const mesActual = () => new Date().toISOString().slice(0, 7);
 const hoyLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const nombreMes = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+const nombreMes = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString(localeActual(), { month: "long", year: "numeric" });
 const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["finanzas-personales"] });
 
 // ---------------------------------------------------------------- resumen
@@ -239,7 +240,7 @@ function Movimientos({ mes }: { mes: string }) {
       <div className="space-y-1">
         {q.data?.map((m) => (
           <div key={m.id} className="flex items-center gap-3 rounded-xl border border-borde bg-superficie px-3 py-2 text-sm">
-            <span className="w-20 shrink-0 text-xs text-tenue">{new Date(`${m.fecha}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</span>
+            <span className="w-20 shrink-0 text-xs text-tenue">{new Date(`${m.fecha}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short" })}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate">{m.descripcion || m.categoria}</p>
               <p className="text-xs text-tenue">
@@ -343,7 +344,7 @@ function Suscripciones() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{s.nombre}</p>
                 <p className="text-xs text-tenue">
-                  {dinero(s.monto)} {s.moneda} · {s.ciclo} · próximo cobro {new Date(`${s.proximoCobro}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}
+                  {dinero(s.monto)} {s.moneda} · {s.ciclo} · próximo cobro {new Date(`${s.proximoCobro}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "long" })}
                 </p>
               </div>
               {s.activa ? <Insignia tono={faltan <= s.avisarDias ? "aviso" : "neutro"}>{faltan <= 0 ? "Hoy" : `En ${faltan} día${faltan === 1 ? "" : "s"}`}</Insignia> : <Insignia>Pausada</Insignia>}
