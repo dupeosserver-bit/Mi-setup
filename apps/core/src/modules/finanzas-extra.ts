@@ -11,7 +11,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { repartir } from "@mi-setup/shared";
-import { and, asc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { financePeople, financeSplitCharges, financeSplitMembers, financeSplits, personalMovements } from "../db/schema.js";
@@ -312,6 +312,53 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
       return { ok: true };
     });
 
+    /**
+     * Editar un pago completo: nombre, total, notas y quiénes participan.
+     * Las personas que quitas pierden sus cobros sin pagar; a las que siguen se
+     * les ajusta el monto en los cobros que aún no pagan.
+     */
+    app.put("/api/finanzas-personales/divididos/:id", escribir, async (request) => {
+      const user = currentUser(request);
+      const { id } = idParams.parse(request.params);
+      await pagoPropio(user.id, id);
+      const d = z
+        .object({
+          nombre: z.string().trim().min(1).max(80),
+          total: MONTO,
+          notas: z.string().trim().max(500).default(""),
+          incluirme: z.boolean().default(true),
+          personas: z
+            .array(z.object({ nombre: z.string().trim().min(1).max(60), contacto: z.string().trim().max(120).default(""), monto: z.coerce.number().positive().optional() }))
+            .min(1, "Deja al menos una persona")
+            .max(30),
+        })
+        .parse(request.body);
+      const nombres = new Set(d.personas.map((p) => p.nombre.toLowerCase()));
+      if (nombres.size !== d.personas.length) throw new HttpError(400, "Hay una persona repetida");
+      const partes = repartir(d.total, d.personas.length + (d.incluirme ? 1 : 0)).slice(d.incluirme ? 1 : 0);
+      const montos = d.personas.map((p, i) => p.monto ?? partes[i]!);
+      await db.update(financeSplits).set({ name: d.nombre, total: d.total.toFixed(2), notes: d.notas }).where(eq(financeSplits.id, id));
+      const quedan: string[] = [];
+      for (const [i, p] of d.personas.entries()) {
+        const personId = await persona(user.id, p.nombre, p.contacto);
+        if (p.contacto) await db.update(financePeople).set({ contact: p.contacto }).where(eq(financePeople.id, personId));
+        quedan.push(personId);
+        const monto = montos[i]!.toFixed(2);
+        await db
+          .insert(financeSplitMembers)
+          .values({ splitId: id, personId, amount: monto })
+          .onConflictDoUpdate({ target: [financeSplitMembers.splitId, financeSplitMembers.personId], set: { amount: monto } });
+        await db
+          .update(financeSplitCharges)
+          .set({ amount: monto })
+          .where(and(eq(financeSplitCharges.splitId, id), eq(financeSplitCharges.personId, personId), gte(financeSplitCharges.dueOn, hoy()), isNull(financeSplitCharges.paidAt)));
+      }
+      await db.delete(financeSplitMembers).where(and(eq(financeSplitMembers.splitId, id), notInArray(financeSplitMembers.personId, quedan)));
+      await db.delete(financeSplitCharges).where(and(eq(financeSplitCharges.splitId, id), notInArray(financeSplitCharges.personId, quedan), isNull(financeSplitCharges.paidAt)));
+      sync(deps, user.id, "finanzas-personales");
+      return { ok: true };
+    });
+
     app.delete("/api/finanzas-personales/divididos/:id", escribir, async (request) => {
       const user = currentUser(request);
       const { id } = idParams.parse(request.params);
@@ -359,6 +406,7 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
         .update(financePeople)
         .set({ ...(d.nombre ? { name: d.nombre } : {}), ...(d.contacto !== undefined ? { contact: d.contacto } : {}) })
         .where(eq(financePeople.id, id));
+      sync(deps, user.id, "finanzas-personales");
       return { ok: true };
     });
 

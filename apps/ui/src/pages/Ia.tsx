@@ -2,7 +2,7 @@
 import { Negociar } from "../components/IaExtras";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessagesSquare, Paperclip, Trash2, Volume2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { EntradaIa, type AdjuntoIa } from "../components/EntradaIa";
 import { Boton, Cargando, Encabezado, ErrorCaja, FaltaConfigurar, Pestanas, Tarjeta, Vacio, avisar, cx } from "../components/ui";
@@ -88,6 +88,12 @@ function Chat() {
       void queryClient.invalidateQueries({ queryKey: ["ia"] });
     },
   });
+  // Al abrir un chat (o llegar una respuesta) se baja directo al último mensaje.
+  const caja = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = caja.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [actual, detalle.data, enviar.isPending]);
   const borrar = useMutation({
     mutationFn: (id: string) => api(`/api/ia/conversaciones/${id}`, { metodo: "DELETE" }),
     onSuccess: () => {
@@ -132,7 +138,7 @@ function Chat() {
           ) : null
         }
       >
-        <div className="max-h-[55vh] space-y-3 overflow-y-auto">
+        <div ref={caja} className="max-h-[55vh] space-y-3 overflow-y-auto">
           {actual && detalle.isLoading ? <Cargando /> : null}
           {!actual ? <Vacio icono={MessagesSquare} texto="Escribe para empezar. La IA solo propone; tú apruebas." /> : null}
           {detalle.data?.mensajes.map((m) => (

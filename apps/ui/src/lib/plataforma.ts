@@ -14,6 +14,8 @@ export interface PuenteEscritorio {
   sistema(): Promise<InfoEquipo>;
   abrirNavegadorPrivado(url?: string): void;
   abrirPanel(url: string): void;
+  /** Vista previa HTML en ventana flotante (0.11.2b o más nueva de la app de Windows). */
+  abrirVistaPrevia?(html: string, encima?: boolean): void;
   abrirExterno(url: string): void;
   notificar(titulo: string, cuerpo: string): void;
   alNavegar(cb: (ruta: string) => void): () => void;

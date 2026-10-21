@@ -1,4 +1,5 @@
 /** Enlaces cortos de tu dominio (/l/<codigo>) con contador de clics. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, Link, Plus, QrCode, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -40,7 +41,9 @@ export default function Enlaces() {
   const cambiar = useMutation({ mutationFn: ({ id, activo }: { id: string; activo: boolean }) => api(`/api/enlaces/${id}`, { metodo: "PATCH", cuerpo: { activo } }), onSuccess: refrescar, onError: avisarError });
   const borrar = useMutation({ mutationFn: (id: string) => api(`/api/enlaces/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
 
+  const pag610 = usePaginado(lista.data, 20);
   return (
+    <>
     <div className="space-y-4">
       <Encabezado titulo="Enlaces cortos" descripcion="Convierte un enlace largo en uno corto de tu dominio y mira cuántas veces lo abren." />
       {puede ? (
@@ -68,7 +71,7 @@ export default function Enlaces() {
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.length === 0 ? <Vacio icono={Link} texto="Todavía no tienes enlaces cortos." /> : null}
       <div className="space-y-2">
-        {lista.data?.map((l) => (
+        {pag610.visibles.map((l) => (
           <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-3">
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-sm font-medium">{corto(l.codigo)}</p>
@@ -97,5 +100,7 @@ export default function Enlaces() {
         ))}
       </div>
     </div>
+    {pag610.paginas}
+    </>
   );
 }

@@ -1,4 +1,5 @@
 /** Inversiones: precio de acciones, ETF e índices (Yahoo Finance, con retraso). Solo datos, no es asesoría financiera. */
+import { Paginas } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
@@ -134,21 +135,9 @@ function ExplorarAcciones({ mios, alAgregar }: { mios: string[]; alAgregar: (s: 
           </tbody>
         </table>
       </div>
-      {paginas > 1 ? (
-        <div className="mt-3 flex items-center justify-center gap-1">
-          <Boton tamano="sm" variante="secundario" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
-            Anterior
-          </Boton>
-          {Array.from({ length: Math.min(5, paginas) }, (_, i) => Math.min(Math.max(1, pagina - 2), Math.max(1, paginas - 4)) + i).map((n) => (
-            <Boton key={n} tamano="sm" variante={n === pagina ? "primario" : "fantasma"} onClick={() => setPagina(n)}>
-              {n}
-            </Boton>
-          ))}
-          <Boton tamano="sm" variante="secundario" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
-            Siguiente
-          </Boton>
-        </div>
-      ) : null}
+      <div className="mt-3">
+        <Paginas pagina={pagina} total={paginas} alCambiar={setPagina} />
+      </div>
       <p className="mt-2 text-xs text-tenue">
         «Analistas» es el promedio de lo que opinan analistas de bancos y casas de bolsa (Yahoo Finanzas): es una opinión, no una garantía, y no es asesoría financiera. Antes de invertir, infórmate y no metas dinero que necesites.
       </p>

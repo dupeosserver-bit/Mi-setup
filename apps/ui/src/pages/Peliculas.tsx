@@ -1,4 +1,5 @@
 /** Películas y series: buscar, dónde verlas en México, siguiente capítulo y tu lista "por ver". */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, CalendarClock, Check, Clapperboard, ExternalLink, Film, Play, Radio, Search, Star, Trash2, Tv } from "lucide-react";
 import { useState } from "react";
@@ -77,12 +78,16 @@ function Poster({ r, alAbrir }: { r: { titulo: string; poster: string | null; fe
 }
 
 function Rejilla({ elementos, alAbrir }: { elementos: Resumen[]; alAbrir: (r: Resumen) => void }) {
+  const pag861 = usePaginado(elementos , 18);
   return (
+    <>
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-      {elementos.map((r) => (
+      {pag861.visibles.map((r) => (
         <Poster key={`${r.tipo}-${r.id}`} r={r} alAbrir={() => alAbrir(r)} />
       ))}
     </div>
+    {pag861.paginas}
+    </>
   );
 }
 
@@ -206,14 +211,16 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
 }
 
 function Lista({ elementos, alAbrir }: { elementos: PorVer[]; alAbrir: (p: PorVer) => void }) {
+  const pag453 = usePaginado(elementos , 18);
   const puede = usePuede("peliculas", "escritura");
   const invalidar = () => void queryClient.invalidateQueries({ queryKey: ["peliculas", "por-ver"] });
   const marcar = useMutation({ mutationFn: (p: PorVer) => api(`/api/peliculas/por-ver/${p.id}`, { metodo: "PATCH", cuerpo: { vista: !p.vista } }), onSuccess: invalidar, onError: avisarError });
   const quitar = useMutation({ mutationFn: (id: string) => api(`/api/peliculas/por-ver/${id}`, { metodo: "DELETE" }), onSuccess: invalidar, onError: avisarError });
   if (!elementos.length) return <Vacio icono={Bookmark} texto="Busca una película o serie y tócala para agregarla aquí." />;
   return (
+    <>
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-      {elementos.map((p) => (
+      {pag453.visibles.map((p) => (
         <div key={p.id} className={cx("min-w-0", p.vista && "opacity-50")}>
           <Poster r={p} alAbrir={() => alAbrir(p)} />
           {puede ? (
@@ -225,6 +232,8 @@ function Lista({ elementos, alAbrir }: { elementos: PorVer[]; alAbrir: (p: PorVe
         </div>
       ))}
     </div>
+    {pag453.paginas}
+    </>
   );
 }
 

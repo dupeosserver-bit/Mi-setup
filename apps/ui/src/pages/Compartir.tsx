@@ -1,4 +1,5 @@
 /** Compartir archivos por enlace, tipo Mega o MediaFire: subes, copias el enlace y tu amigo descarga. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, HardDrive, Lock, Share2, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
@@ -89,7 +90,9 @@ export default function Compartir() {
     }
   };
 
+  const pag248 = usePaginado(lista.data?.archivos, 20);
   return (
+    <>
     <div className="space-y-4">
       <Encabezado titulo="Compartir archivos" descripcion="Sube un archivo y manda el enlace: quien lo abra lo descarga, sin cuenta." />
       {lista.data ? (
@@ -127,7 +130,7 @@ export default function Compartir() {
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.archivos.length === 0 ? <Vacio icono={Share2} texto="Todavía no compartes archivos." /> : null}
       <div className="space-y-2">
-        {lista.data?.archivos.map((f) => (
+        {pag248.visibles.map((f) => (
           <div key={f.id} className="flex flex-wrap items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{f.nombre}</p>
@@ -162,5 +165,7 @@ export default function Compartir() {
         ))}
       </div>
     </div>
+    {pag248.paginas}
+    </>
   );
 }

@@ -11,6 +11,7 @@
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { versionDeArchivo, versionesRecientes } from "@mi-setup/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { HttpError } from "../http-error.js";
@@ -36,7 +37,8 @@ async function listar(dir: string) {
         return s?.isFile() ? { nombre: n, tamano: s.size, modificado: s.mtime.toISOString(), tipo: n.toLowerCase().endsWith(".apk") ? "android" : "windows" } : null;
       }),
   );
-  return filas.filter((f): f is NonNullable<typeof f> => f !== null).sort((a, b) => b.modificado.localeCompare(a.modificado));
+  // Solo la versión nueva y las 2 anteriores de cada app (deploy/limpiar-descargas.py borra el resto del VPS).
+  return versionesRecientes(filas.filter((f): f is NonNullable<typeof f> => f !== null)).map((f) => ({ ...f, version: versionDeArchivo(f.nombre) }));
 }
 
 export function descargasRoutes(deps: ModuleDeps) {

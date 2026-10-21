@@ -1,8 +1,8 @@
 /** Novedades: clima (con ubicación en tiempo real), ofertas y juegos gratis, tiendas para buscar y vigilante de precios. */
+import { Paginas, usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ChevronLeft,
-  ChevronRight,
   Cloud,
   CloudDrizzle,
   CloudFog,
@@ -442,25 +442,7 @@ function BuscarEnTiendas() {
   );
 }
 
-/** Botones Anterior / Siguiente con el número de página. */
-function Paginador({ pagina, total, hayMas, alCambiar }: { pagina: number; total?: number | undefined; hayMas?: boolean; alCambiar: (p: number) => void }) {
-  const siguiente = total !== undefined ? pagina < total : Boolean(hayMas);
-  if (pagina === 1 && !siguiente) return null;
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <Boton tamano="sm" icono={ChevronLeft} disabled={pagina <= 1} onClick={() => alCambiar(pagina - 1)}>
-        Anterior
-      </Boton>
-      <span className="text-sm text-tenue">
-        Página {pagina}
-        {total !== undefined ? ` de ${total}` : ""}
-      </span>
-      <Boton tamano="sm" disabled={!siguiente} onClick={() => alCambiar(pagina + 1)}>
-        Siguiente <ChevronRight className="h-4 w-4" />
-      </Boton>
-    </div>
-  );
-}
+const Paginador = Paginas;
 
 const MONEDAS = ["MXN", "USD", "EUR", "ARS", "BRL", "COP", "CLP", "PEN", "GBP"] as const;
 const CLAVE_MONEDA = "mi-setup.moneda-juegos";
@@ -548,6 +530,7 @@ function OfertasSteamRegion() {
         }[]
       >(`/api/novedades/steam/ofertas?region=${region}`),
   });
+  const paginado = usePaginado(q.data, 12);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -563,7 +546,7 @@ function OfertasSteamRegion() {
       {q.isLoading ? <Cargando /> : null}
       <ErrorCaja error={q.error} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {q.data?.map((o) => (
+        {paginado.visibles.map((o) => (
           <button
             key={o.id}
             type="button"
@@ -584,6 +567,7 @@ function OfertasSteamRegion() {
           </button>
         ))}
       </div>
+      {paginado.paginas}
       <p className="text-xs text-tenue">Comprar en otra región puede no estar permitido por Steam (revisa sus reglas); sirve para comparar precios.</p>
     </div>
   );
@@ -1369,7 +1353,9 @@ function Precios() {
     onError: avisarError,
   });
 
+  const pag509 = usePaginado(lista.data, 12);
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-tenue">Se revisa cada 3 horas y avisa por push cuando cambia el precio o llega a tu objetivo.</p>
@@ -1383,7 +1369,7 @@ function Precios() {
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.length === 0 ? <Vacio texto="Agrega la página de una tienda y el selector CSS del precio." /> : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {lista.data?.map((w) => (
+        {pag509.visibles.map((w) => (
           <Tarjeta
             key={w.id}
             titulo={w.nombre}
@@ -1538,6 +1524,8 @@ function Precios() {
         </form>
       </Modal>
     </div>
+    {pag509.paginas}
+    </>
   );
 }
 

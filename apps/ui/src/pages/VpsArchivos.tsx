@@ -231,9 +231,15 @@ function Organizar({ base, ruta, alCerrar, alTerminar }: { base: string; ruta: s
   const [quitados, setQuitados] = useState<Set<string>>(new Set());
   const elegidos = (plan.data?.movimientos ?? []).filter((m) => !quitados.has(m.archivo));
   const aplicar = useMutation({
-    mutationFn: () => api<{ movidos: number; omitidos: string[] }>(`${base}/organizar`, { cuerpo: { ruta, movimientos: elegidos.map(({ archivo, carpeta }) => ({ archivo, carpeta })) } }),
+    mutationFn: () =>
+      api<{ movidos: number; omitidos: string[]; renombrados?: { archivo: string; nuevo: string; carpeta: string }[] }>(`${base}/organizar`, {
+        cuerpo: { ruta, movimientos: elegidos.map(({ archivo, carpeta }) => ({ archivo, carpeta })) },
+      }),
     onSuccess: (r) => {
-      avisar(`Movidos ${r.movidos}${r.omitidos.length ? `; ${r.omitidos.length} se quedaron (ya había uno igual)` : ""}`);
+      const ren = r.renombrados ?? [];
+      avisar(
+        `Movidos ${r.movidos}${ren.length ? `; ${ren.length} con número al final porque ya había uno igual (ej. ${ren[0]!.nuevo})` : ""}${r.omitidos.length ? `; ${r.omitidos.length} no se pudieron mover` : ""}`,
+      );
       alTerminar();
       alCerrar();
     },

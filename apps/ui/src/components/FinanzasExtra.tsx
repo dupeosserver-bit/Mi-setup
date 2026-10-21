@@ -4,7 +4,7 @@
  */
 import { ANIO_TARIFA_ISR, agregarIva, isrMensual, isrResico, quitarIva, repartir } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Camera, Check, Copy, HandCoins, Plus, Receipt, Share2, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Camera, Check, Copy, HandCoins, Pencil, Plus, Receipt, Share2, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../lib/api";
 import { compartirConApps } from "../lib/compartir";
@@ -415,30 +415,37 @@ function TomarDe({ alElegir }: { alElegir: (d: { nombre: string; total: number; 
   );
 }
 
-function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
-  const [f, setF] = useState({ nombre: "", total: "", ciclo: "mensual" as PagoDividido["ciclo"], primerCobro: hoyLocal(), incluirme: true, notas: "" });
-  const [personas, setPersonas] = useState<{ nombre: string; contacto: string; monto: string }[]>([{ nombre: "", contacto: "", monto: "" }]);
+function NuevoPagoDividido({ alCerrar, editar, contactos }: { alCerrar: () => void; editar?: PagoDividido; contactos?: Map<string, string> }) {
+  const [f, setF] = useState(() =>
+    editar
+      ? { nombre: editar.nombre, total: String(editar.total), ciclo: editar.ciclo, primerCobro: editar.proximo ?? hoyLocal(), incluirme: editar.miembros.reduce((a, m) => a + m.monto, 0) < editar.total - 0.01, notas: editar.notas }
+      : { nombre: "", total: "", ciclo: "mensual" as PagoDividido["ciclo"], primerCobro: hoyLocal(), incluirme: true, notas: "" },
+  );
+  const [personas, setPersonas] = useState<{ nombre: string; contacto: string; monto: string }[]>(() =>
+    editar ? editar.miembros.map((m) => ({ nombre: m.nombre, contacto: contactos?.get(m.personaId) ?? "", monto: String(m.monto) })) : [{ nombre: "", contacto: "", monto: "" }],
+  );
   const validas = personas.filter((p) => p.nombre.trim());
   const partes = repartir(Number(f.total) || 0, validas.length + (f.incluirme ? 1 : 0));
   const sugerido = (i: number) => partes[i + (f.incluirme ? 1 : 0)] ?? 0;
   const crear = useMutation({
     mutationFn: () =>
-      api("/api/finanzas-personales/divididos", {
+      api(editar ? `/api/finanzas-personales/divididos/${editar.id}` : "/api/finanzas-personales/divididos", {
+        metodo: editar ? "PUT" : "POST",
         cuerpo: {
-          ...f,
+          ...(editar ? { nombre: f.nombre, notas: f.notas, incluirme: f.incluirme } : f),
           total: Number(f.total),
           personas: validas.map((p) => ({ nombre: p.nombre.trim(), contacto: p.contacto.trim(), ...(p.monto ? { monto: Number(p.monto) } : {}) })),
         },
       }),
     onSuccess: () => {
-      avisar("Pago dividido creado");
+      avisar(editar ? "Cambios guardados" : "Pago dividido creado");
       refrescar();
       alCerrar();
     },
     onError: avisarError,
   });
   return (
-    <Modal abierto titulo="Dividir un pago" alCerrar={alCerrar}>
+    <Modal abierto titulo={editar ? `Editar ${editar.nombre}` : "Dividir un pago"} alCerrar={alCerrar}>
       <form
         className="space-y-3"
         onSubmit={(e) => {
@@ -446,7 +453,7 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
           crear.mutate();
         }}
       >
-        <TomarDe alElegir={(d) => setF((x) => ({ ...x, ...d, total: String(d.total) }))} />
+        {editar ? null : <TomarDe alElegir={(d) => setF((x) => ({ ...x, ...d, total: String(d.total) }))} />}
         <div className="grid grid-cols-2 gap-2">
           <Campo etiqueta="¿Qué se paga?">
             <Entrada value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} placeholder="Netflix, renta, internet…" maxLength={80} required />
@@ -455,7 +462,7 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
             <Entrada type="number" min={0} step="0.01" value={f.total} onChange={(e) => setF({ ...f, total: e.target.value })} required />
           </Campo>
           <Campo etiqueta="Se cobra">
-            <Selector value={f.ciclo} onChange={(e) => setF({ ...f, ciclo: e.target.value as PagoDividido["ciclo"] })}>
+            <Selector disabled={Boolean(editar)} value={f.ciclo} onChange={(e) => setF({ ...f, ciclo: e.target.value as PagoDividido["ciclo"] })}>
               {Object.entries(CICLOS).map(([id, texto]) => (
                 <option key={id} value={id}>
                   {texto}
@@ -464,14 +471,14 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
             </Selector>
           </Campo>
           <Campo etiqueta="Primera fecha de pago">
-            <Entrada type="date" value={f.primerCobro} onChange={(e) => setF({ ...f, primerCobro: e.target.value })} required />
+            <Entrada type="date" disabled={Boolean(editar)} value={f.primerCobro} onChange={(e) => setF({ ...f, primerCobro: e.target.value })} required />
           </Campo>
         </div>
         <Interruptor activo={f.incluirme} alCambiar={(v) => setF({ ...f, incluirme: v })} etiqueta="Yo también pago una parte" />
         <div className="space-y-2">
           <p className="text-sm font-medium">Personas</p>
           {personas.map((p, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_6rem_auto] gap-1">
+            <div key={i} className="grid grid-cols-[1fr_auto] gap-1 rounded-xl border border-borde p-1 sm:grid-cols-[1fr_1fr_6rem_auto] sm:border-0 sm:p-0">
               <Entrada value={p.nombre} onChange={(e) => setPersonas(personas.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))} placeholder="Nombre" maxLength={60} />
               <Entrada value={p.contacto} onChange={(e) => setPersonas(personas.map((x, j) => (j === i ? { ...x, contacto: e.target.value } : x)))} placeholder="Teléfono (opcional)" maxLength={120} />
               <Entrada
@@ -483,7 +490,7 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
                 placeholder={p.nombre.trim() ? String(sugerido(validas.indexOf(p))) : "Monto"}
                 aria-label="Monto (vacío = partes iguales)"
               />
-              <Boton type="button" tamano="icono" variante="fantasma" icono={X} aria-label="Quitar" onClick={() => setPersonas(personas.filter((_, j) => j !== i))} disabled={personas.length === 1} />
+              <Boton type="button" tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar persona" onClick={() => setPersonas(personas.filter((_, j) => j !== i))} disabled={personas.length === 1} />
             </div>
           ))}
           <Boton type="button" tamano="sm" variante="secundario" icono={UserPlus} onClick={() => setPersonas([...personas, { nombre: "", contacto: "", monto: "" }])}>
@@ -492,8 +499,66 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
           <p className="text-xs text-tenue">Si dejas el monto vacío, se reparte en partes iguales{f.incluirme ? " contándote a ti" : ""}.</p>
         </div>
         <Boton type="submit" variante="primario" cargando={crear.isPending} disabled={!f.nombre.trim() || !(Number(f.total) > 0) || !validas.length}>
-          Crear
+          {editar ? "Guardar cambios" : "Crear"}
         </Boton>
+        {editar ? <p className="text-xs text-tenue">Si quitas a alguien se borran sus cobros sin pagar de este pago; lo que ya pagó se queda en su historial.</p> : null}
+      </form>
+    </Modal>
+  );
+}
+
+/** Cambiar el nombre o el teléfono de una persona, o quitarla de todo. */
+function EditarPersona({ p, alCerrar }: { p: Persona; alCerrar: () => void }) {
+  const [f, setF] = useState({ nombre: p.nombre, contacto: p.contacto });
+  const guardar = useMutation({
+    mutationFn: () => api(`/api/finanzas-personales/divididos/personas/${p.id}`, { metodo: "PATCH", cuerpo: { nombre: f.nombre.trim(), contacto: f.contacto.trim() } }),
+    onSuccess: () => {
+      avisar("Guardado");
+      refrescar();
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  const quitar = useMutation({
+    mutationFn: () => api(`/api/finanzas-personales/divididos/personas/${p.id}`, { metodo: "DELETE" }),
+    onSuccess: () => {
+      avisar(`${p.nombre} ya no está en tus pagos divididos`);
+      refrescar();
+      alCerrar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <Modal abierto titulo={`Editar a ${p.nombre}`} alCerrar={alCerrar} ancho="max-w-sm">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          guardar.mutate();
+        }}
+      >
+        <Campo etiqueta="Nombre">
+          <Entrada value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} maxLength={60} required />
+        </Campo>
+        <Campo etiqueta="Teléfono o contacto">
+          <Entrada value={f.contacto} onChange={(e) => setF({ ...f, contacto: e.target.value })} maxLength={120} />
+        </Campo>
+        <div className="flex flex-wrap justify-between gap-2">
+          <Boton
+            type="button"
+            variante="peligro"
+            icono={Trash2}
+            cargando={quitar.isPending}
+            onClick={() =>
+              void confirmar({ titulo: `¿Quitar a ${p.nombre}?`, mensaje: "Sale de todos los pagos que comparte y se borra su lista de cobros.", boton: "Quitar" }).then((ok) => ok && quitar.mutate())
+            }
+          >
+            Quitar persona
+          </Boton>
+          <Boton type="submit" variante="primario" cargando={guardar.isPending} disabled={!f.nombre.trim()}>
+            Guardar
+          </Boton>
+        </div>
       </form>
     </Modal>
   );
@@ -503,6 +568,8 @@ export function PagosDivididos() {
   const puede = usePuede("finanzas_personales", "escritura");
   const q = useQuery({ queryKey: ["finanzas-personales", "divididos"], queryFn: () => api<{ hoy: string; pagos: PagoDividido[]; personas: Persona[] }>("/api/finanzas-personales/divididos") });
   const [nuevo, setNuevo] = useState(false);
+  const [editarPago, setEditarPago] = useState<PagoDividido | null>(null);
+  const [editarPersona, setEditarPersona] = useState<Persona | null>(null);
   const [vista, setVista] = useState<"personas" | "pagos">("personas");
   const marcar = useMutation({
     mutationFn: ({ id, pagado }: { id: string; pagado: boolean }) => api(`/api/finanzas-personales/divididos/cobros/${id}`, { cuerpo: { pagado } }),
@@ -578,6 +645,7 @@ export function PagosDivididos() {
               titulo={p.nombre}
               acciones={
                 <div className="flex gap-1">
+                  {puede ? <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Editar o quitar persona" onClick={() => setEditarPersona(p)} /> : null}
                   <Boton tamano="icono" variante="fantasma" icono={Share2} aria-label="Mandarle su lista" onClick={() => void compartirTexto(textoDePersona(p))} />
                   <Boton tamano="icono" variante="fantasma" icono={Copy} aria-label="Copiar su lista" onClick={() => void navigator.clipboard.writeText(textoDePersona(p)).then(() => avisar("Copiado"))} />
                 </div>
@@ -634,6 +702,7 @@ export function PagosDivididos() {
                 puede ? (
                   <div className="flex items-center gap-2">
                     <Interruptor activo={p.activo} alCambiar={() => pausar.mutate(p)} etiqueta={p.activo ? "Activo" : "Pausado"} />
+                    <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Editar pago y personas" onClick={() => setEditarPago(p)} />
                     <Boton
                       tamano="icono"
                       variante="fantasma"
@@ -661,6 +730,8 @@ export function PagosDivididos() {
         </div>
       )}
       {nuevo ? <NuevoPagoDividido alCerrar={() => setNuevo(false)} /> : null}
+      {editarPago ? <NuevoPagoDividido editar={editarPago} contactos={new Map(d.personas.map((p) => [p.id, p.contacto]))} alCerrar={() => setEditarPago(null)} /> : null}
+      {editarPersona ? <EditarPersona p={editarPersona} alCerrar={() => setEditarPersona(null)} /> : null}
       <Modal abierto={Boolean(cobrar.data)} titulo="Mensaje para cobrar" alCerrar={() => cobrar.reset()}>
         {cobrar.data ? <ResultadoNegociacion r={cobrar.data} /> : null}
       </Modal>

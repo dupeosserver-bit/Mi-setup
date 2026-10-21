@@ -164,3 +164,37 @@ export function abrirPanel(url: string): void {
   });
   void panel.loadURL(url);
 }
+
+let vistaPrevia: BrowserWindow | null = null;
+
+/**
+ * Vista previa HTML en una ventana flotante aparte (como la del panel). El
+ * código corre aislado: sin Node, partición en memoria, sin navegar ni abrir
+ * ventanas, y siempre arriba si lo pides.
+ */
+export function abrirVistaPrevia(html: string, encima = true): void {
+  if (typeof html !== "string" || html.length > 2_000_000) return;
+  const datos = `data:text/html;charset=utf-8;base64,${Buffer.from(html, "utf8").toString("base64")}`;
+  if (!vistaPrevia || vistaPrevia.isDestroyed()) {
+    vistaPrevia = new BrowserWindow({
+      width: 420,
+      height: 760,
+      title: "Vista previa · Mi Setup",
+      backgroundColor: "#ffffff",
+      autoHideMenuBar: true,
+      alwaysOnTop: encima,
+      webPreferences: { partition: "vista-previa", sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
+    });
+    vistaPrevia.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    vistaPrevia.webContents.on("will-navigate", (e, destino) => {
+      if (!destino.startsWith("data:")) e.preventDefault();
+    });
+    vistaPrevia.on("closed", () => {
+      vistaPrevia = null;
+    });
+  } else {
+    vistaPrevia.setAlwaysOnTop(encima);
+  }
+  void vistaPrevia.loadURL(datos);
+  vistaPrevia.showInactive();
+}

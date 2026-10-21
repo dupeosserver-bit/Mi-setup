@@ -1,4 +1,5 @@
 /** Noticias de tus fuentes RSS (Google Noticias, BBC y las que agregues). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Newspaper, Plus, RefreshCw, Settings2, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -114,9 +115,11 @@ function Fuentes({ alCerrar }: { alCerrar: () => void }) {
 }
 
 function Tarjetas({ noticias }: { noticias: Noticia[] }) {
+  const { visibles, paginas } = usePaginado(noticias, 12);
   return (
+    <div className="space-y-3">
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {noticias.map((n, i) => (
+      {visibles.map((n, i) => (
         <button
           key={`${n.url}-${i}`}
           type="button"
@@ -135,6 +138,8 @@ function Tarjetas({ noticias }: { noticias: Noticia[] }) {
           <ExternalLink className="h-4 w-4 shrink-0 text-tenue" />
         </button>
       ))}
+    </div>
+    {paginas}
     </div>
   );
 }

@@ -26,7 +26,7 @@ import { leerMetricas, leerSistema } from "./metricas";
 import { registrarArchivosLocales } from "./archivos-locales";
 import { registrarServidoresLocales } from "./servidores-locales";
 import { registrarTerminalLocal } from "./terminal-local";
-import { abrirNavegadorPrivado, abrirPanel } from "./ventanas";
+import { abrirNavegadorPrivado, abrirPanel, abrirVistaPrevia } from "./ventanas";
 
 const DEV = process.argv.includes("--dev");
 const SERVIDOR_PREDETERMINADO = "https://setup.mexicanland.net";
@@ -327,6 +327,9 @@ function registrarIpc(): void {
   });
   ipcMain.on("panel", (e, url: unknown) => {
     if (deLaApp(e) && typeof url === "string") abrirPanel(url);
+  });
+  ipcMain.on("vista-previa", (e, html: unknown, encima: unknown) => {
+    if (deLaApp(e) && typeof html === "string") abrirVistaPrevia(html, encima !== false);
   });
   ipcMain.on("ventana", (e, accion: unknown) => {
     if (!deLaApp(e) || !ventana) return;

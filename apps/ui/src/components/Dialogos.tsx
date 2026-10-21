@@ -31,7 +31,9 @@ export function DialogoReauth() {
       await reautenticarConBiometria();
       await listo();
     } catch (err) {
-      setError(mensajeDeError(err));
+      // Si la cancelas, queda el PIN a la mano sin mostrar error.
+      const texto = mensajeDeError(err);
+      if (!/cancel/i.test(texto)) setError(texto);
     }
   };
 

@@ -5,6 +5,7 @@
  * - PC: la app de Windows se actualiza sola (electron-updater) y sus pantallas
  *   vienen del servidor, así que siempre están al día.
  */
+import { compararVersiones } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Download, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
@@ -17,23 +18,7 @@ interface InfoActualizacion {
   apk: { nombre: string; url: string; fecha: string } | null;
 }
 
-/** Etapa al final de la versión: "b" (beta, en pruebas) va antes que "a" (pública) y sin letra cuenta como pública. */
-const ETAPA: Record<string, number> = { b: 0, a: 1, "": 1 };
-
-/** 1 si a > b, -1 si a < b, 0 si son iguales ("0.10.0" > "0.9.3", "0.9.0a" > "0.9.0b"). */
-export function compararVersiones(a: string, b: string): number {
-  const partes = (v: string) => {
-    const m = /^([\d.]+)([a-z]?)/i.exec(v.trim());
-    return { nums: (m?.[1] ?? v).split(".").map((n) => Number.parseInt(n, 10) || 0), etapa: ETAPA[(m?.[2] ?? "").toLowerCase()] ?? 1 };
-  };
-  const pa = partes(a);
-  const pb = partes(b);
-  for (let i = 0; i < Math.max(pa.nums.length, pb.nums.length); i++) {
-    const d = (pa.nums[i] ?? 0) - (pb.nums[i] ?? 0);
-    if (d !== 0) return d > 0 ? 1 : -1;
-  }
-  return Math.sign(pa.etapa - pb.etapa);
-}
+export { compararVersiones };
 
 function useActualizacion() {
   return useQuery({

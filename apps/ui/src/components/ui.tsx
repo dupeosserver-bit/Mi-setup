@@ -6,7 +6,6 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 import { createPortal } from "react-dom";
@@ -72,16 +71,8 @@ export const AreaTexto = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<
   },
 );
 
-export const Selector = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Selector(
-  { className, children, ...props },
-  ref,
-) {
-  return (
-    <select ref={ref} className={cx(CAMPO, "h-10", className)} {...props}>
-      {children}
-    </select>
-  );
-});
+// Selector propio con el estilo de la interfaz (no el menú feo del sistema).
+export { Selector } from "./Selector";
 
 export function Campo({
   etiqueta,

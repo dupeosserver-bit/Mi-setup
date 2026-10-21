@@ -1,4 +1,5 @@
 /** Cripto: precios en vivo (CoinGecko) de tu lista de monedas. Solo datos, no es asesoría financiera. */
+import { Paginas } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, RefreshCw, Search, X } from "lucide-react";
 import { useState } from "react";
@@ -120,21 +121,9 @@ function ExplorarCripto({ moneda, misIds, alAgregar }: { moneda: "mxn" | "usd" |
           </tbody>
         </table>
       </div>
-      {paginas > 1 ? (
-        <div className="mt-3 flex items-center justify-center gap-1">
-          <Boton tamano="sm" variante="secundario" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>
-            Anterior
-          </Boton>
-          {Array.from({ length: Math.min(5, paginas) }, (_, i) => Math.min(Math.max(1, pagina - 2), Math.max(1, paginas - 4)) + i).map((n) => (
-            <Boton key={n} tamano="sm" variante={n === pagina ? "primario" : "fantasma"} onClick={() => setPagina(n)}>
-              {n}
-            </Boton>
-          ))}
-          <Boton tamano="sm" variante="secundario" disabled={pagina >= paginas} onClick={() => setPagina(pagina + 1)}>
-            Siguiente
-          </Boton>
-        </div>
-      ) : null}
+      <div className="mt-3">
+        <Paginas pagina={pagina} total={paginas} alCambiar={setPagina} />
+      </div>
       <p className="mt-2 text-xs text-tenue">
         Para comparar: las más grandes suelen ser menos arriesgadas y las que más suben también pueden caer igual de rápido. Esto son datos, no una recomendación: nadie sabe qué subirá. Invierte solo lo que puedas perder.
       </p>

@@ -47,6 +47,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, api } from "../lib/api";
 import { compartirConApps, guardarEnDispositivo } from "../lib/compartir";
+import { guardarBlob } from "../lib/guardar";
 import { extensionDe, fmtDuracion, grabarAudio, type Grabacion } from "../lib/grabadora";
 import { dictar } from "../lib/voz";
 import { confirmar } from "../lib/confirmar";
@@ -187,11 +188,11 @@ function Dibujo({ alGuardar, alCerrar }: { alGuardar: (png: Blob) => Promise<voi
           </label>
           <label className="flex items-center gap-2">
             Fondo
-            <select value={fondo} onChange={(e) => setFondo(e.target.value as typeof fondo)} className="rounded-lg border border-borde bg-fondo px-2 py-1">
+            <Selector value={fondo} onChange={(e) => setFondo(e.target.value as typeof fondo)} className="h-8 w-auto rounded-lg px-2">
               <option value="blanco">Blanco</option>
               <option value="oscuro">Oscuro</option>
               <option value="transparente">Transparente</option>
-            </select>
+            </Selector>
           </label>
         </div>
         <canvas
@@ -746,12 +747,25 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
             variante="secundario"
             icono={Download}
             onClick={async () => {
-              let donde = "";
-              for (const a of adjuntos.data ?? []) donde = await guardarEnDispositivo(api_base(a.url), a.nombre).catch(() => donde);
-              avisar(donde ? `Guardados en ${donde}` : "No se pudo guardar");
+              // Un solo .zip con la nota, las fotos, los archivos y las notas de voz.
+              try {
+                const { crearZip } = await import("../lib/zip");
+                const archivos = [{ nombre: `${(titulo || "nota").slice(0, 60)}.md`, datos: new TextEncoder().encode(contenido) }];
+                let fallidos = 0;
+                for (const a of adjuntos.data ?? []) {
+                  const r = await fetch(api_base(a.url)).catch(() => null);
+                  if (!r?.ok) fallidos++;
+                  else archivos.push({ nombre: a.nombre, datos: new Uint8Array(await r.arrayBuffer()) });
+                }
+                const zip = crearZip(archivos);
+                const donde = await guardarBlob(new Blob([zip], { type: "application/zip" }), `${(titulo || "nota").replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 60) || "nota"}.zip`, { aviso: false });
+                avisar(`Guardado en ${donde}${fallidos ? ` (${fallidos} no se pudieron bajar)` : ""}`);
+              } catch (err) {
+                avisarError(err);
+              }
             }}
           >
-            Guardar todos en este dispositivo
+            Guardar todo en un .zip
           </Boton>
           <ul className="mt-2 space-y-1">
             {adjuntos.data.map((a) => (

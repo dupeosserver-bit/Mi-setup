@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("miSetup", {
   sistema: () => ipcRenderer.invoke("sistema"),
   abrirNavegadorPrivado: (url?: string) => ipcRenderer.send("privado", url),
   abrirPanel: (url: string) => ipcRenderer.send("panel", url),
+  /** Vista previa HTML en ventana flotante (0.11.2b+). */
+  abrirVistaPrevia: (html: string, encima?: boolean) => ipcRenderer.send("vista-previa", html, encima),
   abrirExterno: (url: string) => ipcRenderer.send("externo", url),
   notificar: (titulo: string, cuerpo: string) => ipcRenderer.send("notificar", titulo, cuerpo),
   ventana: (accion: AccionVentana) => ipcRenderer.send("ventana", accion),

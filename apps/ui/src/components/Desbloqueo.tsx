@@ -1,6 +1,6 @@
 /** Crear o abrir la bóveda con la clave maestra (nunca sale de este dispositivo). */
 import { Fingerprint, KeyRound, Lock, ShieldAlert } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { mensajeDeError } from "../lib/api";
 import { abrirBoveda, crearBoveda, useBoveda, useConfigBoveda } from "../lib/boveda/estado";
 import { abrirRapido, aperturaRapida } from "../lib/boveda/rapida";
@@ -34,6 +34,27 @@ export function Desbloqueo({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [trabajando, setTrabajando] = useState(false);
   const rapida = aperturaRapida();
+  const intentado = useRef(false);
+
+  const abrirConRapida = async () => {
+    setError(null);
+    setTrabajando(true);
+    try {
+      await abrirRapido(config.data!);
+    } catch (err) {
+      const texto = mensajeDeError(err);
+      if (!/cancel/i.test(texto)) setError(texto);
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  // Con huella o PIN activados se piden solos al entrar: si son correctos, abre directo.
+  useEffect(() => {
+    if (clave || intentado.current || !rapida || !config.data?.configurada) return;
+    intentado.current = true;
+    void abrirConRapida();
+  }, [clave, config.data?.configurada]);
 
   if (clave) return <>{children}</>;
   if (config.isLoading) return <Cargando />;
@@ -72,17 +93,7 @@ export function Desbloqueo({ children }: { children: ReactNode }) {
               className="w-full"
               icono={Fingerprint}
               cargando={trabajando}
-              onClick={async () => {
-                setError(null);
-                setTrabajando(true);
-                try {
-                  await abrirRapido(config.data!);
-                } catch (err) {
-                  setError(mensajeDeError(err));
-                } finally {
-                  setTrabajando(false);
-                }
-              }}
+              onClick={() => void abrirConRapida()}
             >
               {rapida.metodo === "huella" ? "Abrir con huella" : "Abrir con mi PIN"}
             </Boton>

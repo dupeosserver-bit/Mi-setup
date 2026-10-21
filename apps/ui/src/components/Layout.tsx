@@ -39,6 +39,19 @@ export async function cerrarSesion(): Promise<void> {
   queryClient.clear();
 }
 
+/** Alto más grande visto con este ancho: así el teclado del celular no cambia la forma de la pantalla. */
+let altoMaximo = { ancho: 0, alto: 0 };
+
+/**
+ * Ancho ÷ alto de la pantalla. Al abrir el teclado solo baja el alto; si se
+ * usara ese alto, el fondo pasaba a «imagen completa» y salía dos veces.
+ */
+export function formaPantalla(ancho = window.innerWidth, alto = window.innerHeight): number {
+  if (ancho !== altoMaximo.ancho) altoMaximo = { ancho, alto };
+  else altoMaximo.alto = Math.max(altoMaximo.alto, alto);
+  return ancho / Math.max(1, altoMaximo.alto);
+}
+
 /**
  * Fondo de pantalla que se adapta: en PC usa el «fondo para PC» si hay. Si la
  * imagen no tiene la forma de la pantalla (ej. una foto vertical en una
@@ -46,12 +59,12 @@ export async function cerrarSesion(): Promise<void> {
  * imagen oscurecida, en lugar de recortarla.
  */
 function useFondo(fondo: string | null, fondoPc: string | null, ajuste: "auto" | "llenar" | "completo") {
-  const [ancho, setAncho] = useState(() => (typeof window === "undefined" ? 1 : window.innerWidth / Math.max(1, window.innerHeight)));
+  const [ancho, setAncho] = useState(() => (typeof window === "undefined" ? 1 : formaPantalla()));
   const pc = ancho > 1.2 && typeof window !== "undefined" && window.innerWidth >= 768;
   const url = (pc && fondoPc) || fondo;
   const [forma, setForma] = useState<number | null>(null);
   useEffect(() => {
-    const alCambiar = () => setAncho(window.innerWidth / Math.max(1, window.innerHeight));
+    const alCambiar = () => setAncho(formaPantalla());
     window.addEventListener("resize", alCambiar);
     return () => window.removeEventListener("resize", alCambiar);
   }, []);

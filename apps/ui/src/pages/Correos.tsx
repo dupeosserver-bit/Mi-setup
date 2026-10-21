@@ -1,4 +1,5 @@
 /** Correos temporales: direcciones alias@dominio, bandeja y "Guardar" para que no expiren (24 h). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Bookmark, BookmarkCheck, Copy, Inbox, Mail, Plus, Shuffle, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -124,7 +125,9 @@ export default function Correos() {
     refetchInterval: 30_000,
   });
 
+  const pag136 = usePaginado(mensajes.data, 25);
   return (
+    <>
     <>
       <Encabezado
         titulo="Correos temporales"
@@ -174,7 +177,7 @@ export default function Correos() {
         <div className={cx("space-y-2", abierto && "hidden lg:block")}>
           {mensajes.isLoading ? <Cargando /> : null}
           {mensajes.data?.length === 0 ? <Vacio icono={Inbox} texto="La bandeja está vacía." /> : null}
-          {mensajes.data?.map((m) => (
+          {pag136.visibles.map((m) => (
             <div key={m.id} className={cx("rounded-xl border p-3", abierto === m.id ? "border-acento/60 bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}>
               <button type="button" onClick={() => setAbierto(m.id)} className="w-full text-left">
                 <p className="truncate text-sm font-medium">{m.asunto || "(sin asunto)"}</p>
@@ -204,6 +207,8 @@ export default function Correos() {
       <Modal abierto={nuevo} titulo="Nueva dirección" alCerrar={() => setNuevo(false)}>
         {alias.data ? <NuevoAlias dominio={alias.data.dominio} alTerminar={() => setNuevo(false)} /> : null}
       </Modal>
+    </>
+    {pag136.paginas}
     </>
   );
 }

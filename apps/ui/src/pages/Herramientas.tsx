@@ -5,13 +5,15 @@
  * - Emojis secretos: esconde un mensaje o código dentro de un emoji.
  * - Vista previa HTML/CSS/JS al instante, en tamaño celular, tableta o PC.
  */
-import { Code2, Copy, Download, Eye, ImagePlus, Monitor, Play, QrCode, Save, Smartphone, Sparkles, Tablet, Trash2, Wand2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Code2, Copy, Download, ExternalLink, Eye, ImagePlus, Monitor, Play, QrCode, Save, Smartphone, Sparkles, Tablet, Trash2, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { CodigoQr, ESTILO_BASICO, type CodigoQrRef, type EstiloQr } from "../components/CodigoQr";
 import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { esconderEnEmoji, revelarDeEmoji } from "../lib/emojis";
 import { API_BASE } from "../lib/api";
+import { escritorio } from "../lib/plataforma";
 import { guardarBlob } from "../lib/guardar";
 
 // ---------------------------------------------------------------- utilidades
@@ -420,6 +422,100 @@ export function documentoDe(c: { html: string; css: string; js: string }): strin
 
 const TAMANOS = { celular: { ancho: 375, icono: Smartphone }, tableta: { ancho: 768, icono: Tablet }, pc: { ancho: 1280, icono: Monitor } } as const;
 
+/**
+ * Marco aislado con la página. Se adapta al ancho disponible: si el tamaño
+ * elegido (ej. PC, 1280 px) no cabe en el celular, se ve completo a escala.
+ */
+function MarcoVista({ doc, ancho, alto = 0.5, actualizar }: { doc: string; ancho: number; alto?: number; actualizar: number }) {
+  const caja = useRef<HTMLDivElement>(null);
+  const marco = useRef<HTMLIFrameElement>(null);
+  const listo = useRef(false);
+  const ultimo = useRef(doc);
+  ultimo.current = doc;
+  const [disponible, setDisponible] = useState(ancho);
+  const [altoCaja, setAltoCaja] = useState(400);
+  useEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    const medir = () => {
+      setDisponible(el.clientWidth || ancho);
+      // alto < 0: llenar el panel que lo contiene; ≤ 1: parte de la pantalla; si no, píxeles.
+      const deseado = alto < 0 ? (el.parentElement?.clientHeight ?? 400) - 4 : alto <= 1 ? window.innerHeight * alto : alto;
+      setAltoCaja(Math.max(200, Math.round(deseado)));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ancho, alto]);
+  useEffect(() => {
+    const alMensaje = (e: MessageEvent) => {
+      if (e.source !== marco.current?.contentWindow || e.data !== "vista-previa-lista") return;
+      listo.current = true;
+      marco.current?.contentWindow?.postMessage(ultimo.current, "*");
+    };
+    window.addEventListener("message", alMensaje);
+    return () => window.removeEventListener("message", alMensaje);
+  }, []);
+  useEffect(() => {
+    if (listo.current) marco.current?.contentWindow?.postMessage(ultimo.current, "*");
+  }, [actualizar]);
+  const escala = Math.min(1, disponible / ancho);
+  return (
+    <div ref={caja} className="w-full overflow-hidden rounded-xl border border-borde bg-white" style={{ height: altoCaja }}>
+      {/* Página aislada del servidor + sandbox sin allow-same-origin: el código corre sin acceso a la app ni a tu sesión. */}
+      <iframe
+        ref={marco}
+        title="Vista previa"
+        sandbox="allow-scripts allow-modals"
+        src={`${API_BASE}/vista-previa`}
+        style={{ width: ancho, height: altoCaja / escala, transform: `scale(${escala})`, transformOrigin: "top left", marginLeft: escala === 1 ? Math.max(0, (disponible - ancho) / 2) : 0 }}
+        className="block border-0"
+      />
+    </div>
+  );
+}
+
+/** Ventana flotante dentro de la app (web y celular): se mueve, cambia de tamaño y se minimiza. */
+function VentanaFlotante({ titulo, alCerrar, children }: { titulo: string; alCerrar: () => void; children: ReactNode }) {
+  const chico = window.innerWidth < 640;
+  const [pos, setPos] = useState(() => (chico ? { x: 8, y: 72 } : { x: window.innerWidth - 460, y: 90 }));
+  const [min, setMin] = useState(false);
+  const arrastre = useRef<{ dx: number; dy: number } | null>(null);
+  return createPortal(
+    <div
+      className="fixed z-[80] flex flex-col overflow-hidden rounded-2xl border border-borde bg-superficie shadow-2xl"
+      style={{ left: pos.x, top: pos.y, width: chico ? window.innerWidth - 16 : 440, height: min ? undefined : chico ? "60vh" : 640, resize: chico || min ? "none" : "both", maxWidth: "calc(100vw - 16px)" }}
+    >
+      <div
+        className="flex shrink-0 cursor-move touch-none select-none items-center gap-2 border-b border-borde px-3 py-2 text-sm"
+        onPointerDown={(e) => {
+          arrastre.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          if (!arrastre.current) return;
+          setPos({ x: Math.min(window.innerWidth - 80, Math.max(0, e.clientX - arrastre.current.dx)), y: Math.min(window.innerHeight - 48, Math.max(0, e.clientY - arrastre.current.dy)) });
+        }}
+        onPointerUp={() => {
+          arrastre.current = null;
+        }}
+      >
+        <Eye className="h-4 w-4 text-acento" />
+        <span className="min-w-0 flex-1 truncate font-medium">{titulo}</span>
+        <button type="button" className="rounded-lg px-2 text-tenue hover:bg-tarjeta hover:text-texto" onClick={() => setMin(!min)} aria-label={min ? "Mostrar" : "Minimizar"}>
+          {min ? "▢" : "–"}
+        </button>
+        <button type="button" className="rounded-lg px-2 text-tenue hover:bg-tarjeta hover:text-texto" onClick={alCerrar} aria-label="Cerrar">
+          ✕
+        </button>
+      </div>
+      {min ? null : <div className="min-h-0 flex-1 p-2">{children}</div>}
+    </div>,
+    document.body,
+  );
+}
+
 function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
   const navegar = useNavigate();
   const [codigo, setCodigo] = useState<Omit<Diseno, "id" | "nombre">>(EJEMPLO);
@@ -434,29 +530,21 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
     if (inicial) setCodigo({ html: inicial, css: "", js: "" });
   }, [inicial]);
 
-  // El marco avisa cuando está listo; después se le manda el código (al dejar de
-  // escribir si "Actualizar mientras escribo" está activo, o al tocar Ejecutar).
-  const marco = useRef<HTMLIFrameElement>(null);
-  const listo = useRef(false);
-  const ultimo = useRef(doc);
-  ultimo.current = doc;
-  const mostrar = (d: string) => {
-    if (listo.current) marco.current?.contentWindow?.postMessage(d, "*");
-  };
-  useEffect(() => {
-    const alMensaje = (e: MessageEvent) => {
-      if (e.source !== marco.current?.contentWindow || e.data !== "vista-previa-lista") return;
-      listo.current = true;
-      mostrar(ultimo.current);
-    };
-    window.addEventListener("message", alMensaje);
-    return () => window.removeEventListener("message", alMensaje);
-  }, []);
+  // El código se manda a los marcos al dejar de escribir (si "Actualizar mientras
+  // escribo" está activo) o al tocar Ejecutar.
+  const [actualizar, setActualizar] = useState(0);
+  const mostrar = (_d?: string) => setActualizar((n) => n + 1);
   useEffect(() => {
     if (!auto) return;
     const t = setTimeout(() => mostrar(doc), 400);
     return () => clearTimeout(t);
   }, [doc, auto]);
+  // Ventana flotante: en la app de PC es una ventana aparte; en web y celular, un panel que se mueve.
+  const pc = escritorio();
+  const [flotante, setFlotante] = useState(false);
+  useEffect(() => {
+    if (flotante && pc?.abrirVistaPrevia) pc.abrirVistaPrevia(doc);
+  }, [flotante, actualizar]);
 
   const guardar = () => {
     const d: Diseno = { id: crypto.randomUUID(), nombre: nombre.trim() || `Diseño ${disenos.length + 1}`, ...codigo };
@@ -531,19 +619,12 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
             </div>
           }
         >
-          <div className="overflow-auto rounded-xl border border-borde bg-white">
-            {/* Página aislada del servidor + sandbox sin allow-same-origin: el código corre sin acceso a la app ni a tu sesión. */}
-            <iframe
-              ref={marco}
-              title="Vista previa"
-              sandbox="allow-scripts allow-modals"
-              src={`${API_BASE}/vista-previa`}
-              style={{ width: ancho, maxWidth: tamano === "pc" ? "none" : "100%" }}
-              className="mx-auto block h-[50vh] border-0"
-            />
-          </div>
+          <MarcoVista doc={doc} ancho={ancho} actualizar={actualizar} />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-tenue">Ancho: {ancho} px. El código corre aislado: no puede tocar tu cuenta.</p>
+            <Boton tamano="sm" icono={ExternalLink} onClick={() => (pc?.abrirVistaPrevia ? (pc.abrirVistaPrevia(doc), setFlotante(true)) : setFlotante(!flotante))}>
+              {flotante && !pc?.abrirVistaPrevia ? "Cerrar ventana flotante" : "Ventana flotante"}
+            </Boton>
             <label className="flex items-center gap-2 text-xs text-tenue">
               <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-acento" />
               Actualizar mientras escribo
@@ -551,6 +632,11 @@ function VistaPreviaHtml({ inicial }: { inicial: string | null }) {
           </div>
         </Tarjeta>
       </div>
+      {flotante && !pc?.abrirVistaPrevia ? (
+        <VentanaFlotante titulo={`Vista previa · ${tamano}`} alCerrar={() => setFlotante(false)}>
+          <MarcoVista doc={doc} ancho={ancho} alto={-1} actualizar={actualizar} />
+        </VentanaFlotante>
+      ) : null}
       {disenos.length ? (
         <Tarjeta titulo="Mis diseños">
           <div className="flex flex-wrap gap-2">

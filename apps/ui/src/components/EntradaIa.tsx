@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { useModelosExtra } from "../lib/ia-modelos";
 import { useGuardarPreferencias, usePreferencias } from "../lib/preferencias";
 import { escuchar } from "../lib/voz";
-import { AreaTexto, Boton, avisar, avisarError, cx } from "./ui";
+import { AreaTexto, Boton, Selector, avisar, avisarError, cx } from "./ui";
 
 export interface AdjuntoIa {
   nombre: string;
@@ -178,10 +178,10 @@ export function EntradaIa({
         }}
       />
       <div className="flex items-center justify-between gap-2 text-[11px] text-tenue">
-        <select
+        <Selector
           value={prefs.ia.modelo ?? ""}
           onChange={(e) => guardar((p) => ({ ...p, ia: { modelo: (e.target.value || null) as ModeloElegido | null } }))}
-          className="rounded-lg border border-borde bg-superficie px-2 py-1 text-[11px] text-texto"
+          className="h-7 w-auto max-w-[11rem] rounded-lg px-2 text-[11px]"
           aria-label="Modelo de IA"
         >
           <option value="">Modelo del servidor</option>
@@ -195,7 +195,7 @@ export function EntradaIa({
               {m.nombre}
             </option>
           ))}
-        </select>
+        </Selector>
         <span>Fotos, PDF y texto · máx. 5 MB c/u</span>
       </div>
     </div>

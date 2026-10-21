@@ -47,6 +47,31 @@ export function carpetaPara(nombre: string): string | null {
   return CARPETAS.find(([re]) => re.test(nombre))?.[1] ?? null;
 }
 
+/** "archivo.tar.gz" → ["archivo", ".tar.gz"]; "Makefile" → ["Makefile", ""]. */
+export function partirNombre(nombre: string): [string, string] {
+  const doble = /^(.+?)(\.tar\.(?:gz|xz|bz2|zst))$/i.exec(nombre);
+  if (doble) return [doble[1]!, doble[2]!];
+  const punto = nombre.lastIndexOf(".");
+  if (punto <= 0) return [nombre, ""];
+  return [nombre.slice(0, punto), nombre.slice(punto)];
+}
+
+/**
+ * Comando que mueve el archivo a la carpeta sin pisar nada: si ya hay uno con
+ * ese nombre usa «archivo-2.zip», «archivo-3.zip»… Imprime el nombre final.
+ */
+export function comandoMoverSinPisar(origen: string, carpeta: string, archivo: string): string {
+  const [base, ext] = partirNombre(archivo);
+  return [
+    `o=${citar(origen)}; c=${citar(carpeta)}; b=${citar(base)}; e=${citar(ext)}`,
+    `[ -f "$o" ] || exit 1`,
+    `mkdir -p -- "$c" || exit 1`,
+    `d="$c/$b$e"; n=2`,
+    `while [ -e "$d" ]; do d="$c/$b-$n$e"; n=$((n+1)); [ "$n" -gt 9999 ] && exit 1; done`,
+    `mv -n -- "$o" "$d" && [ ! -e "$o" ] && printf '%s' "\${d##*/}"`,
+  ].join("; ");
+}
+
 export interface Movimiento {
   archivo: string;
   carpeta: string;
@@ -169,6 +194,7 @@ export function archivosExtraRoutes(deps: ModuleDeps, servidores: Servidores) {
       return servidores.usar(id, async (cliente, servidor) => {
         let movidos = 0;
         const omitidos: string[] = [];
+        const renombrados: { archivo: string; nuevo: string; carpeta: string }[] = [];
         for (const m of d.movimientos) {
           if (!carpetaPara(m.archivo)) {
             omitidos.push(m.archivo);
@@ -176,13 +202,18 @@ export function archivosExtraRoutes(deps: ModuleDeps, servidores: Servidores) {
           }
           const origen = posix.join(d.ruta, m.archivo);
           const carpeta = posix.join(d.ruta, m.carpeta);
-          // mv -n: si ya hay uno con ese nombre, no se pisa (queda donde estaba).
-          const r = await ejecutar(cliente, `[ -f ${citar(origen)} ] && mkdir -p -- ${citar(carpeta)} && mv -n -- ${citar(origen)} ${citar(`${carpeta}/`)} && [ ! -e ${citar(origen)} ]`, { timeoutMs: 30_000 });
-          if (r.codigo === 0) movidos++;
-          else omitidos.push(m.archivo);
+          // Si ya hay uno con ese nombre en la carpeta, no se pisa: se le agrega -2, -3…
+          const r = await ejecutar(cliente, comandoMoverSinPisar(origen, carpeta, m.archivo), { timeoutMs: 30_000 });
+          if (r.codigo !== 0) {
+            omitidos.push(m.archivo);
+            continue;
+          }
+          movidos++;
+          const final = r.salida.trim();
+          if (final && final !== m.archivo) renombrados.push({ archivo: m.archivo, nuevo: final, carpeta: m.carpeta });
         }
-        await registrar(request, "archivos_organizados", `${servidor.name}:${d.ruta}`, { movidos, omitidos: omitidos.length });
-        return { movidos, omitidos };
+        await registrar(request, "archivos_organizados", `${servidor.name}:${d.ruta}`, { movidos, omitidos: omitidos.length, renombrados: renombrados.length });
+        return { movidos, omitidos, renombrados };
       });
     });
 
