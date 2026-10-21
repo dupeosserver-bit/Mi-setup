@@ -9,9 +9,10 @@ import { Code2, Copy, Download, Eye, ImagePlus, Monitor, Play, QrCode, Save, Sma
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { CodigoQr, ESTILO_BASICO, type CodigoQrRef, type EstiloQr } from "../components/CodigoQr";
-import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, cx } from "../components/ui";
+import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { esconderEnEmoji, revelarDeEmoji } from "../lib/emojis";
 import { API_BASE } from "../lib/api";
+import { guardarBlob } from "../lib/guardar";
 
 // ---------------------------------------------------------------- utilidades
 
@@ -49,12 +50,7 @@ function guardarLocal(clave: string, valor: unknown) {
 }
 
 function bajarBlob(b: Blob, nombre: string) {
-  const url = URL.createObjectURL(b);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  void guardarBlob(b, nombre).catch(avisarError);
 }
 
 // ---------------------------------------------------------------- QR

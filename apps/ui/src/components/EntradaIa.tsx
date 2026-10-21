@@ -3,9 +3,10 @@
  * dictar con el micrófono y elegir el modelo. La usan el botón flotante y la
  * página IA.
  */
-import { MODELOS_IA, type ModeloIa } from "@mi-setup/shared";
+import { MODELOS_IA, type ModeloElegido, type ModeloIa } from "@mi-setup/shared";
 import { FileText, ImageIcon, Mic, Paperclip, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useModelosExtra } from "../lib/ia-modelos";
 import { useGuardarPreferencias, usePreferencias } from "../lib/preferencias";
 import { escuchar } from "../lib/voz";
 import { AreaTexto, Boton, avisar, avisarError, cx } from "./ui";
@@ -59,6 +60,7 @@ export function EntradaIa({
   const [escuchando, setEscuchando] = useState(false);
   const archivo = useRef<HTMLInputElement>(null);
   const prefs = usePreferencias();
+  const extras = useModelosExtra();
   const guardar = useGuardarPreferencias();
 
   const agregar = async (lista: FileList | null) => {
@@ -178,7 +180,7 @@ export function EntradaIa({
       <div className="flex items-center justify-between gap-2 text-[11px] text-tenue">
         <select
           value={prefs.ia.modelo ?? ""}
-          onChange={(e) => guardar((p) => ({ ...p, ia: { modelo: (e.target.value || null) as ModeloIa | null } }))}
+          onChange={(e) => guardar((p) => ({ ...p, ia: { modelo: (e.target.value || null) as ModeloElegido | null } }))}
           className="rounded-lg border border-borde bg-superficie px-2 py-1 text-[11px] text-texto"
           aria-label="Modelo de IA"
         >
@@ -186,6 +188,11 @@ export function EntradaIa({
           {(Object.keys(MODELOS_IA) as ModeloIa[]).map((m) => (
             <option key={m} value={m}>
               {MODELOS_IA[m].nombre}
+            </option>
+          ))}
+          {extras.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nombre}
             </option>
           ))}
         </select>

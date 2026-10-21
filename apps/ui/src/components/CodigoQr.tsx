@@ -4,6 +4,7 @@
  */
 import QRCodeStyling, { type Options } from "qr-code-styling";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { guardarBlob } from "../lib/guardar";
 
 export interface EstiloQr {
   color: string;
@@ -64,7 +65,8 @@ export const CodigoQr = forwardRef<CodigoQrRef, { datos: string; tamano?: number
 
   useImperativeHandle(ref, () => ({
     descargar: async (nombre, formato = "png") => {
-      await qr.current?.download({ name: nombre, extension: formato });
+      const b = await qr.current?.getRawData(formato);
+      if (b instanceof Blob) await guardarBlob(b, `${nombre}.${formato}`);
     },
     comoBlob: async () => {
       const b = await qr.current?.getRawData("png");

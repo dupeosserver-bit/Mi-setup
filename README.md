@@ -4,7 +4,7 @@ Tu propio centro de control en la nube: una app para **PC (Windows)**, **celular
 
 Es **código abierto**: cualquiera puede instalar su propio Mi Setup en su VPS y mejorarlo. Cada instalación es independiente y **usa sus propias claves** (nadie comparte las suyas).
 
-> Versión actual: **0.11.0b** (b = beta). Guía completa en [`docs/USO.md`](docs/USO.md).
+> Versión actual: **0.11.1**. Guía completa en [`docs/USO.md`](docs/USO.md).
 
 ## Qué incluye
 

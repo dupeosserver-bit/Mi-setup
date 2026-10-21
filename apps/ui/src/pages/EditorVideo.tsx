@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Boton, Campo, Encabezado, Entrada, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
+import { guardarBlob } from "../lib/guardar";
 import { fmtBytes } from "../lib/formato";
 
 // ---------------------------------------------------------------- tipos
@@ -604,10 +605,7 @@ export default function EditorVideo() {
   };
   const descargarVideo = () => {
     if (!resultado) return;
-    const a = document.createElement("a");
-    a.href = resultado.url;
-    a.download = `${nombreVideo.replace(/[^\w.-]+/g, "_") || "video"}.${resultado.ext}`;
-    a.click();
+    void guardarBlob(resultado.blob, `${nombreVideo.replace(/[^\w.-]+/g, "_") || "video"}.${resultado.ext}`).catch(avisarError);
   };
 
   // ---------------------------------------------------------------- pantalla

@@ -3,6 +3,7 @@
  * archivos en el dispositivo. En el celular usa la hoja de compartir del
  * sistema (con las fotos como archivos); en la PC, la de Windows si existe.
  */
+import { guardarBlob } from "./guardar";
 import { esMovil } from "./plataforma";
 
 export interface ArchivoParaCompartir {
@@ -56,18 +57,5 @@ export async function compartirConApps(datos: { titulo: string; texto: string; a
 export async function guardarEnDispositivo(url: string, nombre: string): Promise<string> {
   const r = await fetch(url);
   if (!r.ok) throw new Error("No se pudo bajar el archivo");
-  const blob = await r.blob();
-  if (esMovil()) {
-    const { Filesystem, Directory } = await import("@capacitor/filesystem");
-    const ruta = `MiSetup/${limpio(nombre)}`;
-    await Filesystem.writeFile({ path: ruta, data: await aBase64(blob), directory: Directory.Documents, recursive: true });
-    return `Documentos/${ruta}`;
-  }
-  const enlace = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = enlace;
-  a.download = limpio(nombre);
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(enlace), 10_000);
-  return "Descargas";
+  return guardarBlob(await r.blob(), nombre, { aviso: false });
 }

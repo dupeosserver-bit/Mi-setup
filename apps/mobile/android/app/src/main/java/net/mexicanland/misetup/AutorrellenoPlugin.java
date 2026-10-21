@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.view.autofill.AutofillManager;
+import androidx.biometric.BiometricManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -33,6 +34,17 @@ public class AutorrellenoPlugin extends Plugin {
         r.put("activo", activo);
         r.put("entradas", entradas);
         call.resolve(r);
+    }
+
+    /** ¿Hay huella o rostro registrados? (respaldo por si el plugin de huella no la detecta). */
+    @PluginMethod
+    public void huella(PluginCall call) {
+        BiometricManager bm = BiometricManager.from(getContext());
+        int r = bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.BIOMETRIC_WEAK);
+        JSObject o = new JSObject();
+        o.put("disponible", r == BiometricManager.BIOMETRIC_SUCCESS);
+        o.put("sinRegistrar", r == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED);
+        call.resolve(o);
     }
 
     @PluginMethod

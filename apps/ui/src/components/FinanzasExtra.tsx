@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Camera, Check, Copy, HandCoins, Plus, Receipt, Share2, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../lib/api";
+import { compartirConApps } from "../lib/compartir";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { ResultadoNegociacion } from "./IaExtras";
@@ -310,16 +311,108 @@ function textoDePersona(p: Persona): string {
 }
 
 async function compartirTexto(texto: string): Promise<void> {
-  if (navigator.share) {
-    try {
-      await navigator.share({ text: texto });
-      return;
-    } catch {
-      /* canceló o no se pudo: se copia */
-    }
-  }
-  await navigator.clipboard.writeText(texto);
-  avisar("Copiado: pégalo en WhatsApp o donde quieras");
+  // Hoja de compartir del sistema (también en la app del celular); si no hay, se copia.
+  const r = await compartirConApps({ titulo: "Pagos", texto }).catch(async () => {
+    await navigator.clipboard.writeText(texto);
+    return "copiado" as const;
+  });
+  if (r === "copiado") avisar("Copiado: pégalo en WhatsApp o donde quieras");
+}
+
+interface MovimientoBase {
+  id: string;
+  tipo: "gasto" | "ingreso";
+  monto: number;
+  categoria: string;
+  descripcion: string;
+  fecha: string;
+}
+interface SuscripcionBase {
+  id: string;
+  nombre: string;
+  monto: number;
+  ciclo: "semanal" | "mensual" | "trimestral" | "anual";
+  proximoCobro: string;
+  activa: boolean;
+}
+
+/** Tomar los datos de un gasto que ya anotaste o de una suscripción que ya tienes. */
+function TomarDe({ alElegir }: { alElegir: (d: { nombre: string; total: number; ciclo: PagoDividido["ciclo"]; primerCobro: string; notas: string }) => void }) {
+  const [origen, setOrigen] = useState<"" | "movimiento" | "suscripcion">("");
+  const movimientos = useQuery({
+    queryKey: ["finanzas-personales", "movimientos", "para-dividir"],
+    queryFn: () => api<MovimientoBase[]>("/api/finanzas-personales/movimientos"),
+    enabled: origen === "movimiento",
+    select: (l) => l.filter((m) => m.tipo === "gasto").slice(0, 60),
+  });
+  const suscripciones = useQuery({
+    queryKey: ["finanzas-personales", "suscripciones"],
+    queryFn: () => api<{ suscripciones: SuscripcionBase[] }>("/api/finanzas-personales/suscripciones"),
+    enabled: origen === "suscripcion",
+  });
+  return (
+    <div className="rounded-xl bg-fondo p-3">
+      <div className="flex flex-wrap items-center gap-1 text-xs">
+        <span className="mr-1 text-tenue">Tomar de:</span>
+        {(
+          [
+            ["", "Escribirlo"],
+            ["movimiento", "Un gasto que hice"],
+            ["suscripcion", "Una suscripción"],
+          ] as const
+        ).map(([id, texto]) => (
+          <button key={id} type="button" onClick={() => setOrigen(id)} className={cx("rounded-full border px-3 py-1", origen === id ? "border-acento bg-acento text-black" : "border-borde")}>
+            {texto}
+          </button>
+        ))}
+      </div>
+      {origen === "movimiento" ? (
+        <Selector
+          className="mt-2"
+          value=""
+          onChange={(e) => {
+            const m = movimientos.data?.find((x) => x.id === e.target.value);
+            if (m) alElegir({ nombre: (m.descripcion || m.categoria).slice(0, 80), total: m.monto, ciclo: "unico", primerCobro: hoyLocal(), notas: `De tu gasto del ${fechaCorta(m.fecha)}` });
+          }}
+        >
+          <option value="">{movimientos.isLoading ? "Cargando…" : movimientos.data?.length ? "Elige el gasto…" : "No tienes gastos anotados"}</option>
+          {movimientos.data?.map((m) => (
+            <option key={m.id} value={m.id}>
+              {fechaCorta(m.fecha)} · {m.descripcion || m.categoria} · {dinero(m.monto)}
+            </option>
+          ))}
+        </Selector>
+      ) : null}
+      {origen === "suscripcion" ? (
+        <Selector
+          className="mt-2"
+          value=""
+          onChange={(e) => {
+            const s = suscripciones.data?.suscripciones.find((x) => x.id === e.target.value);
+            if (!s) return;
+            // Pagos divididos no tiene ciclo trimestral: se reparte cada mes la tercera parte.
+            const trimestral = s.ciclo === "trimestral";
+            alElegir({
+              nombre: s.nombre.slice(0, 80),
+              total: trimestral ? Math.round((s.monto / 3) * 100) / 100 : s.monto,
+              ciclo: s.ciclo === "trimestral" ? "mensual" : s.ciclo,
+              primerCobro: s.proximoCobro,
+              notas: trimestral ? "Suscripción trimestral: se cobra la tercera parte cada mes" : "De tu suscripción",
+            });
+          }}
+        >
+          <option value="">{suscripciones.isLoading ? "Cargando…" : suscripciones.data?.suscripciones.length ? "Elige la suscripción…" : "No tienes suscripciones"}</option>
+          {suscripciones.data?.suscripciones
+            .filter((s) => s.activa)
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre} · {dinero(s.monto)} {s.ciclo}
+              </option>
+            ))}
+        </Selector>
+      ) : null}
+    </div>
+  );
 }
 
 function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
@@ -353,6 +446,7 @@ function NuevoPagoDividido({ alCerrar }: { alCerrar: () => void }) {
           crear.mutate();
         }}
       >
+        <TomarDe alElegir={(d) => setF((x) => ({ ...x, ...d, total: String(d.total) }))} />
         <div className="grid grid-cols-2 gap-2">
           <Campo etiqueta="¿Qué se paga?">
             <Entrada value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} placeholder="Netflix, renta, internet…" maxLength={80} required />

@@ -524,3 +524,14 @@ tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && d
 ```bash
 tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans && docker compose --env-file /opt/mi-setup/.env restart caddy
 ```
+
+## Versión 0.11.1
+
+- **Descargas en el celular**: todos los botones de descargar (fotos a PDF, convertidor, editor de fotos y video, QR, respaldos, «Descargar mis datos», bóveda, adjuntos) guardan en **Documentos/MiSetup**. Si Android no deja, se abre la hoja de compartir para guardarlo en Archivos o Drive. Compartir (pagos divididos, mensajes de la IA) usa la hoja de compartir del sistema.
+- **Huella y PIN**: el PIN o la huella confirman cualquier acción, también las sensibles (5 PIN mal seguidos cierran la sesión). Si tienes la huella activada, el diálogo la pide solo; en el celular, al confirmar con PIN puedes activarla ahí mismo. La huella se detecta con la librería nueva de Android (hay que reinstalar el APK).
+- **Sitios**: al publicar se crea solo el registro DNS del sitio en Cloudflare (si no lo cubre ya el comodín «*») y se borra al borrar el sitio. «¿No abre? Revisar» crea el registro de ese sitio.
+- **Pterodactyl → Administración**: Servidores (crear, suspender, eliminar), Cuentas (ver, crear, eliminar), Nodos (crear, puertos, config de Wings), Eggs (ver e importar .json) y Blueprint (ver extensiones y quitarlas). Importar eggs y Blueprint se hacen por SSH en el VPS del panel (`/var/www/pterodactyl`).
+- **Agentes como IA del asistente**: en el selector de modelo salen los modelos de Ollama que tengas descargados y Claude Code / Gemini CLI instalados en el VPS (VPS → Agentes; entra una vez con `claude` o `gemini` en la terminal). Los agentes solo responden: no corren comandos ni editan archivos, y no cuentan para el tope de IA.
+- **Pagos divididos**: «Tomar de» un gasto que ya anotaste o de una suscripción que ya tienes.
+- **Respaldo de la base**: si sale «Atrasado», el botón «Respaldar ahora y cada día» corre `deploy/respaldo.sh` y lo deja en el cron del VPS (4:15).
+- **Servidores VPS con llave privada** (de 0.11.0b): la llave se valida al guardarla y «Probar» dice si la rechazaron o si no hubo conexión.

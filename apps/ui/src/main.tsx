@@ -16,10 +16,13 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { queryClient } from "./lib/consultas";
+import { interceptarDescargas } from "./lib/guardar";
 import { aplicarPreferenciasGuardadas } from "./lib/preferencias";
 
 // Tema, fuente y zoom guardados en este dispositivo: se aplican antes de pintar nada.
 aplicarPreferenciasGuardadas();
+// En el celular los <a download> no hacen nada: se guardan con Filesystem.
+interceptarDescargas();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

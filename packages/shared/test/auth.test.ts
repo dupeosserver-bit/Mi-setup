@@ -11,9 +11,9 @@ describe("reautenticación", () => {
     expect(reauthSatisfies({ reauthAt: null, reauthMethod: null }, "pin", ahora)).toBe(false);
   });
 
-  it("el PIN no basta para acciones fuertes; contraseña y biometría sí", () => {
+  it("el PIN, la contraseña y la biometría sirven también para acciones fuertes", () => {
     expect(reauthSatisfies({ reauthAt: hace(1), reauthMethod: "pin" }, "pin", ahora)).toBe(true);
-    expect(reauthSatisfies({ reauthAt: hace(1), reauthMethod: "pin" }, "fuerte", ahora)).toBe(false);
+    expect(reauthSatisfies({ reauthAt: hace(1), reauthMethod: "pin" }, "fuerte", ahora)).toBe(true);
     expect(reauthSatisfies({ reauthAt: hace(1), reauthMethod: "biometria" }, "fuerte", ahora)).toBe(true);
   });
 });

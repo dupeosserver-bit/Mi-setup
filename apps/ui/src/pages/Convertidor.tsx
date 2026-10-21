@@ -6,16 +6,12 @@ import { Download, FileAudio, Image as ImageIcon, Repeat, Table } from "lucide-r
 import { useRef, useState } from "react";
 import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, avisar, avisarError } from "../components/ui";
 import { API_BASE, refrescar } from "../lib/api";
+import { guardarBlob } from "../lib/guardar";
 import { fmtBytes } from "../lib/formato";
 import { useSesion } from "../lib/sesion";
 
 function bajarBlob(b: Blob, nombre: string) {
-  const url = URL.createObjectURL(b);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  void guardarBlob(b, nombre).catch(avisarError);
 }
 
 const sinExtension = (n: string) => n.replace(/\.[^.]+$/, "") || "archivo";

@@ -1,9 +1,10 @@
 /** Pterodactyl: servidores, consola, energía, archivos, respaldos, administración y panel web. */
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Archive, ArrowLeft, ExternalLink, File, Folder, Gamepad2, Play, Power, RotateCw, Send, Skull, Square } from "lucide-react";
+import { Archive, ArrowLeft, ExternalLink, File, Folder, Gamepad2, Play, RotateCw, Send, Skull, Square } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, FaltaConfigurar, Insignia, Modal, Pestanas, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { PteroAdmin } from "../components/PteroAdmin";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
@@ -275,30 +276,6 @@ function PanelWeb({ url }: { url: string }) {
   );
 }
 
-function Administracion() {
-  const q = useQuery({ queryKey: ["ptero", "admin"], queryFn: () => api<{ idApp: number; id: string; nombre: string; suspendido: boolean }[]>("/api/ptero/admin/servidores") });
-  const cambiar = async (s: { idApp: number; nombre: string; suspendido: boolean }) => {
-    const accion = s.suspendido ? "unsuspend" : "suspend";
-    if (!(await confirmar({ titulo: s.suspendido ? "Reactivar servidor" : "Suspender servidor", mensaje: `¿${s.suspendido ? "Reactivar" : "Suspender"} ${s.nombre}?` }))) return;
-    await api(`/api/ptero/admin/servidores/${s.idApp}/${accion}`, { metodo: "POST" }).then(() => queryClient.invalidateQueries({ queryKey: ["ptero"] }), avisarError);
-  };
-  return (
-    <Tarjeta titulo="Todos los servidores (llave de aplicación)">
-      <ErrorCaja error={q.error} />
-      {q.isLoading ? <Cargando /> : null}
-      <ul className="space-y-1">
-        {q.data?.map((s) => (
-          <li key={s.idApp} className="flex items-center gap-2 rounded-lg bg-fondo px-3 py-2 text-sm">
-            <span className="flex-1">{s.nombre}</span>
-            {s.suspendido ? <Insignia tono="peligro">Suspendido</Insignia> : <Insignia tono="ok">Activo</Insignia>}
-            <Boton tamano="sm" icono={Power} onClick={() => void cambiar(s)}>{s.suspendido ? "Reactivar" : "Suspender"}</Boton>
-          </li>
-        ))}
-      </ul>
-    </Tarjeta>
-  );
-}
-
 export default function Pterodactyl() {
   const estado = useQuery({ queryKey: ["ptero", "estado"], queryFn: () => api<Estado>("/api/ptero/estado") });
   const esAdmin = usePuede("pterodactyl", "administrar");
@@ -321,7 +298,7 @@ export default function Pterodactyl() {
       <Encabezado titulo="Pterodactyl" descripcion={estado.data?.url} />
       <Pestanas opciones={opciones} valor={vista} alCambiar={(v) => { setVista(v); setAbierto(null); }} />
       {vista === "panel" && estado.data ? <PanelWeb url={estado.data.url} /> : null}
-      {vista === "admin" ? <Administracion /> : null}
+      {vista === "admin" ? <PteroAdmin /> : null}
       {vista === "servidores" ? (
         estado.data && !estado.data.cliente ? (
           <FaltaConfigurar variable="PTERO_CLIENT_KEY" detalle="Crea una llave de API de cliente (ptlc_) en tu cuenta del panel y agrégala al .env del servidor. Mientras tanto puedes usar el panel web." />

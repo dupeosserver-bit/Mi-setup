@@ -1,6 +1,7 @@
 /** Portapapeles con borrado a los 20 s, exportar/importar cifrado y cambio de clave maestra. */
 import { avisar } from "../../components/ui";
 import { api } from "../api";
+import { guardarBlob } from "../guardar";
 import { queryClient } from "../consultas";
 import { cifrar, claveCorrecta, contextoDe, crearVerificador, derivarClave, descifrar, KDF_POR_DEFECTO, nuevaSal, type ParametrosKdf } from "./cripto";
 import { useBoveda, type Coleccion, type ConfigBoveda } from "./estado";
@@ -52,12 +53,7 @@ export async function exportar(coleccion: Coleccion, config: ConfigBoveda): Prom
     verificador: config.verificador,
     items: items.map((i) => ({ tipo: i.tipo, datos: i.datos })),
   };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(archivo, null, 2)], { type: "application/json" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `mi-setup-${coleccion}-${archivo.exportado.slice(0, 10)}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await guardarBlob(new Blob([JSON.stringify(archivo, null, 2)], { type: "application/json" }), `mi-setup-${coleccion}-${archivo.exportado.slice(0, 10)}.json`);
 }
 
 /** Importa un archivo exportado: lo descifra con su clave maestra y lo vuelve a cifrar con la actual. */

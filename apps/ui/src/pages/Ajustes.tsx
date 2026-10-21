@@ -28,6 +28,7 @@ import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { confirmar } from "../lib/confirmar";
 import { PUEDE_CAMBIAR_SERVIDOR, api, cambiarServidor, olvidarServidor, servidoresRecordados } from "../lib/api";
+import { useModelosExtra } from "../lib/ia-modelos";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
@@ -480,6 +481,7 @@ function TerminalAjustes() {
 
 function VozIa() {
   const prefs = usePreferencias();
+  const extras = useModelosExtra();
   const guardar = useGuardarPreferencias();
   const [voces, setVoces] = useState<SpeechSynthesisVoice[]>([]);
   useEffect(() => {
@@ -505,7 +507,16 @@ function VozIa() {
               </span>
             </label>
           ))}
-          <p className="text-xs text-tenue">El gasto de cada modelo cuenta para el mismo tope mensual (IA → Gasto del mes).</p>
+          {extras.map((m) => (
+            <label key={m.id} className={cx("flex cursor-pointer items-start gap-3 rounded-xl border p-3", prefs.ia.modelo === m.id ? "border-acento" : "border-borde")}>
+              <input type="radio" checked={prefs.ia.modelo === m.id} onChange={() => guardar((p) => ({ ...p, ia: { modelo: m.id } }))} className="mt-1" />
+              <span>
+                <span className="block text-sm font-medium">{m.nombre}</span>
+                <span className="block text-xs text-tenue">{m.detalle}</span>
+              </span>
+            </label>
+          ))}
+          <p className="text-xs text-tenue">El gasto de los modelos Claude cuenta para el tope mensual (IA → Gasto del mes). Ollama y los agentes del VPS no.</p>
         </div>
       </Tarjeta>
       <Tarjeta titulo="Voz de la IA" icono={Volume2}>

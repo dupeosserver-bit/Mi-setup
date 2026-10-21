@@ -39,6 +39,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { API_BASE, api } from "../lib/api";
+import { guardarBlob } from "../lib/guardar";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
 import { fmtBytes } from "../lib/formato";
@@ -462,11 +463,7 @@ export default function EditorFotos() {
   const descargarLocal = async () => {
     const url = salida(formato, calidad);
     const blob = await aBlob(url);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${nombre.replace(/[^\w.-]+/g, "_")}.${formato === "jpeg" ? "jpg" : formato}`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    await guardarBlob(blob, `${nombre.replace(/[^\w.-]+/g, "_")}.${formato === "jpeg" ? "jpg" : formato}`).catch(avisarError);
     setModal(null);
   };
 

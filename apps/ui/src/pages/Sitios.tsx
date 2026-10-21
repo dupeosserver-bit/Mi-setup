@@ -708,9 +708,13 @@ function Conexion({ sitio }: { sitio: Sitio }) {
   const q = useQuery({ queryKey: ["sitios", sitio.id, "diagnostico"], queryFn: () => api<Diagnostico>(`/api/sitios/${sitio.id}/diagnostico`), staleTime: 0, retry: false });
   const maestra = usePuede("sitios", "administrar");
   const arreglar = useMutation({
-    mutationFn: () => (sitio.dominio ? api("/api/cloudflare/dominio", { cuerpo: { dominio: sitio.dominio } }) : api("/api/cloudflare/comodin", { cuerpo: {} })),
-    onSuccess: () => {
-      avisar("Registro DNS listo en Cloudflare. Puede tardar un par de minutos en verse.");
+    mutationFn: () => api<{ resultado: "creado" | "existia" | "comodin" }>(`/api/sitios/${sitio.id}/dns`, { cuerpo: {} }),
+    onSuccess: (r) => {
+      avisar(
+        r.resultado === "creado"
+          ? "Registro DNS creado en Cloudflare. Tarda unos minutos en verse (si el celular dice que no existe, espera ~15 min o prueba con datos móviles)."
+          : "El registro ya existe en Cloudflare: solo falta que se propague (unos minutos).",
+      );
       void q.refetch();
     },
     onError: avisarError,
@@ -747,7 +751,7 @@ function Conexion({ sitio }: { sitio: Sitio }) {
             d.cloudflare ? (
               maestra ? (
                 <Boton className="mt-3" variante="primario" icono={Cloud} cargando={arreglar.isPending} onClick={() => arreglar.mutate()}>
-                  {sitio.dominio ? `Crear el registro de ${sitio.dominio} en Cloudflare` : "Crear el registro «*» en Cloudflare"}
+                  Crear el registro de {d.host} en Cloudflare
                 </Boton>
               ) : (
                 <p className="mt-3 text-xs text-tenue">Pídele a la cuenta maestra que cree el registro DNS.</p>

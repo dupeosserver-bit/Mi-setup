@@ -1,4 +1,5 @@
 /** Rutas de la IA asistente (módulo "ia"): chat, conversaciones, uso y cola de propuestas. */
+import { AGENTES_IA, can } from "@mi-setup/shared";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import { aiConversations, aiMessages, aiProposals } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
+import { clienteAgente, type AgenteVps } from "./agentes-vps.js";
 import { crearHerramientas, type ContextoHerramientas, type Herramienta } from "./herramientas.js";
 import { clienteAnthropic, clienteOllama, MARCA_RESULTADO, propuestaDto, ServicioIa, type BloqueIa, type ClienteIa } from "./servicio.js";
 
@@ -66,13 +68,29 @@ export function iaRoutes(deps: ModuleDeps, opciones: OpcionesIa) {
     if (cacheLocal?.clave !== `${url}|${modelo}`) cacheLocal = { clave: `${url}|${modelo}`, cliente: clienteOllama(url, modelo) };
     return cacheLocal.cliente;
   };
+  const extra = (modelo: string): ClienteIa | null => {
+    if (modelo.startsWith("agente:")) return clienteAgente(opciones.contexto.servidores, modelo.slice("agente:".length) as AgenteVps);
+    if (modelo.startsWith("ollama:") && deps.config.env.OLLAMA_URL) return clienteOllama(deps.config.env.OLLAMA_URL, modelo.slice("ollama:".length));
+    return null;
+  };
   const herramientas = crearHerramientas({ deps, ...opciones.contexto }, opciones.extras);
-  const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos, local);
+  const servicio = new ServicioIa(deps, herramientas, cliente, opciones.contextos, local, extra);
   const leer = { config: { acceso: { modulo: "ia" as const, nivel: "lectura" as const } } };
   const escribir = { config: { acceso: { modulo: "ia" as const, nivel: "escritura" as const } } };
 
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/ia/uso", leer, async () => servicio.uso());
+
+    /** Modelos que se pueden elegir además de Claude: los de Ollama descargados y los agentes del VPS. */
+    app.get("/api/ia/modelos-extra", leer, async (request) => {
+      const url = deps.config.env.OLLAMA_URL;
+      const r = url ? await fetch(`${url.replace(/\/+$/, "")}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null) : null;
+      const tags = r?.ok ? ((await r.json().catch(() => null)) as { models?: { name: string; size?: number }[] } | null) : null;
+      return {
+        ollama: (tags?.models ?? []).map((m) => ({ id: `ollama:${m.name}`, nombre: m.name, tamano: m.size ?? null })),
+        agentes: can(currentUser(request), "vps_comandos", "administrar") ? Object.entries(AGENTES_IA).map(([id, a]) => ({ id, ...a })) : [],
+      };
+    });
 
     // Con adjuntos el cuerpo puede pasar de 1 MB: se permite hasta 40 MB solo en esta ruta.
     app.post("/api/ia/chat", { ...escribir, bodyLimit: 40 * 1024 * 1024 }, async (request) => servicio.chat(currentUser(request), chatSchema.parse(request.body)));

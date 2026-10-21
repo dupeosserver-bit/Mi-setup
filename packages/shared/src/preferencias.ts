@@ -60,6 +60,17 @@ export const MODELOS_IA = {
 export const MODELO_LOCAL = "llama-local";
 export type ModeloIa = keyof typeof MODELOS_IA;
 
+/** Agentes de terminal instalados en el VPS (VPS → Agentes) que también responden en el asistente. */
+export const AGENTES_IA = {
+  "agente:claude-code": { nombre: "Claude Code (en tu VPS)", detalle: "Usa la cuenta con la que iniciaste sesión en el VPS (claude). Solo responde: no corre comandos ni edita archivos." },
+  "agente:gemini-cli": { nombre: "Gemini CLI (en tu VPS)", detalle: "Usa tu cuenta de Google del VPS (gemini). Solo responde: no corre comandos ni edita archivos." },
+} as const;
+/** Además de MODELOS_IA: un modelo de Ollama descargado («ollama:nombre») o un agente del VPS. */
+export const MODELO_EXTRA = /^(ollama:[a-zA-Z0-9._:/-]{1,80}|agente:(claude-code|gemini-cli))$/;
+/** Lo que se puede guardar como modelo elegido. */
+export type ModeloElegido = ModeloIa | `ollama:${string}` | keyof typeof AGENTES_IA;
+export const esModeloElegible = (m: string): m is ModeloElegido => m in MODELOS_IA || MODELO_EXTRA.test(m);
+
 const claves = <T extends Record<string, unknown>>(o: T) => Object.keys(o) as [keyof T & string, ...(keyof T & string)[]];
 
 export const preferenciasSchema = z.object({
@@ -98,7 +109,12 @@ export const preferenciasSchema = z.object({
   ia: z
     .object({
       /** null = el modelo del servidor (AI_MODEL). */
-      modelo: z.enum(claves(MODELOS_IA)).nullable().default(null),
+      modelo: z
+        .string()
+        .refine(esModeloElegible, "Modelo desconocido")
+        .transform((m) => m as ModeloElegido)
+        .nullable()
+        .default(null),
     })
     .default({}),
 });

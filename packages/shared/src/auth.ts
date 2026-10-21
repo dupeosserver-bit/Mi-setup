@@ -10,14 +10,15 @@ export const REAUTH_METHODS = ["password", "pin", "biometria"] as const;
 export type ReauthMethod = (typeof REAUTH_METHODS)[number];
 
 /**
- * Exigencia de una acción: "pin" acepta cualquier método; "fuerte" exige
- * contraseña o biometría (bóveda, root, control remoto, cuentas).
+ * Exigencia de una acción: "pin" acepta cualquier método; "fuerte" (bóveda,
+ * root, control remoto, cuentas) acepta contraseña, huella o PIN. El PIN cuenta
+ * porque 5 intentos fallidos cierran la sesión (no se puede adivinar).
  */
 export const REAUTH_REQUIREMENTS = ["pin", "fuerte"] as const;
 export type ReauthRequirement = (typeof REAUTH_REQUIREMENTS)[number];
 
 export function isStrongReauthMethod(method: ReauthMethod): boolean {
-  return method === "password" || method === "biometria";
+  return method === "password" || method === "biometria" || method === "pin";
 }
 
 export interface ReauthState {

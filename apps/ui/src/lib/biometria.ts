@@ -4,6 +4,7 @@
  * almacén seguro del teléfono; para usarla hay que pasar la huella. El
  * servidor solo conoce el hash de la llave.
  */
+import { registerPlugin } from "@capacitor/core";
 import { api } from "./api";
 import { esMovil, nombrePorDefecto } from "./plataforma";
 
@@ -15,13 +16,19 @@ async function plugin() {
   return NativeBiometric;
 }
 
+// Revisión propia (APK 0.11.1 o más nueva) con la API nueva de Android.
+const Nativo = registerPlugin<{ huella(): Promise<{ disponible: boolean; sinRegistrar: boolean }> }>("Autorrelleno");
+
 export async function biometriaSoportada(): Promise<boolean> {
   if (!esMovil()) return false;
-  try {
-    return (await (await plugin()).isAvailable()).isAvailable;
-  } catch {
-    return false;
-  }
+  const delPlugin = await plugin()
+    .then((nb) => nb.isAvailable())
+    .then((r) => r.isAvailable)
+    .catch(() => false);
+  if (delPlugin) return true;
+  return Nativo.huella()
+    .then((r) => r.disponible)
+    .catch(() => false);
 }
 
 export async function biometriaDisponible(): Promise<boolean> {

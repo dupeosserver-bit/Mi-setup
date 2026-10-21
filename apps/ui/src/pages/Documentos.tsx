@@ -5,15 +5,11 @@
 import { Camera, Combine, Download, FileText, PenLine, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { PDFDocument, degrees } from "pdf-lib";
 import { useEffect, useRef, useState } from "react";
+import { guardarBlob } from "../lib/guardar";
 import { Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
 
 function bajar(bytes: Uint8Array, nombre: string) {
-  const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  void guardarBlob(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), nombre).catch(avisarError);
 }
 
 /** "1-3, 5, 8-9" → [0,1,2,4,7,8] (índices desde 0, sin repetir, dentro del total). */

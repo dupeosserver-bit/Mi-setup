@@ -235,6 +235,27 @@ export function respaldosVpsRoutes(deps: ModuleDeps, servidores: Servidores) {
   const servidorId = z.object({ servidorId: z.string().uuid() });
 
   return async function (app: FastifyInstance): Promise<void> {
+    /**
+     * Respaldo diario de la base de Mi Setup (deploy/respaldo.sh → /opt/mi-setup/backups, la carpeta
+     * que ve «Base de datos de Mi Setup»): correrlo ahora y/o dejarlo programado en el cron del VPS.
+     */
+    app.post("/api/respaldos/base/script", crear, async (request) => {
+      soloMaestra(request);
+      const d = z.object({ servidorId: z.string().uuid().optional(), ahora: z.boolean().default(true), programar: z.boolean().default(false) }).parse(request.body);
+      const lista = await servidores.listar();
+      const s = d.servidorId ? lista.find((x) => x.id === d.servidorId) : lista[0];
+      if (!s) throw new HttpError(400, "Agrega primero tu VPS en VPS → Terminal");
+      const SCRIPT = "/opt/mi-setup/app/deploy/respaldo.sh";
+      const pasos = [`[ -f ${SCRIPT} ] || { echo MISETUP_SIN_SCRIPT; exit 3; }`];
+      if (d.programar) pasos.push(`(crontab -l 2>/dev/null | grep -v 'deploy/respaldo.sh'; echo "15 4 * * * sh ${SCRIPT} >> /var/log/misetup-respaldo.log 2>&1") | crontab - && echo MISETUP_PROGRAMADO`);
+      if (d.ahora) pasos.push(`sh ${SCRIPT} 2>&1 | tail -n 6`);
+      const r = await servidores.usar(s.id, (c) => ejecutar(c, pasos.join(" && "), { timeoutMs: 15 * 60_000 }));
+      if (r.salida.includes("MISETUP_SIN_SCRIPT")) throw new HttpError(400, `No encontré ${SCRIPT} en ${s.name}: sube la versión nueva de Mi Setup al VPS.`);
+      if (r.codigo !== 0) throw new HttpError(502, `El respaldo falló: ${[r.salida, r.error].join(" ").trim().split(/\s*\n\s*/).slice(-3).join(" ").slice(0, 300)}`);
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "respaldo_base_script", module: "respaldos", target: s.name, outcome: "ok", details: { ahora: d.ahora, programar: d.programar }, ...clientInfo(request) });
+      return { ok: true, programado: r.salida.includes("MISETUP_PROGRAMADO"), salida: r.salida.replace("MISETUP_PROGRAMADO", "").trim() };
+    });
+
     /** Disco del VPS y respaldos hechos (con los que van en curso o fallaron). */
     app.get("/api/respaldos/vps", ver, async (request) => {
       soloMaestra(request);

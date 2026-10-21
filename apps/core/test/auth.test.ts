@@ -168,7 +168,7 @@ describe("reautenticación (5 minutos)", () => {
   const setPin = (c: Ctx, token: string, pin: string) =>
     c.app.inject({ method: "PUT", url: "/api/auth/pin", headers: bearer(token), payload: { pin } });
 
-  it("vence a los 5 min; el PIN no basta para acciones fuertes", async () => {
+  it("vence a los 5 min; el PIN o la contraseña sirven también para acciones fuertes", async () => {
     const { ctx: c, secret } = await conMaestra();
     rutas(c);
     const { accessToken: t } = await loginOk(c, secret);
@@ -190,7 +190,8 @@ describe("reautenticación (5 minutos)", () => {
     c.advance(6 * MIN);
     expect((await reauth(c, t, { metodo: "pin", pin: "48151623" })).statusCode).toBe(200);
     expect((await get(c, "/api/prueba/pin", t)).statusCode).toBe(200);
-    expect((await get(c, "/api/prueba/fuerte", t)).statusCode).toBe(403);
+    // Con PIN correcto entra directo (sin pedir además la contraseña).
+    expect((await get(c, "/api/prueba/fuerte", t)).statusCode).toBe(200);
   });
 
   it("5 PIN incorrectos seguidos cierran la sesión", async () => {

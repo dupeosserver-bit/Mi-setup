@@ -436,6 +436,31 @@ function ServidoresJuego() {
   );
 }
 
+/** Corre deploy/respaldo.sh en el VPS ahora y/o lo deja en el cron diario (4:15). */
+function RespaldoDiarioBase({ alTerminar }: { alTerminar: () => void }) {
+  const correr = useMutation({
+    mutationFn: (d: { ahora: boolean; programar: boolean }) => api<{ programado: boolean }>("/api/respaldos/base/script", { cuerpo: d }),
+    onSuccess: (r, d) => {
+      avisar(d.programar ? (d.ahora ? "Respaldo hecho y programado cada día a las 4:15" : "Programado cada día a las 4:15") : "Respaldo hecho");
+      alTerminar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <div className="mb-3 rounded-xl bg-fondo p-3 text-sm">
+      <p className="text-tenue">El respaldo diario no está corriendo en tu VPS. Hazlo aquí (corre el script deploy/respaldo.sh: base + archivos subidos, guarda 14 días):</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Boton tamano="sm" variante="primario" icono={Database} cargando={correr.isPending && correr.variables?.programar} disabled={correr.isPending} onClick={() => correr.mutate({ ahora: true, programar: true })}>
+          Respaldar ahora y cada día
+        </Boton>
+        <Boton tamano="sm" cargando={correr.isPending && !correr.variables?.programar} disabled={correr.isPending} onClick={() => correr.mutate({ ahora: true, programar: false })}>
+          Solo ahora
+        </Boton>
+      </div>
+    </div>
+  );
+}
+
 export default function Respaldos() {
   const verPtero = usePuede("pterodactyl");
   const maestra = useMe().data?.usuario.role === "maestra";
@@ -464,6 +489,7 @@ export default function Respaldos() {
           ) : base.data ? (
             <Vacio icono={Archive} texto="Aún no hay respaldos en la carpeta." />
           ) : null}
+          {maestra && base.data && !base.data.alDia ? <RespaldoDiarioBase alTerminar={() => void base.refetch()} /> : null}
           <ul className="max-h-80 space-y-1 overflow-auto">
             {base.data?.archivos.map((a) => (
               <li key={a.nombre} className="flex justify-between gap-2 rounded-lg bg-fondo px-3 py-1.5 text-xs">

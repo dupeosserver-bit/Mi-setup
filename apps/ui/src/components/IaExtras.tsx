@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Copy, HandCoins, Scale, ScanSearch, Share2, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api";
+import { compartirConApps } from "../lib/compartir";
 import { AreaTexto, Boton, Campo, Entrada, Interruptor, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
 
 interface Negociacion {
@@ -16,13 +17,10 @@ interface Negociacion {
 }
 
 async function copiarOCompartir(texto: string, compartir = false): Promise<void> {
-  if (compartir && navigator.share) {
-    try {
-      await navigator.share({ text: texto });
-      return;
-    } catch {
-      /* se copia */
-    }
+  if (compartir) {
+    const r = await compartirConApps({ titulo: "Mensaje", texto }).catch(() => "error" as const);
+    if (r === "compartido") return;
+    if (r === "copiado") return avisar("Copiado");
   }
   await navigator.clipboard.writeText(texto);
   avisar("Copiado");

@@ -109,9 +109,7 @@ export function registerAccessGuard(app: FastifyInstance, deps: GuardDeps): void
     if (acceso.reauth && !reauthSatisfies(user, acceso.reauth, deps.now())) {
       return reply.code(403).send({
         error:
-          acceso.reauth === "fuerte"
-            ? "Confirma tu identidad con contraseña o huella"
-            : "Confirma tu identidad con PIN, contraseña o huella",
+          "Confirma tu identidad con tu PIN, tu huella o tu contraseña",
         codigo: "reauth_requerida",
         metodo: acceso.reauth,
       });

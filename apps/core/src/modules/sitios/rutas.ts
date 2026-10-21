@@ -2,7 +2,7 @@
  * Creador de sitios y apps: administración (solo con sesión de Mi Setup).
  * Cada sitio es de su dueño; puede invitar a otras cuentas a editarlo.
  */
-import { borrarDnsDeSitio } from "../cloudflare.js";
+import { asegurarDnsDeSitio, borrarDnsDeSitio } from "../cloudflare.js";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -200,8 +200,10 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       const viejas = await db.select({ id: siteVersions.id }).from(siteVersions).where(eq(siteVersions.siteId, s.id)).orderBy(desc(siteVersions.createdAt)).offset(30);
       if (viejas.length) await db.delete(siteVersions).where(inArray(siteVersions.id, viejas.map((v) => v.id)));
       await refrescarDominios();
-      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "sitio_publicado", module: "sitios", target: s.slug, outcome: "ok", ...clientInfo(request) });
-      return { ok: true, url: urlPublica(s) };
+      // Sin registro DNS el sitio no existe en internet: se crea solo (y se borra con el sitio).
+      const dns = await asegurarDnsDeSitio(deps, s.customDomain ?? `${s.slug}.${deps.config.env.DOMAIN}`).catch(() => "no_se_pudo" as const);
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "sitio_publicado", module: "sitios", target: s.slug, outcome: "ok", details: { dns }, ...clientInfo(request) });
+      return { ok: true, url: urlPublica(s), dns };
     });
 
     app.post("/api/sitios/:id/despublicar", escribir, async (request) => {

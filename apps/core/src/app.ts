@@ -55,6 +55,7 @@ import { correoGoogleRoutes } from "./modules/correo-google.js";
 import { dispararRecordatorios, recordatoriosRoutes } from "./modules/recordatorios.js";
 import { negocioRoutes, recordarCobros } from "./modules/negocio.js";
 import { pteroRoutes } from "./modules/ptero.js";
+import { pteroAdminRoutes } from "./modules/ptero-admin.js";
 import { respaldosRoutes } from "./modules/respaldos.js";
 import { respaldosAutomaticos, respaldosVpsRoutes } from "./modules/respaldos-vps.js";
 import { revisarVencimientos, vencimientosRoutes } from "./modules/vencimientos.js";
@@ -247,6 +248,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
 
   const ptero = pteroRoutes(deps);
   await app.register(ptero.routes);
+  await app.register(pteroAdminRoutes(deps, ptero.ptero, vps.servidores));
   await app.register(vencimientosRoutes(deps));
   await app.register(negocioRoutes(deps));
   await app.register(respaldosRoutes(deps));

@@ -299,8 +299,8 @@ export function EditorSitio({ sitio, alPublicar }: { sitio: SitioEditable; alPub
         return { ruta: i === 0 ? "/" : `/${slug(nombre) || `pagina-${i}`}`, titulo: i === 0 ? "" : nombre, html, css, privada: i > 0 && Boolean(p.get("privada" as never)) };
       });
       await api(`/api/sitios/${sitio.id}/ajustes`, { metodo: "PUT", cuerpo: { ajustes: { fuentes: [...usadas].slice(0, 5) } } });
-      const r = await api<{ url: string }>(`/api/sitios/${sitio.id}/publicar`, { cuerpo: { paginas: paginasPub } });
-      avisar("¡Publicado!");
+      const r = await api<{ url: string; dns?: string }>(`/api/sitios/${sitio.id}/publicar`, { cuerpo: { paginas: paginasPub } });
+      avisar(r.dns === "creado" ? "¡Publicado! Creé su registro DNS en Cloudflare: abre en unos minutos." : "¡Publicado!");
       alPublicar(r.url);
     } catch (err) {
       avisarError(err);

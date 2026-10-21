@@ -3,6 +3,7 @@
  * acción pide reautenticación, abre el diálogo y reintenta.
  */
 import type { LoginResponse, ReauthRequirement } from "@mi-setup/shared";
+import { guardarBlob } from "./guardar";
 import { pedirReauth } from "./reauth";
 import { useSesion } from "./sesion";
 
@@ -189,13 +190,7 @@ export async function descargar(ruta: string, nombre: string): Promise<void> {
     }
   }
   if (!res.ok) throw new ApiError(res.status, "No se pudo descargar el archivo");
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await guardarBlob(await res.blob(), nombre);
 }
 
 export function mensajeDeError(error: unknown): string {

@@ -69,6 +69,41 @@ export async function borrarDnsDeSitio(deps: Pick<ModuleDeps, "config">, hosts: 
   return borrados;
 }
 
+/**
+ * Al publicar: si nombre.DOMINIO (o el dominio propio) no tiene registro ni lo
+ * cubre el comodín «*», crea su registro A hacia el VPS con el comentario
+ * «Mi Setup» (así se borra junto con el sitio). Sin token no hace nada.
+ */
+export async function asegurarDnsDeSitio(deps: Pick<ModuleDeps, "config">, host: string): Promise<"creado" | "existia" | "comodin" | "sin_token" | "no_se_pudo"> {
+  const token = deps.config.env.CLOUDFLARE_API_TOKEN;
+  if (!token) return "sin_token";
+  const pedir = async <T>(ruta: string, metodo = "GET", cuerpo?: unknown): Promise<T | null> => {
+    const r = await fetch(`${API}${ruta}`, {
+      method: metodo,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      ...(cuerpo !== undefined ? { body: JSON.stringify(cuerpo) } : {}),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => null);
+    const d = r ? ((await r.json().catch(() => null)) as Respuesta<T> | null) : null;
+    return d?.success ? d.result : null;
+  };
+  const nombre = host.toLowerCase();
+  const zonas = (await pedir<Zona[]>("/zones?per_page=50&status=active")) ?? [];
+  const zona = zonaDe(nombre, zonas);
+  if (!zona) return "no_se_pudo";
+  const buscar = (z: Zona, n: string) => pedir<Registro[]>(`/zones/${z.id}/dns_records?per_page=50&name=${encodeURIComponent(n)}`).then((l) => l ?? []);
+  if ((await buscar(zona, nombre)).some((r) => ["A", "AAAA", "CNAME"].includes(r.type))) return "existia";
+  // El comodín cubre un solo nivel: sitio.dominio.com, no a.b.dominio.com.
+  const padre = nombre.slice(nombre.indexOf(".") + 1);
+  if (padre.includes(".") && (await buscar(zona, `*.${padre}`)).length) return "comodin";
+  const app = deps.config.env.APP_HOST.toLowerCase();
+  const zonaApp = zonaDe(app, zonas);
+  const ip = (zonaApp ? (await buscar(zonaApp, app)).find((r) => r.type === "A")?.content : undefined) ?? (await resolve4(app).catch(() => []))[0];
+  if (!ip) return "no_se_pudo";
+  const creado = await pedir(`/zones/${zona.id}/dns_records`, "POST", { type: "A", name: nombre, content: ip, ttl: 1, proxied: false, comment: COMENTARIO });
+  return creado ? "creado" : "no_se_pudo";
+}
+
 export function cloudflareRoutes(deps: ModuleDeps) {
   async function cf<T>(ruta: string, init: { metodo?: string; cuerpo?: unknown } = {}): Promise<T> {
     const token = deps.config.env.CLOUDFLARE_API_TOKEN;
@@ -154,6 +189,19 @@ export function cloudflareRoutes(deps: ModuleDeps) {
       const r = await crearA(zona, dominio === zona.name ? "@" : dominio, ip);
       await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "cloudflare_dominio", module: "sitios", target: dominio, outcome: "ok", ...clientInfo(request) });
       return { ok: true, resultado: r, ip };
+    });
+
+    /** Crea el registro DNS de ese sitio (el mismo que se crea solo al publicar). */
+    app.post("/api/sitios/:id/dns", cambiar, async (request) => {
+      const { id } = idParams.parse(request.params);
+      const [s] = await deps.db.select().from(sites).where(eq(sites.id, id));
+      if (!s) throw new HttpError(404, "Sitio no encontrado");
+      if (!deps.config.env.CLOUDFLARE_API_TOKEN) throw missingConfig("CLOUDFLARE_API_TOKEN");
+      const host = s.customDomain ?? `${s.slug}.${deps.config.env.DOMAIN}`;
+      const resultado = await asegurarDnsDeSitio(deps, host);
+      if (resultado === "no_se_pudo") throw new HttpError(502, `No pude crear el registro de ${host}: revisa que el token vea esa zona en Cloudflare y que exista el registro A de ${deps.config.env.APP_HOST}.`);
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "cloudflare_dns_sitio", module: "sitios", target: host, outcome: "ok", details: { resultado }, ...clientInfo(request) });
+      return { ok: true, resultado, host };
     });
 
     /** Por qué un sitio todavía no abre: publicado → DNS → HTTPS. */

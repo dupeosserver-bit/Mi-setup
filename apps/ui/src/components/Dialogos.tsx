@@ -2,11 +2,11 @@
 import { AlertTriangle, Fingerprint, KeyRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, mensajeDeError } from "../lib/api";
-import { biometriaDisponible, reautenticarConBiometria } from "../lib/biometria";
+import { biometriaDisponible, biometriaSoportada, inscribirBiometria, reautenticarConBiometria } from "../lib/biometria";
 import { useConfirmar } from "../lib/confirmar";
 import { queryClient, useMe } from "../lib/consultas";
 import { useReauth } from "../lib/reauth";
-import { Boton, Campo, Entrada, Modal } from "./ui";
+import { Boton, Campo, Entrada, Interruptor, Modal, avisar } from "./ui";
 
 export function DialogoReauth() {
   const { abierto, metodo, terminar } = useReauth();
@@ -16,34 +16,13 @@ export function DialogoReauth() {
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [bio, setBio] = useState(false);
-
-  useEffect(() => {
-    if (!abierto) return;
-    setValor("");
-    setError(null);
-    setModo(metodo === "pin" && me?.tienePin ? "pin" : "password");
-    void biometriaDisponible().then(setBio);
-  }, [abierto, metodo, me?.tienePin]);
+  /** El celular tiene huella pero aún no está activada en Mi Setup. */
+  const [ofrecerHuella, setOfrecerHuella] = useState(false);
+  const [activarHuella, setActivarHuella] = useState(true);
 
   const listo = async () => {
     await queryClient.invalidateQueries({ queryKey: ["me"] });
     terminar(true);
-  };
-
-  const enviar = async (e: FormEvent) => {
-    e.preventDefault();
-    setEnviando(true);
-    setError(null);
-    try {
-      await api("/api/auth/reauth", {
-        cuerpo: modo === "password" ? { metodo: "password", password: valor } : { metodo: "pin", pin: valor },
-      });
-      await listo();
-    } catch (err) {
-      setError(mensajeDeError(err));
-    } finally {
-      setEnviando(false);
-    }
   };
 
   const conHuella = async () => {
@@ -56,12 +35,48 @@ export function DialogoReauth() {
     }
   };
 
+  useEffect(() => {
+    if (!abierto) return;
+    setValor("");
+    setError(null);
+    // El PIN sirve para todo (también acciones sensibles); la contraseña queda como respaldo.
+    setModo(me?.tienePin ? "pin" : "password");
+    void (async () => {
+      const lista = await biometriaDisponible();
+      setBio(lista);
+      setOfrecerHuella(!lista && (await biometriaSoportada()));
+      // Con la huella activada se pide de una vez, sin tener que tocar nada.
+      if (lista) void conHuella();
+    })();
+  }, [abierto, metodo, me?.tienePin]);
+
+  const enviar = async (e: FormEvent) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    try {
+      await api("/api/auth/reauth", {
+        cuerpo: modo === "password" ? { metodo: "password", password: valor } : { metodo: "pin", pin: valor },
+      });
+      if (ofrecerHuella && activarHuella) {
+        // La confirmación recién hecha permite activar la huella sin pedir nada más.
+        await inscribirBiometria().then(
+          () => avisar("Huella activada: la próxima vez solo pon tu dedo"),
+          () => undefined,
+        );
+      }
+      await listo();
+    } catch (err) {
+      setError(mensajeDeError(err));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   return (
     <Modal abierto={abierto} titulo="Confirma tu identidad" alCerrar={() => terminar(false)} ancho="max-w-sm">
       <p className="mb-4 text-sm text-tenue">
-        {metodo === "fuerte"
-          ? "Esta acción es sensible: confirma con tu contraseña o con tu huella."
-          : "Confirma con tu PIN, tu contraseña o tu huella."}
+        {bio ? "Pon tu dedo en el sensor, o confirma con tu PIN." : me?.tienePin ? "Confirma con tu PIN." : "Confirma con tu contraseña (en Ajustes puedes crear un PIN para no escribirla)."}
       </p>
       <form onSubmit={enviar} className="space-y-3">
         <Campo etiqueta={modo === "password" ? "Contraseña" : "PIN"}>
@@ -83,7 +98,8 @@ export function DialogoReauth() {
             Usar huella o rostro
           </Boton>
         ) : null}
-        {metodo === "pin" && me?.tienePin ? (
+        {ofrecerHuella ? <Interruptor activo={activarHuella} alCambiar={setActivarHuella} etiqueta="Activar mi huella en este celular" /> : null}
+        {me?.tienePin ? (
           <button
             type="button"
             className="w-full text-center text-xs text-tenue hover:text-texto"

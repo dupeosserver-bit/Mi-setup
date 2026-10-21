@@ -4,7 +4,7 @@
  * propuesta "pendiente" y solo corre cuando el usuario la aprueba.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { can, MODELO_LOCAL, MODELOS_IA, reauthSatisfies, type ModuleId } from "@mi-setup/shared";
+import { can, esModeloElegible, MODELO_LOCAL, reauthSatisfies, type ModuleId } from "@mi-setup/shared";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
   aiConversations,
@@ -156,8 +156,8 @@ const PRECIOS: Record<string, readonly [number, number]> = {
 const PRECIO_MAXIMO = [10, 50] as const;
 
 export function calcularCosto(modelo: string, u: RespuestaIa["usage"]): number {
-  // La IA local corre en tu VPS: no cuesta.
-  if (modelo.startsWith("ollama:")) return 0;
+  // La IA local y los agentes corren en tu VPS (con su propia cuenta): no cuestan aquí.
+  if (modelo.startsWith("ollama:") || modelo.startsWith("agente:")) return 0;
   const clave = Object.keys(PRECIOS).find((k) => modelo === k || modelo.startsWith(`${k}-`));
   const [entrada, salida] = clave ? PRECIOS[clave]! : PRECIO_MAXIMO;
   const lectura = u.cache_read_input_tokens ?? 0;
@@ -236,6 +236,8 @@ export class ServicioIa {
     private readonly contextosExtra: readonly ((user: AuthUser) => Promise<string | null>)[] = [],
     /** IA gratuita del VPS (Ollama); null si OLLAMA_URL no está configurada. */
     private readonly obtenerLocal: () => ClienteIa | null = () => null,
+    /** Otro modelo de Ollama («ollama:nombre») o un agente del VPS («agente:claude-code»). */
+    private readonly obtenerExtra: (modelo: string) => ClienteIa | null = () => null,
   ) {}
 
   private get presupuesto(): number {
@@ -355,7 +357,7 @@ export class ServicioIa {
   /** Modelo para esta cuenta: el que eligió en Ajustes → Voz e IA o el del servidor. */
   private async modeloDe(user: AuthUser): Promise<string> {
     const elegido = (await leerPreferencias(this.deps, user.id)).ia.modelo;
-    return elegido && elegido in MODELOS_IA ? elegido : this.deps.config.env.AI_MODEL;
+    return elegido && esModeloElegible(elegido) ? elegido : this.deps.config.env.AI_MODEL;
   }
 
   async chat(
@@ -370,7 +372,15 @@ export class ServicioIa {
     let aviso: string | null = null;
     let cliente: ClienteIa;
     let usarLocal = false;
-    if (elegido === MODELO_LOCAL) {
+    const extra = elegido.startsWith("ollama:") || elegido.startsWith("agente:");
+    if (extra) {
+      // Los agentes corren por SSH en el VPS: solo para quien puede usar sus comandos.
+      if (elegido.startsWith("agente:") && !can(user, "vps_comandos", "administrar")) throw new HttpError(403, "Los agentes del VPS solo los usa quien administra el VPS", "sin_permiso");
+      const c = this.obtenerExtra(elegido);
+      if (!c) throw missingConfig("OLLAMA_URL");
+      cliente = c;
+      usarLocal = true;
+    } else if (elegido === MODELO_LOCAL) {
       if (!local) throw missingConfig("OLLAMA_URL");
       cliente = local;
       usarLocal = true;
@@ -389,7 +399,7 @@ export class ServicioIa {
     } else {
       cliente = claude;
     }
-    const modelo = usarLocal ? this.deps.config.env.OLLAMA_MODEL : elegido;
+    const modelo = extra ? elegido : usarLocal ? this.deps.config.env.OLLAMA_MODEL : elegido;
     const { db } = this.deps;
 
     let conversacionId = entrada.conversacionId;
