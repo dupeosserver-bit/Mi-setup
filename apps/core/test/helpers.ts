@@ -3,7 +3,7 @@ import type { PermissionMap } from "@mi-setup/shared";
 import { asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { buildApp } from "../src/app.js";
+import { buildApp, type AppDeps } from "../src/app.js";
 import type { ClienteIa } from "../src/modules/ia/servicio.js";
 import type { FabricaMotor, ValidarToken } from "../src/modules/bots-discord/index.js";
 import { hashSecret } from "../src/auth/password.js";
@@ -40,7 +40,7 @@ export function memoryNotifier(): Notifier & { sent: PushMessage[] } {
   };
 }
 
-export async function createTestContext(options: { config?: Config; clienteIa?: ClienteIa; clienteIaLocal?: ClienteIa; fabricaBots?: FabricaMotor; validarTokenBot?: ValidarToken } = {}) {
+export async function createTestContext(options: { config?: Config; clienteIa?: ClienteIa; clienteIaLocal?: ClienteIa; fabricaBots?: FabricaMotor; validarTokenBot?: ValidarToken; comunidad?: AppDeps["comunidad"] } = {}) {
   const { db, client } = await createTestDb();
   const clock = { now: new Date("2026-03-01T12:00:00.000Z") };
   const notifier = memoryNotifier();
@@ -54,6 +54,7 @@ export async function createTestContext(options: { config?: Config; clienteIa?: 
     ...(options.clienteIaLocal ? { clienteIaLocal: options.clienteIaLocal } : {}),
     ...(options.fabricaBots ? { fabricaBots: options.fabricaBots } : {}),
     ...(options.validarTokenBot ? { validarTokenBot: options.validarTokenBot } : {}),
+    ...(options.comunidad ? { comunidad: options.comunidad } : {}),
   });
   await preparar();
   return {

@@ -21,6 +21,8 @@ import {
   Inbox,
   KeyRound,
   LayoutTemplate,
+  MessagesSquare,
+  ShieldAlert,
   Plus,
   RefreshCw,
   Settings2,
@@ -39,7 +41,7 @@ import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insi
 import { API_BASE, api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { PUBLICA } from "../edicion";
-import { queryClient, usePuede } from "../lib/consultas";
+import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { PLANTILLAS_SITIOS } from "../lib/plantillasSitios";
 import { abrirExterno } from "../lib/plataforma";
 import { localeActual } from "../lib/idioma";
@@ -59,6 +61,9 @@ interface Ajustes {
   servidores?: { id: string; nombre: string; direccion?: string }[];
   avisos?: boolean;
   pago?: string;
+  comunidad?: { activa: boolean; oficial?: string };
+  demo?: boolean;
+  descargas?: boolean;
 }
 interface Sitio {
   id: string;
@@ -781,6 +786,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   const [a, setA] = useState<Ajustes>(sitio.ajustes);
   const [editor, setEditor] = useState("");
   const verPtero = usePuede("pterodactyl") && !PUBLICA;
+  const esMaestra = useMe().data?.usuario.role === "maestra";
   const archivos = useQuery({ queryKey: ["sitios", sitio.id, "archivos"], queryFn: () => api<Archivo[]>(`/api/sitios/${sitio.id}/archivos`) });
   const ptero = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string; direccion?: string }[]>("/api/ptero/servidores"), enabled: verPtero, retry: false });
   const editores = useQuery({ queryKey: ["sitios", sitio.id, "editores"], queryFn: () => api<{ id: string; correo: string; nombre: string }[]>(`/api/sitios/${sitio.id}/editores`) });
@@ -861,6 +867,27 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
         <div className="mt-3">
           <Interruptor activo={a.avisos !== false} alCambiar={(v) => setA({ ...a, avisos: v })} etiqueta="Avisarme al celular cuando llegue un mensaje o pedido" />
         </div>
+      </Tarjeta>
+      <Tarjeta titulo="Comunidad" icono={MessagesSquare}>
+        <Interruptor
+          activo={Boolean(a.comunidad?.activa)}
+          alCambiar={(v) => setA({ ...a, comunidad: { ...a.comunidad, activa: v } })}
+          etiqueta="Que los visitantes suban proyectos y comenten (bloque «Comunidad» del editor)"
+        />
+        {a.comunidad?.activa ? (
+          <div className="mt-3 space-y-2">
+            <Campo etiqueta="Tu nombre oficial (nadie más lo puede usar)" ayuda="Cuando respondes desde aquí sale con este nombre y la marca «Oficial».">
+              <Entrada value={a.comunidad.oficial ?? ""} maxLength={40} placeholder="JokeerYT" onChange={(e) => setA({ ...a, comunidad: { activa: true, oficial: e.target.value || undefined } })} />
+            </Campo>
+            <p className="text-xs text-tenue">Se bloquean insultos y groserías. Cada .zip (y cada repositorio de GitHub) se revisa con antivirus y no aparece hasta que lo apruebas.</p>
+          </div>
+        ) : null}
+        {esMaestra && !PUBLICA ? (
+          <div className="mt-3 space-y-2">
+            <Interruptor activo={Boolean(a.descargas)} alCambiar={(v) => setA({ ...a, descargas: v })} etiqueta="Mostrar las apps para descargar (bloque «Descargas»: la nueva y las 2 anteriores)" />
+            <Interruptor activo={Boolean(a.demo)} alCambiar={(v) => setA({ ...a, demo: v })} etiqueta="Mostrar la demo de Mi Setup en /demo (sin datos reales)" />
+          </div>
+        ) : null}
       </Tarjeta>
       <Tarjeta titulo="App instalable" icono={Smartphone}>
         <Interruptor activo={Boolean(a.app)} alCambiar={(v) => setA({ ...a, app: v })} etiqueta="Que se pueda instalar como app (Agregar a pantalla de inicio)" />
@@ -1027,8 +1054,151 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   );
 }
 
+// ---------------------------------------------------------------- comunidad
+interface ElementoComunidad {
+  id: string;
+  tipo: "proyecto" | "comentario";
+  proyecto: string | null;
+  autor: string;
+  oficial: boolean;
+  titulo: string;
+  texto: string;
+  enlace: string | null;
+  estado: "pendiente" | "aprobado" | "rechazado";
+  revision: "pendiente" | "limpio" | "infectado" | "error" | "sin_archivo";
+  detalleRevision: string;
+  tieneArchivo: boolean;
+  archivoNombre: string | null;
+  fecha: string;
+}
+const REVISION: Record<ElementoComunidad["revision"], { texto: string; tono: "ok" | "aviso" | "peligro" | "neutro" }> = {
+  pendiente: { texto: "Revisando con antivirus…", tono: "neutro" },
+  limpio: { texto: "Antivirus: sin virus", tono: "ok" },
+  infectado: { texto: "Antivirus: ¡tiene virus!", tono: "peligro" },
+  error: { texto: "Sin revisar", tono: "aviso" },
+  sin_archivo: { texto: "Sin archivo", tono: "neutro" },
+};
+
+function Comunidad({ sitio }: { sitio: Sitio }) {
+  const q = useQuery({
+    queryKey: ["sitios", sitio.id, "comunidad"],
+    queryFn: () => api<{ oficial: string; elementos: ElementoComunidad[] }>(`/api/sitios/${sitio.id}/comunidad`),
+    refetchInterval: (c) => (c.state.data?.elementos.some((e) => e.revision === "pendiente") ? 4000 : 60_000),
+  });
+  const [filtro, setFiltro] = useState<"pendiente" | "aprobado" | "rechazado" | "comentarios">("pendiente");
+  const [respuesta, setRespuesta] = useState<{ proyecto: string | null; texto: string } | null>(null);
+  const accion = async (fn: () => Promise<unknown>) => {
+    await fn().catch(avisarError);
+    void q.refetch();
+  };
+  const todos = q.data?.elementos ?? [];
+  const proyectos = todos.filter((e) => e.tipo === "proyecto");
+  const lista = filtro === "comentarios" ? todos.filter((e) => e.tipo === "comentario") : proyectos.filter((e) => e.estado === filtro);
+  const pendientes = proyectos.filter((e) => e.estado === "pendiente").length;
+  const base = `/api/sitios/${sitio.id}/comunidad`;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Pestanas
+          valor={filtro}
+          alCambiar={setFiltro}
+          opciones={[
+            { id: "pendiente", texto: `Por aprobar${pendientes ? ` (${pendientes})` : ""}` },
+            { id: "aprobado", texto: "Aprobados" },
+            { id: "rechazado", texto: "Rechazados" },
+            { id: "comentarios", texto: "Comentarios" },
+          ]}
+        />
+        <Boton tamano="sm" variante="secundario" icono={MessagesSquare} onClick={() => setRespuesta({ proyecto: null, texto: "" })}>
+          Escribir como {q.data?.oficial ?? "autor oficial"}
+        </Boton>
+      </div>
+      <ErrorCaja error={q.error} />
+      {q.data && !lista.length ? <Vacio icono={MessagesSquare} texto={filtro === "pendiente" ? "No hay nada esperando tu aprobación." : "Aquí no hay nada todavía."} /> : null}
+      {lista.map((e) => (
+        <Tarjeta
+          key={e.id}
+          titulo={e.tipo === "proyecto" ? e.titulo : `💬 ${e.autor}${e.oficial ? " · Oficial" : ""}`}
+          acciones={<Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Borrar" onClick={() => void accion(async () => (await confirmar({ titulo: "¿Borrar?", mensaje: "También se borran sus comentarios." })) && api(`${base}/${e.id}`, { metodo: "DELETE" }))} />}
+        >
+          <p className="mb-2 text-xs text-tenue">
+            {e.tipo === "proyecto" ? `${e.autor}${e.oficial ? " (oficial)" : ""} · ` : ""}
+            {fecha(e.fecha)}
+            {e.proyecto ? ` · en «${proyectos.find((p) => p.id === e.proyecto)?.titulo ?? "un proyecto"}»` : ""}
+          </p>
+          {e.texto ? <p className="mb-2 whitespace-pre-wrap break-words text-sm">{e.texto}</p> : null}
+          {e.tipo === "proyecto" ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Insignia tono={REVISION[e.revision].tono}>{REVISION[e.revision].texto}</Insignia>
+                {e.detalleRevision && e.revision !== "limpio" ? <span className="text-xs text-tenue">{e.detalleRevision}</span> : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {e.enlace ? (
+                  <Boton tamano="sm" variante="fantasma" icono={ExternalLink} onClick={() => abrirExterno(e.enlace!)}>
+                    Ver en GitHub
+                  </Boton>
+                ) : null}
+                {e.tieneArchivo && e.revision !== "infectado" ? (
+                  <Boton tamano="sm" variante="fantasma" icono={Download} onClick={() => void descargar(`${base}/${e.id}/archivo`, e.archivoNombre ?? "proyecto.zip").catch(avisarError)}>
+                    Bajar .zip
+                  </Boton>
+                ) : null}
+                {e.revision === "error" ? (
+                  <Boton tamano="sm" variante="secundario" icono={RefreshCw} onClick={() => void accion(() => api(`${base}/${e.id}/revisar`, { metodo: "POST" }))}>
+                    Revisar otra vez
+                  </Boton>
+                ) : null}
+                {e.estado !== "aprobado" ? (
+                  <Boton tamano="sm" variante="primario" icono={CheckCircle2} disabled={e.revision !== "limpio"} onClick={() => void accion(() => api(`${base}/${e.id}/estado`, { metodo: "POST", cuerpo: { estado: "aprobado" } }))}>
+                    Aprobar
+                  </Boton>
+                ) : (
+                  <Boton tamano="sm" variante="secundario" icono={MessagesSquare} onClick={() => setRespuesta({ proyecto: e.id, texto: "" })}>
+                    Responder
+                  </Boton>
+                )}
+                {e.estado !== "rechazado" ? (
+                  <Boton tamano="sm" variante="fantasma" icono={XCircle} onClick={() => void accion(() => api(`${base}/${e.id}/estado`, { metodo: "POST", cuerpo: { estado: "rechazado" } }))}>
+                    Rechazar
+                  </Boton>
+                ) : null}
+              </div>
+              {e.revision === "infectado" ? (
+                <p className="flex items-center gap-1 text-xs text-peligro">
+                  <ShieldAlert className="h-4 w-4" /> El archivo se borró por seguridad. Recházalo o bórralo.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Tarjeta>
+      ))}
+      {respuesta ? (
+        <Modal abierto titulo={respuesta.proyecto ? "Responder como autor oficial" : "Comentario oficial"} alCerrar={() => setRespuesta(null)}>
+          <div className="space-y-3">
+            <AreaTexto rows={4} maxLength={2000} value={respuesta.texto} onChange={(ev) => setRespuesta({ ...respuesta, texto: ev.target.value })} placeholder="Escribe tu respuesta" />
+            <Boton
+              variante="primario"
+              disabled={!respuesta.texto.trim()}
+              onClick={() =>
+                void accion(async () => {
+                  await api(`${base}/responder`, { metodo: "POST", cuerpo: { texto: respuesta.texto, proyecto: respuesta.proyecto } });
+                  setRespuesta(null);
+                  avisar("Publicado con la marca «Oficial»");
+                })
+              }
+            >
+              Publicar
+            </Boton>
+          </div>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- detalle
-type PestanaSitio = "editor" | "imagenes" | "mensajes" | "datos" | "cuentas" | "estadisticas" | "ajustes";
+type PestanaSitio = "editor" | "imagenes" | "mensajes" | "comunidad" | "datos" | "cuentas" | "estadisticas" | "ajustes";
 function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
   const q = useQuery({ queryKey: ["sitios", id], queryFn: () => api<Sitio & { borrador: Record<string, unknown> }>(`/api/sitios/${id}`) });
   const [pestana, setPestana] = useState<PestanaSitio>("editor");
@@ -1060,6 +1230,7 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
           { id: "editor", texto: "Editor" },
           { id: "imagenes", texto: "Imágenes" },
           { id: "mensajes", texto: `Mensajes y pedidos${nuevos ? ` (${nuevos})` : ""}` },
+          ...(s.ajustes.comunidad?.activa ? [{ id: "comunidad" as const, texto: "Comunidad" }] : []),
           { id: "datos", texto: "Datos" },
           { id: "cuentas", texto: "Cuentas" },
           { id: "estadisticas", texto: "Estadísticas" },
@@ -1080,6 +1251,7 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
       ) : null}
       {pestana === "imagenes" ? <Imagenes sitio={s} /> : null}
       {pestana === "mensajes" ? <Mensajes sitio={s} /> : null}
+      {pestana === "comunidad" ? <Comunidad sitio={s} /> : null}
       {pestana === "datos" ? <Datos sitio={s} /> : null}
       {pestana === "cuentas" ? <Cuentas sitio={s} /> : null}
       {pestana === "estadisticas" ? <Estadisticas sitio={s} /> : null}

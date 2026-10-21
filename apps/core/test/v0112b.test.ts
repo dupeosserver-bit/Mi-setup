@@ -468,3 +468,219 @@ describe("0.11.2b · edición pública", () => {
     }
   });
 });
+
+describe("0.11.2b · demo pública", () => {
+  it("sirve la demo en /demo y deja mostrarla dentro de otro sitio", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    dir = await mkdtemp(join(tmpdir(), "v0112b-"));
+    await mkdir(join(dir, "demo", "assets"), { recursive: true });
+    await writeFile(join(dir, "demo", "index.html"), "<!doctype html><title>Demo</title>");
+    await writeFile(join(dir, "demo", "assets", "a.js"), "console.log(1)");
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir, DEMO_DIR: join(dir, "demo") }) });
+    for (const url of ["/demo", "/demo/", "/demo/notas"]) {
+      const r = await ctx.app.inject({ method: "GET", url });
+      expect(r.statusCode, url).toBe(200);
+      expect(r.body).toContain("<title>Demo</title>");
+      expect(r.headers["x-frame-options"]).toBeUndefined();
+      expect(String(r.headers["content-security-policy"])).toContain("frame-ancestors 'self' https:");
+    }
+    expect((await ctx.app.inject({ method: "GET", url: "/demo/assets/a.js" })).statusCode).toBe(200);
+    // La app normal sigue sin dejarse meter en marcos.
+    expect(String((await ctx.app.inject({ method: "GET", url: "/api/health" })).headers["content-security-policy"])).toContain("frame-ancestors 'none'");
+  });
+});
+
+describe("0.11.2b · comunidad del sitio oficial", () => {
+  it("bloquea groserías (aunque las disfracen) sin confundir palabras normales", async () => {
+    const { contieneGroseria, nombreReservado } = await import("../src/modules/sitios/comunidad.js");
+    for (const t of ["eres un pendejo", "P3nd3j0", "p u t o", "hijodeputa", "fuuuck you", "puuto", "pinche app", "son unos cabrones", "what a b1tch"]) expect(contieneGroseria(t), t).toBe(true);
+    for (const t of ["Hola, qué buena app", "computadora nueva", "una disputa", "Niger y Nigeria", "tarea pendiente", "buena reputación", "nightmare mode", "Escribo en español"]) expect(contieneGroseria(t), t).toBe(false);
+    for (const n of ["JokeerYT", "Jokeer YT", "j0keeryt", "JokeerYT_Oficial", "JOKEERYT"]) expect(nombreReservado(n), n).toBe(true);
+    expect(nombreReservado("Joker")).toBe(false);
+    expect(nombreReservado("Ana")).toBe(false);
+  });
+
+  it("habla con ClamAV (INSTREAM) y entiende OK y FOUND", async () => {
+    const { createServer } = await import("node:net");
+    const { escanearConClamav } = await import("../src/modules/sitios/comunidad.js");
+    const servidor = createServer((s) => {
+      let datos = Buffer.alloc(0);
+      s.on("data", (d) => {
+        datos = Buffer.concat([datos, d]);
+        // Fin del flujo: un trozo de largo 0.
+        if (datos.length >= 14 && datos.subarray(-4).equals(Buffer.alloc(4))) s.end(datos.includes("VIRUS") ? "stream: Eicar-Test-Signature FOUND\0" : "stream: OK\0");
+      });
+    });
+    await new Promise<void>((ok) => servidor.listen(0, "127.0.0.1", ok));
+    const puerto = (servidor.address() as { port: number }).port;
+    const flujo = async function* (t: string) {
+      yield Buffer.from(t);
+    };
+    expect(await escanearConClamav("127.0.0.1", puerto, flujo("archivo normal"))).toEqual({ estado: "limpio", detalle: "Sin virus" });
+    expect(await escanearConClamav("127.0.0.1", puerto, flujo("esto trae VIRUS"))).toEqual({ estado: "infectado", detalle: "Eicar-Test-Signature" });
+    servidor.close();
+    expect((await escanearConClamav("127.0.0.1", 1, flujo("x"), 2000)).estado).toBe("error");
+  });
+
+  it("proyectos con antivirus y aprobación, comentarios y nombre oficial", async () => {
+    dir = await mkdtemp(join(tmpdir(), "v0112b-"));
+    const escanear = async (datos: AsyncIterable<Uint8Array>) => {
+      let todo = "";
+      for await (const t of datos) todo += Buffer.from(t).toString("latin1");
+      return todo.includes("VIRUS") ? { estado: "infectado" as const, detalle: "Prueba.Virus" } : { estado: "limpio" as const, detalle: "Sin virus" };
+    };
+    const pedidosGithub: string[] = [];
+    const descargarGithub = async function* (usuario: string, repo: string) {
+      pedidosGithub.push(`${usuario}/${repo}`);
+      yield Buffer.from("PK\u0003\u0004 repo limpio");
+    };
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir }), comunidad: { escanear, descargarGithub } });
+    await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123", permissions: { sitios: "escritura" } });
+    const h = bearer((await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "u@x.test", password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
+    const app = ctx.app;
+    const s = (await app.inject({ method: "POST", url: "/api/sitios", headers: h, payload: { nombre: "Mi Setup", slug: "misetup" } })).json<{ id: string }>();
+    await app.inject({ method: "POST", url: `/api/sitios/${s.id}/publicar`, headers: h, payload: { paginas: [{ ruta: "/", html: "<div data-ms-comunidad></div>", css: "" }] } });
+    const H = { host: "misetup.mexicanland.net" };
+    let ip = 0;
+    const otraIp = () => ({ ...H, "x-forwarded-for": `10.1.0.${++ip}` });
+    // Sin activarla, no hay comunidad.
+    expect((await app.inject({ method: "GET", url: "/_ms/comunidad", headers: H })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PUT", url: `/api/sitios/${s.id}/ajustes`, headers: h, payload: { ajustes: { comunidad: { activa: true, oficial: "JokeerYT" } } } })).statusCode).toBe(200);
+
+    // Comentarios: groserías y el nombre oficial se rechazan; lo demás aparece al momento.
+    const comentar = (payload: object) => app.inject({ method: "POST", url: "/_ms/comunidad/comentario", headers: { ...H, "x-forwarded-for": `10.0.0.${Math.floor(Math.random() * 200)}` }, payload });
+    expect((await comentar({ nombre: "Luis", texto: "eres un pendejo" })).statusCode).toBe(400);
+    expect((await comentar({ nombre: "Jokeer YT", texto: "Soy el autor" })).statusCode).toBe(400);
+    expect((await comentar({ nombre: "", texto: "¡Qué buena app!" })).statusCode).toBe(200);
+
+    // Proyecto con enlace de GitHub: se revisa el .zip del repositorio y espera aprobación.
+    const proyecto = await app.inject({ method: "POST", url: "/_ms/comunidad/proyecto", headers: otraIp(), payload: { nombre: "Sofía", titulo: "Mi Setup con tema morado", descripcion: "Cambié los colores", enlace: "https://github.com/sofia/mi-setup-morado" } });
+    expect(proyecto.statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/_ms/comunidad/proyecto", headers: otraIp(), payload: { titulo: "Malo", enlace: "https://gitlab.com/x/y" } })).statusCode).toBe(400);
+    const lista = async () => (await app.inject({ method: "GET", url: "/_ms/comunidad", headers: H })).json<{ oficial: string; proyectos: { id: string; titulo: string; archivo: { url: string } | null; comentarios: { autor: string; oficial: boolean }[] }[]; comentarios: { autor: string }[] }>();
+    expect((await lista()).proyectos).toHaveLength(0);
+    expect((await lista()).comentarios.map((c) => c.autor)).toEqual(["Anónimo"]);
+
+    // .zip con virus: se marca y se borra; no se puede aprobar.
+    const zipMalo = multipartSitio("version.zip", "application/zip", Buffer.from("PK\u0003\u0004 VIRUS"));
+    const conCampos = (m: ReturnType<typeof multipartSitio>, titulo: string) => ({
+      ...m,
+      payload: Buffer.concat([Buffer.from(`------prueba0112b\r\nContent-Disposition: form-data; name="titulo"\r\n\r\n${titulo}\r\n`), m.payload]),
+    });
+    const malo = conCampos(zipMalo, "Versión rara");
+    expect((await app.inject({ method: "POST", url: "/_ms/comunidad/proyecto", headers: { ...otraIp(), ...malo.headers }, payload: malo.payload })).statusCode).toBe(200);
+    const bueno = conCampos(multipartSitio("bueno.zip", "application/zip", Buffer.from("PK\u0003\u0004 todo bien")), "Versión buena");
+    expect((await app.inject({ method: "POST", url: "/_ms/comunidad/proyecto", headers: { ...otraIp(), ...bueno.headers }, payload: bueno.payload })).statusCode).toBe(200);
+    const noZip = conCampos(multipartSitio("x.zip", "application/zip", Buffer.from("MZ ejecutable")), "Disfrazado");
+    expect((await app.inject({ method: "POST", url: "/_ms/comunidad/proyecto", headers: { ...otraIp(), ...noZip.headers }, payload: noZip.payload })).statusCode).toBe(415);
+
+    type Elemento = { id: string; titulo: string; tipo: string; estado: string; revision: string };
+    let elementos: Elemento[] = [];
+    for (let i = 0; i < 50; i++) {
+      elementos = (await app.inject({ method: "GET", url: `/api/sitios/${s.id}/comunidad`, headers: h })).json<{ elementos: Elemento[] }>().elementos;
+      if (elementos.filter((e) => e.tipo === "proyecto").every((e) => e.revision !== "pendiente")) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const de = (t: string) => elementos.find((e) => e.titulo === t)!;
+    expect(pedidosGithub).toEqual(["sofia/mi-setup-morado"]);
+    expect(de("Mi Setup con tema morado").revision).toBe("limpio");
+    expect(de("Versión rara").revision).toBe("infectado");
+    expect(de("Versión buena").revision).toBe("limpio");
+    const estado = (id: string, e: string) => app.inject({ method: "POST", url: `/api/sitios/${s.id}/comunidad/${id}/estado`, headers: h, payload: { estado: e } });
+    expect((await estado(de("Versión rara").id, "aprobado")).statusCode).toBe(409);
+    expect((await estado(de("Versión buena").id, "aprobado")).statusCode).toBe(200);
+    expect((await estado(de("Mi Setup con tema morado").id, "aprobado")).statusCode).toBe(200);
+
+    // Ya aprobados: se ven, el .zip se baja y el autor oficial responde.
+    const vista = await lista();
+    expect(vista.oficial).toBe("JokeerYT");
+    expect(vista.proyectos.map((p) => p.titulo).sort()).toEqual(["Mi Setup con tema morado", "Versión buena"]);
+    const conZip = vista.proyectos.find((p) => p.archivo)!;
+    const baja = await app.inject({ method: "GET", url: conZip.archivo!.url, headers: H });
+    expect(baja.statusCode).toBe(200);
+    expect(baja.headers["content-disposition"]).toContain("attachment");
+    const resp = await app.inject({ method: "POST", url: `/api/sitios/${s.id}/comunidad/responder`, headers: h, payload: { texto: "¡Gracias por compartir!", proyecto: conZip.id } });
+    expect(resp.statusCode).toBe(200);
+    const final = await lista();
+    expect(final.proyectos.find((p) => p.id === conZip.id)!.comentarios).toEqual([expect.objectContaining({ autor: "JokeerYT", oficial: true })]);
+
+    // Rechazar lo quita de la vista; borrar elimina también sus comentarios.
+    expect((await estado(conZip.id, "rechazado")).statusCode).toBe(200);
+    expect((await lista()).proyectos).toHaveLength(1);
+    expect((await app.inject({ method: "DELETE", url: `/api/sitios/${s.id}/comunidad/${conZip.id}`, headers: h })).statusCode).toBe(200);
+  });
+
+  it("muestra las apps para descargar solo en sitios de la cuenta maestra", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const { eq } = await import("drizzle-orm");
+    const { users } = await import("../src/db/schema.js");
+    dir = await mkdtemp(join(tmpdir(), "v0112b-"));
+    await mkdir(join(dir, "descargas"), { recursive: true });
+    for (const v of ["0.10.0", "0.11.0", "0.11.1", "0.11.2b"]) await writeFile(join(dir, "descargas", `MiSetup-${v}.apk`), "apk");
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir, DESCARGAS_DIR: join(dir, "descargas") }) });
+    const id = await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123", permissions: { sitios: "escritura" } });
+    const h = bearer((await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "u@x.test", password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
+    const app = ctx.app;
+    const s = (await app.inject({ method: "POST", url: "/api/sitios", headers: h, payload: { nombre: "Mi Setup", slug: "misetup" } })).json<{ id: string }>();
+    await app.inject({ method: "PUT", url: `/api/sitios/${s.id}/ajustes`, headers: h, payload: { ajustes: { descargas: true } } });
+    await app.inject({ method: "POST", url: `/api/sitios/${s.id}/publicar`, headers: h, payload: { paginas: [{ ruta: "/", html: "<div data-ms-descargas></div>", css: "" }] } });
+    const H = { host: "misetup.mexicanland.net" };
+    expect((await app.inject({ method: "GET", url: "/_ms/descargas", headers: H })).statusCode).toBe(404);
+    await ctx.db.update(users).set({ role: "maestra" }).where(eq(users.id, id));
+    const r = (await app.inject({ method: "GET", url: "/_ms/descargas", headers: H })).json<{ archivos: { nombre: string; url: string }[] }>();
+    // La nueva y las 2 anteriores.
+    expect(r.archivos.map((a) => a.nombre)).toEqual(["MiSetup-0.11.2b.apk", "MiSetup-0.11.1.apk", "MiSetup-0.11.0.apk"]);
+    expect((await app.inject({ method: "GET", url: r.archivos[0]!.url, headers: H })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/_ms/descargas/MiSetup-0.10.0.apk", headers: H })).statusCode).toBe(404);
+  });
+});
+
+describe("0.11.2b · sitio oficial", () => {
+  it("se crea sin publicar, sin nada de la edición personal, y se puede ver con su demo", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const { eq } = await import("drizzle-orm");
+    const { sites, siteAssets } = await import("../src/db/schema.js");
+    const { sembrarSitioOficial } = await import("../src/modules/sitios/oficial.js");
+    dir = await mkdtemp(join(tmpdir(), "v0112b-"));
+    await mkdir(join(dir, "demo"), { recursive: true });
+    await writeFile(join(dir, "demo", "index.html"), "<!doctype html><title>Demo de ejemplo</title>");
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir, DEMO_DIR: join(dir, "demo") }) });
+    // Sin cuenta maestra todavía no hay a nombre de quién crearlo.
+    await sembrarSitioOficial(ctx.deps);
+    expect(await ctx.db.select().from(sites)).toHaveLength(0);
+    await seedUser(ctx.db, { email: "m@x.test", password: "clave-de-prueba-123", role: "maestra" });
+    await sembrarSitioOficial(ctx.deps);
+    await sembrarSitioOficial(ctx.deps);
+    const lista = await ctx.db.select().from(sites);
+    expect(lista).toHaveLength(1);
+    const s = lista[0]!;
+    expect(s.slug).toBe("misetup");
+    expect(s.published).toBeNull();
+    const paginas = (s.draft as { importado: { paginas: { nombre: string; html: string }[] } }).importado.paginas;
+    expect(paginas.map((p) => p.nombre)).toEqual(["Inicio", "Funciones", "Descargas", "Instalar", "Wiki", "Demo en vivo", "Comunidad"]);
+    const todo = paginas.map((p) => p.html).join("\n");
+    expect(todo).toContain("Hecho con IA");
+    expect(todo).toContain("El autor no pide créditos");
+    expect(todo).toContain("Esta es la página oficial");
+    expect(todo).toContain("@JokeerYT_Oficia");
+    expect(todo).toContain("data-ms-comunidad");
+    expect(todo).toContain("data-ms-descargas");
+    expect(todo).not.toMatch(/pterodactyl|discord|twitch|kick\b|minecraft|mi casa|control remoto|servidores en mi pc|mexicanland|<script/i);
+    // Capturas de la demo subidas como imágenes del sitio.
+    expect((await ctx.db.select().from(siteAssets).where(eq(siteAssets.siteId, s.id))).length).toBeGreaterThanOrEqual(8);
+
+    // Publicado (como lo haría el editor), se ve en misetup.DOMINIO con su demo adentro.
+    const rutas: Record<string, string> = { Inicio: "/", "Demo en vivo": "/demo-en-vivo", Comunidad: "/comunidad" };
+    const publicadas = paginas.filter((p) => rutas[p.nombre]).map((p) => ({ ruta: rutas[p.nombre]!, titulo: p.nombre, html: p.html, css: "" }));
+    await ctx.db.update(sites).set({ published: { paginas: publicadas } }).where(eq(sites.id, s.id));
+    const H = { host: "misetup.mexicanland.net" };
+    expect((await ctx.app.inject({ method: "GET", url: "/", headers: H })).body).toContain("página oficial");
+    expect((await ctx.app.inject({ method: "GET", url: "/demo-en-vivo", headers: H })).body).toContain('src="/demo/"');
+    const demo = await ctx.app.inject({ method: "GET", url: "/demo/finanzas", headers: H });
+    expect(demo.statusCode).toBe(200);
+    expect(demo.body).toContain("Demo de ejemplo");
+    expect(String(demo.headers["content-security-policy"])).toContain("frame-ancestors 'self'");
+    expect((await ctx.app.inject({ method: "GET", url: "/demo/..%2F..%2F..%2Fetc%2Fpasswd", headers: H })).body).not.toContain("root:");
+    expect((await ctx.app.inject({ method: "GET", url: "/_ms/comunidad", headers: H })).statusCode).toBe(200);
+  });
+});

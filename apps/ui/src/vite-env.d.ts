@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** "publica" compila la edición de la comunidad (sin los apartados personales). */
   readonly VITE_EDICION?: string;
+  /** "1" compila la demo pública (sin servidor, datos de ejemplo). */
+  readonly VITE_DEMO?: string;
 }
 
 interface ImportMeta {

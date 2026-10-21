@@ -1056,6 +1056,41 @@ export const siteAssets = pgTable(
   (t) => [index("site_assets_sitio").on(t.siteId)],
 );
 
+/**
+ * Comunidad de un sitio: proyectos (enlace de GitHub o .zip) y comentarios de
+ * visitantes. Los proyectos esperan a que el dueño los apruebe; los archivos
+ * se revisan con ClamAV antes.
+ */
+export const siteCommunity = pgTable(
+  "site_community",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** "proyecto" o "comentario". */
+    kind: text("kind").notNull(),
+    /** Comentario dentro de un proyecto (o null si es del muro general). */
+    parentId: uuid("parent_id"),
+    author: text("author").notNull().default(""),
+    /** Respuesta del dueño del sitio (nombre oficial). */
+    official: boolean("official").notNull().default(false),
+    title: text("title").notNull().default(""),
+    body: text("body").notNull().default(""),
+    link: text("link"),
+    fileName: text("file_name"),
+    storedName: text("stored_name"),
+    fileSize: integer("file_size"),
+    /** pendiente | limpio | infectado | error | sin_archivo */
+    scan: text("scan").notNull().default("sin_archivo"),
+    scanDetail: text("scan_detail").notNull().default(""),
+    /** pendiente | aprobado | rechazado */
+    status: text("status").notNull().default("pendiente"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_community_sitio").on(t.siteId, t.kind, t.status)],
+);
+
 // ---------------------------------------------------------------- versión 0.10: billetera, notas con adjuntos y bots de Discord
 
 /** Billetera de Mis finanzas: solo apodo y últimos 4 dígitos; las tarjetas de prueba usan números públicos de pruebas. */

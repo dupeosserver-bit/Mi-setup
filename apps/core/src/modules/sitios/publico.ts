@@ -4,7 +4,8 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { join } from "node:path";
+import { stat } from "node:fs/promises";
+import { extname, join, resolve, sep } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -12,7 +13,11 @@ import { verifySecret } from "../../auth/password.js";
 import { siteAssets, siteEntries, siteMembers, sites, siteStats, siteTables, users } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import type { ModuleDeps } from "../common.js";
+import { carpetaDescargas, listarDescargas, tipoDescarga } from "../descargas.js";
 import { carpetaArchivos } from "../herramientas.js";
+import { CSP_DEMO } from "../../static-ui.js";
+import { VERSION } from "../../version.js";
+import type { AjustesComunidad, ServicioComunidad } from "./comunidad.js";
 import type { PteroClient } from "../ptero.js";
 import { limpiarHost, type DetectorSitios } from "./detector.js";
 import { RUNTIME, SERVICE_WORKER } from "./runtime.js";
@@ -40,12 +45,17 @@ export interface AjustesSitio {
   avisos?: boolean;
   /** Instrucciones de pago que ve el cliente al enviar su pedido. */
   pago?: string;
+  comunidad?: AjustesComunidad;
+  /** Muestra la demo de Mi Setup en /demo (sitio oficial). */
+  demo?: boolean;
+  /** Muestra las apps para descargar (solo sitios de la cuenta maestra). */
+  descargas?: boolean;
 }
 
 type FilaSitio = typeof sites.$inferSelect;
 
 const CSP_SITIO =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src * data: blob:; media-src * data: blob:; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://player.twitch.tv https://player.kick.com https://www.google.com https://maps.google.com; form-action 'self'; base-uri 'self'; frame-ancestors *";
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src * data: blob:; media-src * data: blob:; connect-src 'self'; frame-src 'self' https://www.youtube-nocookie.com https://player.twitch.tv https://player.kick.com https://www.google.com https://maps.google.com; form-action 'self'; base-uri 'self'; frame-ancestors *";
 
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const jsonSeguro = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
@@ -69,7 +79,7 @@ export function armarPagina(sitio: Pick<FilaSitio, "name" | "settings">, pagina:
 <meta property="og:title" content="${esc(titulo)}"><meta property="og:type" content="website"><meta property="og:url" content="${esc(origen + pagina.ruta)}">${descripcion ? `<meta property="og:description" content="${esc(descripcion)}">` : ""}${imagen ? `<meta property="og:image" content="${esc(imagen.startsWith("/") ? origen + imagen : imagen)}"><meta name="twitter:card" content="summary_large_image">` : ""}
 ${icono ? `<link rel="icon" href="${esc(icono)}"><link rel="apple-touch-icon" href="${esc(icono)}">` : ""}${a.app ? `<link rel="manifest" href="/manifest.webmanifest">` : ""}${a.color ? `<meta name="theme-color" content="${esc(a.color)}">` : ""}
 ${fuentes.length ? `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fuentes.map((f) => `family=${encodeURIComponent(f)}:wght@400;600;700`).join("&")}&display=swap">` : ""}
-<style>html{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111}img,video,iframe{max-width:100%}img,video{height:auto}@media (max-width:760px){html,body{overflow-x:hidden}table{display:block;overflow-x:auto}}.ms-tarjeta{display:inline-block;vertical-align:top;width:220px;margin:8px;padding:12px;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);background:#fff;color:#111}.ms-tarjeta img{width:100%;border-radius:10px}.ms-agregar{margin-top:8px;padding:8px 14px;border:0;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;font-weight:600;cursor:pointer}</style>
+<style>html{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111}img,video,iframe{max-width:100%}img,video{height:auto}@media (max-width:760px){html,body{overflow-x:hidden}table{display:block;overflow-x:auto}}.ms-tarjeta{display:inline-block;vertical-align:top;width:220px;margin:8px;padding:12px;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);background:#fff;color:#111}.ms-tarjeta img{width:100%;border-radius:10px}.ms-agregar{margin-top:8px;padding:8px 14px;border:0;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;font-weight:600;cursor:pointer}.ms-descarga,.ms-proyecto,.ms-form-proyecto,.ms-form-comentario{display:flex;flex-direction:column;gap:8px}.ms-descarga{padding:14px;margin:8px 0;border:1px solid rgba(127,127,127,.25);border-radius:14px}.ms-etiqueta,.ms-insignia{align-self:flex-start;font-size:12px;padding:2px 8px;border-radius:99px;background:rgba(127,127,127,.15)}.ms-nueva .ms-etiqueta,.ms-insignia{background:${esc(a.color || "#16a34a")};color:#fff}.ms-insignia{margin-left:6px}.ms-boton{align-self:flex-start;padding:8px 14px;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;text-decoration:none;font-weight:600}.ms-proyecto{padding:14px;margin:10px 0;border:1px solid rgba(127,127,127,.25);border-radius:14px}.ms-proyecto h4{margin:0}.ms-enlaces{display:flex;flex-wrap:wrap;gap:12px}.ms-hilo{border-left:3px solid rgba(127,127,127,.25);padding-left:10px}.ms-comentario p{margin:4px 0 10px;white-space:pre-wrap;overflow-wrap:anywhere}.ms-oficial strong{color:${esc(a.color || "#16a34a")}}.ms-form-proyecto input,.ms-form-proyecto textarea,.ms-form-comentario input,.ms-form-comentario textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(127,127,127,.35);font:inherit;background:transparent;color:inherit}.ms-form-proyecto button,.ms-form-comentario button{align-self:flex-start;padding:9px 16px;border:0;border-radius:10px;background:${esc(a.color || "#16a34a")};color:#fff;font-weight:600;cursor:pointer}</style>
 <style>${pagina.css.replace(/<\/style/gi, "<\\/style")}</style></head><body>${pagina.html}
 <script>${ADAPTAR}</script><script>window.__MS=${jsonSeguro(cfg)}</script><script src="/_ms/runtime.js" defer></script></body></html>`;
 }
@@ -106,7 +116,7 @@ const leerCookie = (request: FastifyRequest, nombre: string) =>
     .map((c) => c.trim().split("="))
     .find(([k]) => k === nombre)?.[1];
 
-export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios) {
+export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios, comunidad?: ServicioComunidad) {
   const { db } = deps;
   const secreto = () => `${deps.config.env.JWT_SECRET ?? "desarrollo"}:sitios`;
   const cache = new Map<string, { sitio: FilaSitio | null; hasta: number; version: number }>();
@@ -282,6 +292,56 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios)
       const [m] = await db.select({ name: siteMembers.name, email: siteMembers.email }).from(siteMembers).where(and(eq(siteMembers.id, id), eq(siteMembers.siteId, s.id)));
       return m ? { conectado: true, nombre: m.name, correo: m.email } : { conectado: false };
     });
+
+    comunidad?.publicas(app, sitioDe, limitar, avisarDueno);
+
+    // ---------------------------------------------------------- apps para descargar (sitio oficial)
+    const conDescargas = async (request: FastifyRequest) => {
+      const s = await sitioDe(request);
+      const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, s.ownerId));
+      if (!((s.settings ?? {}) as AjustesSitio).descargas || u?.role !== "maestra") throw new HttpError(404, "No encontrado");
+      return s;
+    };
+    app.get("/__sitio/_ms/descargas", publico, async (request) => {
+      await conDescargas(request);
+      const archivos = await listarDescargas(carpetaDescargas(deps));
+      return { version: VERSION, archivos: archivos.map((f) => ({ nombre: f.nombre, tipo: f.tipo, version: f.version, tamano: f.tamano, fecha: f.modificado, url: `/_ms/descargas/${encodeURIComponent(f.nombre)}` })) };
+    });
+    app.get("/__sitio/_ms/descargas/:nombre", publico, async (request, reply) => {
+      await conDescargas(request);
+      const { nombre } = z.object({ nombre: z.string().max(200) }).parse(request.params);
+      // Solo las que aparecen en la lista (la nueva y las 2 anteriores).
+      const f = (await listarDescargas(carpetaDescargas(deps))).find((x) => x.nombre === nombre);
+      if (!f) throw new HttpError(404, "No encontrado");
+      return reply
+        .header("content-type", tipoDescarga(nombre))
+        .header("content-length", String(f.tamano))
+        .header("content-disposition", `attachment; filename="${nombre.replace(/"/g, "")}"`)
+        .header("cache-control", "no-cache")
+        .send(createReadStream(join(carpetaDescargas(deps), nombre)));
+    });
+
+    // ---------------------------------------------------------- demo de Mi Setup (sitio oficial), sin datos reales
+    const TIPOS: Record<string, string> = { ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8", ".webmanifest": "application/manifest+json" };
+    const demo = async (request: FastifyRequest, reply: FastifyReply) => {
+      const s = await sitioDe(request);
+      const raiz = deps.config.demoDir;
+      if (!((s.settings ?? {}) as AjustesSitio).demo || !raiz || !existsSync(join(raiz, "index.html"))) throw new HttpError(404, "No encontrado");
+      const resto = decodeURIComponent(((request.params as { "*"?: string })["*"] ?? "").split("?")[0] ?? "");
+      const pedido = resolve(raiz, resto);
+      const info = pedido.startsWith(resolve(raiz) + sep) ? await stat(pedido).catch(() => null) : null;
+      const archivo = info?.isFile() ? pedido : join(raiz, "index.html");
+      const tipo = TIPOS[extname(archivo)] ?? "application/octet-stream";
+      reply.removeHeader("x-frame-options");
+      return reply
+        .header("content-security-policy", CSP_DEMO.replace("frame-ancestors 'self' https:", "frame-ancestors 'self'"))
+        .header("cache-control", archivo.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable")
+        .header("x-content-type-options", "nosniff")
+        .type(tipo)
+        .send(createReadStream(archivo));
+    };
+    app.get("/__sitio/demo", publico, (request, reply) => reply.redirect("/demo/"));
+    app.get("/__sitio/demo/*", publico, demo);
 
     app.get("/__sitio/_ms/bloque/:tipo", publico, async (request) => {
       const s = await sitioDe(request);

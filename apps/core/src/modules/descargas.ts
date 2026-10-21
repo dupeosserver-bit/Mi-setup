@@ -27,7 +27,7 @@ export function carpetaDescargas(deps: ModuleDeps): string {
   return deps.config.env.DESCARGAS_DIR ?? join(deps.config.uploadsDir, "..", "descargas");
 }
 
-async function listar(dir: string) {
+export async function listarDescargas(dir: string) {
   const nombres = await readdir(dir).catch(() => [] as string[]);
   const filas = await Promise.all(
     nombres
@@ -41,16 +41,24 @@ async function listar(dir: string) {
   return versionesRecientes(filas.filter((f): f is NonNullable<typeof f> => f !== null)).map((f) => ({ ...f, version: versionDeArchivo(f.nombre) }));
 }
 
+export function tipoDescarga(nombre: string): string {
+  const n = nombre.toLowerCase();
+  if (n.endsWith(".apk")) return "application/vnd.android.package-archive";
+  if (n.endsWith(".exe")) return "application/vnd.microsoft.portable-executable";
+  if (n.endsWith(".yml")) return "text/yaml; charset=utf-8";
+  return "application/octet-stream";
+}
+
 export function descargasRoutes(deps: ModuleDeps) {
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/descargas", { config: { acceso: { autenticado: true } } }, async () => {
       const dir = carpetaDescargas(deps);
-      return { archivos: (await listar(dir)).map((f) => ({ ...f, url: `/api/descargas/${encodeURIComponent(f.nombre)}` })) };
+      return { archivos: (await listarDescargas(dir)).map((f) => ({ ...f, url: `/api/descargas/${encodeURIComponent(f.nombre)}` })) };
     });
 
     /** Versión del servidor y app de Android más nueva (la app avisa si hay versión nueva). */
     app.get("/api/actualizaciones", { config: { acceso: { autenticado: true } } }, async () => {
-      const archivos = await listar(carpetaDescargas(deps));
+      const archivos = await listarDescargas(carpetaDescargas(deps));
       const apk = archivos.find((f) => f.tipo === "android");
       return { version: VERSION, apk: apk ? { nombre: apk.nombre, url: `/api/descargas/${encodeURIComponent(apk.nombre)}`, fecha: apk.modificado } : null };
     });
@@ -61,16 +69,8 @@ export function descargasRoutes(deps: ModuleDeps) {
       const ruta = join(carpetaDescargas(deps), nombre);
       const s = await stat(ruta).catch(() => null);
       if (!s?.isFile()) throw new HttpError(404, "No encontrado");
-      const n = nombre.toLowerCase();
-      const tipo = n.endsWith(".apk")
-        ? "application/vnd.android.package-archive"
-        : n.endsWith(".exe")
-          ? "application/vnd.microsoft.portable-executable"
-          : n.endsWith(".yml")
-            ? "text/yaml; charset=utf-8"
-            : "application/octet-stream";
       return reply
-        .header("content-type", tipo)
+        .header("content-type", tipoDescarga(nombre))
         .header("content-length", String(s.size))
         .header("content-disposition", `attachment; filename="${nombre.replace(/"/g, "")}"`)
         .header("cache-control", "no-cache")

@@ -25,12 +25,18 @@ aplicarPreferenciasGuardadas();
 // En el celular los <a download> no hacen nada: se guardan con Filesystem.
 interceptarDescargas();
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function arrancar() {
+  // Demo pública: la app trae sus propios datos de ejemplo y no habla con ningún servidor.
+  if (import.meta.env.VITE_DEMO === "1") (await import("./demo")).activarDemo();
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+
+void arrancar();

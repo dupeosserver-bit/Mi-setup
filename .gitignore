@@ -21,3 +21,5 @@ MiSetup.apk
 docs/sitio-web/preview-completo.html
 !apps/ui/.env.publica
 !apps/ui/.env.movil-publica
+!apps/ui/.env.demo
+dist-demo/

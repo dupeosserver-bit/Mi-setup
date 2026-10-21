@@ -22,6 +22,7 @@ import { calcularCosto, clienteAnthropic, clienteOllama, type ClienteIa } from "
 import { SLUG_VALIDO, SLUGS_RESERVADOS, type DetectorSitios } from "./detector.js";
 import { armarPagina, type AjustesSitio, type PaginaPublicada } from "./publico.js";
 import { RUNTIME } from "./runtime.js";
+import type { ServicioComunidad } from "./comunidad.js";
 import { armarPaquete, cambiarIds, leerImportacion, ponerArchivos, type ArchivoPaquete } from "./paquete.js";
 
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -48,6 +49,11 @@ const ajustesSchema = z.object({
   avisos: z.boolean().optional(),
   /** Cómo se paga (transferencia, OXXO, PayPal…): se muestra al cliente al enviar su pedido. */
   pago: z.string().max(700).optional(),
+  /** Comunidad: proyectos y comentarios de visitantes (con antivirus y aprobación). */
+  comunidad: z.object({ activa: z.boolean(), oficial: z.string().trim().min(2).max(40).optional() }).optional(),
+  /** Muestra la demo de Mi Setup en /demo y las apps para descargar (solo sitios de la cuenta maestra). */
+  demo: z.boolean().optional(),
+  descargas: z.boolean().optional(),
 });
 
 const paginaSchema = z.object({
@@ -60,7 +66,7 @@ const paginaSchema = z.object({
 
 const columnaSchema = z.object({ nombre: z.string().regex(/^[a-z0-9_]{1,30}$/), tipo: z.enum(["texto", "numero", "imagen", "enlace"]) });
 
-export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, clienteIa?: ClienteIa) {
+export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, clienteIa?: ClienteIa, comunidad?: ServicioComunidad) {
   const { db } = deps;
   const dirSitio = (id: string) => join(carpetaArchivos(deps), "sitios", id);
 
@@ -292,6 +298,9 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       if (a) await unlink(join(dirSitio(s.id), a.storedName)).catch(() => undefined);
       return { ok: true };
     });
+
+    // ---------------------------------------------------------- comunidad (proyectos y comentarios de visitantes)
+    comunidad?.privadas(app, sitioDe);
 
     // ---------------------------------------------------------- formularios y pedidos
     app.get("/api/sitios/:id/entradas", leer, async (request) => {

@@ -52,6 +52,9 @@ export const envBase = z.object({
     GEMINI_API_KEY: optionalString,
     /** Token de Cloudflare (permiso Zone → DNS → Edit) para crear los registros DNS de los sitios. */
     CLOUDFLARE_API_TOKEN: optionalString,
+    /** Antivirus ClamAV (clamd) para revisar lo que sube la comunidad del sitio oficial. */
+    CLAMAV_HOST: optionalString,
+    CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
     /** App de TikTok (developers.tiktok.com) para publicar clips. */
     TIKTOK_CLIENT_KEY: optionalString,
     /** Modelo de Gemini para pasar voz a texto (dictado en PC). */
@@ -91,6 +94,8 @@ export const envBase = z.object({
     KICK_CLIENT_SECRET: optionalString,
     /** Carpeta de la UI compilada. En Docker: /app/public. */
     UI_DIR: optionalString,
+    /** Demo pública compilada (apps/ui con --mode demo); se sirve en /demo/. */
+    DEMO_DIR: optionalString,
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */
     UPLOADS_DIR: optionalString,
     /** Solo desarrollo: "1" usa Postgres embebido en .data/pglite (sin Docker). */
@@ -129,6 +134,7 @@ export interface Config {
   readonly ntfyUrl: string;
   /** Carpeta de la UI compilada (null = no se sirve UI). */
   readonly uiDir: string | null;
+  readonly demoDir: string | null;
   readonly uploadsDir: string;
 }
 
@@ -160,5 +166,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
     env.UPLOADS_DIR ??
     (isProduction ? "/data/uploads" : fileURLToPath(new URL("../../../.data/uploads", import.meta.url)));
 
-  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl, uiDir, uploadsDir };
+  const demoDir = env.DEMO_DIR ?? (isProduction ? null : fileURLToPath(new URL("../../ui/dist-demo", import.meta.url)));
+
+  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl, uiDir, demoDir, uploadsDir };
 }

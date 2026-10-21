@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:publica": "vite build --mode publica",
+    "build:demo": "vite build --mode demo",
     "build:movil": "vite build --mode movil",
     "build:movil-publica": "vite build --mode movil-publica",
     "typecheck": "tsc -p tsconfig.json --noEmit",

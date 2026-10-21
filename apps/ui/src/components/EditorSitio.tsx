@@ -12,6 +12,7 @@ import pluginCodigo from "grapesjs-custom-code";
 import pluginFormularios from "grapesjs-plugin-forms";
 import { Code2, FilePlus2, Monitor, Move, Redo2, Rocket, Save, Smartphone, Sparkles, Tablet, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PUBLICA } from "../edicion";
 import { API_BASE, api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { FUENTES_GOOGLE } from "../lib/plantillasSitios";
@@ -52,6 +53,8 @@ const BLOQUES: { id: string; etiqueta: string; emoji: string; html: string }[] =
   { id: "ms-youtube", etiqueta: "Último video", emoji: "▶️", html: `<div data-ms-bloque="youtube" data-canal="" style="padding:10px">Pon el ID de tu canal (UC…) en las propiedades.</div>` },
   { id: "ms-envivo", etiqueta: "En vivo (Twitch/Kick)", emoji: "🔴", html: `<div data-ms-bloque="envivo" data-twitch="" data-kick="" style="padding:10px">Pon tu canal en las propiedades.</div>` },
   { id: "ms-servidores", etiqueta: "Estado de servidores", emoji: "🟢", html: `<div data-ms-bloque="servidores" style="padding:10px">Elige los servidores en Ajustes del sitio.</div>` },
+  { id: "ms-comunidad", etiqueta: "Comunidad", emoji: "🧑‍🤝‍🧑", html: `<section data-ms-comunidad style="max-width:900px;margin:0 auto;padding:20px">Actívala en Ajustes del sitio → Comunidad.</section>` },
+  { id: "ms-descargas", etiqueta: "Descargas", emoji: "⬇️", html: `<section data-ms-descargas style="max-width:700px;margin:0 auto;padding:20px">Actívalas en Ajustes del sitio → Comunidad.</section>` },
   { id: "ms-login", etiqueta: "Iniciar sesión", emoji: "🔐", html: `<form data-ms-login data-ms-destino="/" style="display:flex;flex-direction:column;gap:10px;max-width:360px;margin:20px auto"><input name="correo" type="email" placeholder="Correo" required style="padding:12px;border-radius:10px;border:1px solid #ddd"><input name="clave" type="password" placeholder="Contraseña" required style="padding:12px;border-radius:10px;border:1px solid #ddd"><button type="submit" style="padding:12px;border:0;border-radius:10px;background:#111;color:#fff">Entrar</button></form>` },
   { id: "ms-usuario", etiqueta: "Nombre + salir", emoji: "👤", html: `<div style="display:flex;gap:10px;align-items:center;padding:10px">Hola, <strong data-ms-usuario>…</strong><button data-ms-salir style="padding:6px 12px;border-radius:8px">Salir</button></div>` },
   { id: "ms-pie", etiqueta: "Pie de página", emoji: "⬇️", html: `<footer style="padding:24px;text-align:center;background:#111;color:#fff">© Mi sitio · Hecho con Mi Setup</footer>` },
@@ -91,7 +94,8 @@ function configurarEditor(editor: Editor, idSitio: string) {
   ], "form");
 
   const bm = editor.BlockManager;
-  for (const b of BLOQUES) {
+  // En la edición pública no hay Pterodactyl: el bloque de servidores no aparece.
+  for (const b of BLOQUES.filter((x) => !(PUBLICA && x.id === "ms-servidores"))) {
     bm.add(b.id, { label: b.etiqueta, category: "Mi Setup", media: `<div style="font-size:26px;line-height:1">${b.emoji}</div>`, content: b.html });
   }
 

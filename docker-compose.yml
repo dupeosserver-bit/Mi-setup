@@ -89,6 +89,9 @@ services:
       MERCADOLIBRE_CLIENT_SECRET: ${MERCADOLIBRE_CLIENT_SECRET:-}
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      # Antivirus para lo que sube la comunidad del sitio oficial (servicio clamav de abajo).
+      CLAMAV_HOST: ${CLAMAV_HOST:-misetup-clamav}
+      CLAMAV_PORT: "3310"
     volumes:
       - misetup_uploads:/data/uploads
       # Archivos privados: compartidos por enlace, música y videos (no se sirven sin permiso).
@@ -137,6 +140,20 @@ services:
     networks:
       - web
 
+  # Antivirus ClamAV: revisa cada .zip (y cada repositorio de GitHub) que sube la
+  # comunidad del sitio oficial antes de que lo apruebes. Usa ~1 GB de RAM, por eso
+  # es opcional: se enciende con COMPOSE_PROFILES=comunidad en el .env.
+  # Sin él, los proyectos quedan «sin revisar» y no se pueden aprobar.
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: misetup-clamav
+    restart: unless-stopped
+    profiles: ["comunidad"]
+    volumes:
+      - misetup_clamav:/var/lib/clamav
+    networks:
+      - web
+
   caddy:
     image: caddy:2-alpine
     container_name: misetup-caddy
@@ -177,3 +194,4 @@ volumes:
   misetup_caddy_data:
   misetup_caddy_config:
   misetup_ollama:
+  misetup_clamav:

@@ -6,6 +6,7 @@
  * - [data-ms-producto] + carrito → pedido por WhatsApp (y queda guardado).
  * - [data-ms-login] / [data-ms-salir] → cuentas del área privada.
  * - [data-ms-bloque] → contador, clima, último video, en vivo, servidores.
+ * - [data-ms-descargas] / [data-ms-comunidad] → apps para bajar y comunidad (sitio oficial).
  * - Estadísticas privadas (visitas y clics), sin cookies de rastreo.
  * - App instalable (service worker) si el dueño la activó.
  */
@@ -229,6 +230,116 @@ export const RUNTIME = `(function () {
         });
       }).catch(function () {});
     }
+  });
+
+
+  // ---------------------------------------------------------- apps para descargar y comunidad (sitio oficial)
+  function el(tag, attrs, hijos) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (k === "texto") n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); });
+    (hijos || []).forEach(function (h) { if (h) n.appendChild(h); });
+    return n;
+  }
+  function mb(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB"; }
+  function fecha(t) { try { return new Date(t).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } }
+  document.querySelectorAll("[data-ms-descargas]").forEach(function (cont) {
+    fetch("/_ms/descargas").then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (d) {
+      cont.textContent = "";
+      if (!d.archivos.length) { cont.appendChild(el("p", { texto: "Pronto habrá descargas aquí." })); return; }
+      var vistos = {};
+      d.archivos.forEach(function (f) {
+        var nueva = !vistos[f.tipo];
+        vistos[f.tipo] = true;
+        cont.appendChild(el("div", { class: "ms-descarga" + (nueva ? " ms-nueva" : "") }, [
+          el("strong", { texto: (f.tipo === "android" ? "Android (APK)" : "Windows (PC)") + (f.version ? " · " + f.version : "") }),
+          el("span", { class: "ms-etiqueta", texto: nueva ? "Nueva" : "Anterior" }),
+          el("small", { texto: mb(f.tamano) + " · " + fecha(f.fecha) }),
+          el("a", { href: f.url, class: "ms-boton", download: "", texto: "Descargar" }),
+        ]));
+      });
+    }).catch(function () { cont.textContent = "Las descargas no están disponibles ahora."; });
+  });
+
+  function autor(c, oficial) {
+    return el("span", { class: "ms-autor" + (c.oficial ? " ms-oficial" : "") }, [
+      el("strong", { texto: c.autor }),
+      c.oficial ? el("span", { class: "ms-insignia", title: "Autor oficial de Mi Setup", texto: "✔ Oficial" }) : null,
+      el("small", { texto: " · " + fecha(c.fecha) }),
+    ]);
+  }
+  function comentario(c) { return el("div", { class: "ms-comentario" }, [autor(c), el("p", { texto: c.texto })]); }
+  function formComentario(proyecto, alEnviar) {
+    var f = el("form", { class: "ms-form-comentario", "data-ms-normal": "" }, [
+      el("input", { name: "nombre", maxlength: "40", placeholder: "Tu nombre (vacío = Anónimo)" }),
+      el("textarea", { name: "texto", maxlength: "1000", required: "", rows: "2", placeholder: "Escribe un comentario…" }),
+      el("input", { name: "_trampa", tabindex: "-1", autocomplete: "off", style: "position:absolute;left:-9999px", "aria-hidden": "true" }),
+      el("button", { type: "submit", texto: "Comentar" }),
+    ]);
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var datos = { nombre: f.nombre.value, texto: f.texto.value, _trampa: f._trampa.value };
+      if (proyecto) datos.proyecto = proyecto;
+      enviar("/_ms/comunidad/comentario", datos).then(function (r) { f.texto.value = ""; if (r.comentario) alEnviar(r.comentario); }).catch(function (err) { aviso(err.message); });
+    });
+    return f;
+  }
+  document.querySelectorAll("[data-ms-comunidad]").forEach(function (cont) {
+    var subir = el("form", { class: "ms-form-proyecto", "data-ms-normal": "" }, [
+      el("h3", { texto: "Sube tu versión" }),
+      el("input", { name: "nombre", maxlength: "40", placeholder: "Tu nombre (vacío = Anónimo)" }),
+      el("input", { name: "titulo", maxlength: "80", required: "", placeholder: "Nombre de tu versión" }),
+      el("textarea", { name: "descripcion", maxlength: "1500", rows: "3", placeholder: "¿Qué cambiaste?" }),
+      el("input", { name: "enlace", type: "url", maxlength: "200", placeholder: "https://github.com/usuario/proyecto" }),
+      el("label", { class: "ms-archivo" }, [el("span", { texto: "o sube un .zip (máx. 50 MB): " }), el("input", { name: "archivo", type: "file", accept: ".zip,application/zip" })]),
+      el("input", { name: "_trampa", tabindex: "-1", autocomplete: "off", style: "position:absolute;left:-9999px", "aria-hidden": "true" }),
+      el("small", { texto: "Cada archivo se revisa con antivirus y aparece cuando el autor lo aprueba." }),
+      el("button", { type: "submit", texto: "Enviar" }),
+    ]);
+    subir.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var boton = subir.querySelector("button");
+      var archivo = subir.archivo.files && subir.archivo.files[0];
+      var peticion;
+      if (archivo) {
+        var fd = new FormData();
+        ["nombre", "titulo", "descripcion", "enlace", "_trampa"].forEach(function (k) { fd.append(k, subir[k].value); });
+        fd.append("archivo", archivo);
+        peticion = fetch("/_ms/comunidad/proyecto", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw new Error(j.error || "Error"); return j; });
+        });
+      } else {
+        peticion = enviar("/_ms/comunidad/proyecto", { nombre: subir.nombre.value, titulo: subir.titulo.value, descripcion: subir.descripcion.value, enlace: subir.enlace.value, _trampa: subir._trampa.value });
+      }
+      boton.disabled = true;
+      peticion.then(function (r) { subir.reset(); aviso(r.mensaje || "¡Enviado!"); }).catch(function (err) { aviso(err.message); }).then(function () { boton.disabled = false; });
+    });
+    var lista = el("div", { class: "ms-proyectos" });
+    var muro = el("div", { class: "ms-muro" });
+    cont.textContent = "";
+    cont.appendChild(subir);
+    cont.appendChild(el("h3", { texto: "Versiones de la comunidad" }));
+    cont.appendChild(lista);
+    cont.appendChild(el("h3", { texto: "Comentarios" }));
+    cont.appendChild(muro);
+    fetch("/_ms/comunidad").then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (d) {
+      if (!d.proyectos.length) lista.appendChild(el("p", { class: "ms-vacio", texto: "Todavía no hay versiones aprobadas. ¡Sé el primero!" }));
+      d.proyectos.forEach(function (p) {
+        var hilo = el("div", { class: "ms-hilo" }, p.comentarios.map(comentario));
+        lista.appendChild(el("article", { class: "ms-proyecto" }, [
+          el("h4", { texto: p.titulo }),
+          autor(p),
+          p.texto ? el("p", { texto: p.texto }) : null,
+          el("div", { class: "ms-enlaces" }, [
+            p.enlace ? el("a", { href: p.enlace, target: "_blank", rel: "noopener nofollow ugc", texto: "Ver en GitHub" }) : null,
+            p.archivo ? el("a", { href: p.archivo.url, download: "", texto: "Descargar .zip (" + mb(p.archivo.tamano) + ")" }) : null,
+          ]),
+          hilo,
+          formComentario(p.id, function (c) { hilo.appendChild(comentario(c)); }),
+        ]));
+      });
+      d.comentarios.forEach(function (c) { muro.appendChild(comentario(c)); });
+      muro.appendChild(formComentario(null, function (c) { muro.insertBefore(comentario(c), muro.lastChild); }));
+    }).catch(function () { lista.textContent = "La comunidad no está disponible ahora."; });
   });
 
   // ---------------------------------------------------------- app instalable

@@ -37,6 +37,8 @@ import { ejerciciosRoutes } from "./modules/ejercicios.js";
 import { cloudflareRoutes } from "./modules/cloudflare.js";
 import { estudioRoutes } from "./modules/estudio.js";
 import { crearDetectorSitios, sitiosModule } from "./modules/sitios/index.js";
+import type { OpcionesComunidad } from "./modules/sitios/comunidad.js";
+import { sembrarSitioOficial } from "./modules/sitios/oficial.js";
 import { imagenesRoutes } from "./modules/imagenes.js";
 import { correoRoutes, purgarCorreos } from "./modules/correo.js";
 import { iaRoutes } from "./modules/ia/rutas.js";
@@ -84,6 +86,8 @@ export interface AppDeps {
   readonly fabricaBots?: FabricaMotor;
   /** Validación del token de un bot (pruebas). */
   readonly validarTokenBot?: ValidarToken;
+  /** Antivirus y descarga de GitHub falsos para la comunidad de los sitios (pruebas). */
+  readonly comunidad?: Omit<OpcionesComunidad, "deps">;
 }
 
 export interface App {
@@ -179,7 +183,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
     return reply.code(status).send({ error: error.message });
   });
 
-  const { hayUi } = await registerStatic(app, { uiDir: config.uiDir, uploadsDir: config.uploadsDir });
+  const { hayUi } = await registerStatic(app, { uiDir: config.uiDir, uploadsDir: config.uploadsDir, demoDir: config.demoDir });
   app.setNotFoundHandler((request, reply) => {
     const ruta = request.url.split("?")[0] ?? "";
     if (hayUi && request.method === "GET" && !ruta.startsWith("/api") && !ruta.startsWith("/uploads")) {
@@ -227,7 +231,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(ejerciciosRoutes(deps));
   await app.register(cloudflareRoutes(deps));
   await app.register(estudioRoutes(deps));
-  await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa));
+  await app.register(sitiosModule(deps, detectorSitios, appDeps.clienteIa, appDeps.comunidad));
   await app.register(imagenesRoutes(deps));
   jobs.push({ nombre: "suscripciones", cadaMs: 60 * 60_000, alInicio: true, run: () => revisarSuscripciones(deps) });
   jobs.push({ nombre: "limpiar-compartidos", cadaMs: 24 * 60 * 60_000, alInicio: true, run: () => limpiarCompartidos(deps) });
@@ -280,6 +284,7 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
     // Si la base aún no responde, se sigue con el .env.
     await aplicarClavesGuardadas(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron cargar las claves guardadas"));
     await sembrarRoles(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudieron crear los roles iniciales"));
+    await sembrarSitioOficial(deps).catch((err: unknown) => app.log.warn({ err }, "No se pudo preparar el sitio oficial"));
   };
 
   return { app, auth, hub, deps, jobs, gestorBots: personales?.gestorBots ?? null, preparar };

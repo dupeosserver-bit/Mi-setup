@@ -3,6 +3,7 @@
  * `pnpm branding` (assets/branding/icon.png) → el nombre "MexicanLand" en texto.
  * Nunca se usa una imagen genérica.
  */
+import { PUBLICA } from "../edicion";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, urlServidor } from "../lib/api";
@@ -34,7 +35,8 @@ export function Logo({ tamano = "md", conTexto = true }: { tamano?: keyof typeof
   const [fallo, setFallo] = useState<string | null>(null);
   const src = data?.logo ?? "/branding/logo.png";
   const mostrarImagen = fallo !== src;
-  const nombre = data?.nombre || "MexicanLand";
+  // La edición pública se llama Mi Setup; la personal, MexicanLand.
+  const nombre = data?.nombre || (PUBLICA ? "Mi Setup" : "MexicanLand");
   useEffect(() => {
     document.title = nombre;
   }, [nombre]);

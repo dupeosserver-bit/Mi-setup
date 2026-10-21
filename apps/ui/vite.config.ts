@@ -7,6 +7,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  // La demo pública se sirve en /demo/ (core la publica junto a la app).
+  base: mode === "demo" ? "/demo/" : "/",
   // App de Android: la UI va empaquetada y habla con el servidor por HTTPS.
   define: {
     // Versión de esta app (el celular la compara con la del servidor para avisar de actualizaciones).
@@ -37,7 +39,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: mode === "demo" ? "dist-demo" : "dist",
     emptyOutDir: true,
     chunkSizeWarningLimit: 1500,
   },

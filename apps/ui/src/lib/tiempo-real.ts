@@ -36,7 +36,8 @@ class TiempoReal {
   };
 
   iniciar() {
-    if (this.activo) return;
+    // La demo no tiene servidor: no hay tiempo real.
+    if (this.activo || import.meta.env.VITE_DEMO === "1") return;
     this.activo = true;
     this.conectar();
   }

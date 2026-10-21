@@ -7,7 +7,8 @@
   "description": "Backend de Mi Setup (API, WebSocket, migraciones)",
   "files": [
     "dist",
-    "drizzle"
+    "drizzle",
+    "sitio-oficial"
   ],
   "scripts": {
     "dev": "tsx watch --conditions=development src/index.ts",

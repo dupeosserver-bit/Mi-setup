@@ -18,8 +18,10 @@ COPY apps/ui apps/ui
 COPY scripts/edicion-publica.mjs scripts/
 RUN pnpm --filter "@mi-setup/core..." build \
   && VITE_EDICION=$EDICION pnpm --filter @mi-setup/ui build \
+  && pnpm --filter @mi-setup/ui build:demo \
   && pnpm --filter @mi-setup/core deploy --prod /out \
   && cp -r apps/ui/dist /out/public \
+  && cp -r apps/ui/dist-demo /out/public-demo \
   && if [ "$EDICION" = "publica" ]; then node scripts/edicion-publica.mjs core /out/dist; fi
 
 FROM node:22-alpine AS runtime
@@ -29,6 +31,7 @@ RUN apk add --no-cache ffmpeg yt-dlp
 ENV NODE_ENV=production \
     EDICION=$EDICION \
     UI_DIR=/app/public \
+    DEMO_DIR=/app/public-demo \
     UPLOADS_DIR=/data/uploads \
     ARCHIVOS_DIR=/data/archivos
 WORKDIR /app
