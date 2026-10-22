@@ -85,7 +85,7 @@ export function EnergiaVps({ servidor, nombre }: { servidor: string; nombre: str
               { id: "servicios", texto: "Servicios (systemd)" },
             ]}
           />
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-borde px-2">
+          <label className="mb-4 flex w-full min-w-[12rem] flex-1 items-center gap-2 rounded-xl border border-borde px-2 sm:w-auto">
             <Search className="h-4 w-4 text-tenue" />
             <Entrada className="border-0 bg-transparent px-0" value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar" />
           </label>

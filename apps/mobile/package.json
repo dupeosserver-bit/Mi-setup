@@ -1,15 +1,18 @@
 {
   "name": "@mi-setup/mobile",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "etapa": "b",
   "private": true,
-  "description": "Mi Setup para Android (Capacitor): biometría y notificaciones",
+  "description": "Mi Setup para Android e iPhone (Capacitor): biometría y notificaciones",
   "scripts": {
     "sincronizar": "pnpm --filter @mi-setup/ui build:movil && cap sync android",
     "sincronizar:publica": "pnpm --filter @mi-setup/ui build:movil-publica && cap sync android",
     "abrir": "cap open android",
     "apk": "cd android && gradlew assembleDebug",
-    "apk:release": "cd android && gradlew assembleRelease"
+    "apk:release": "cd android && gradlew assembleRelease",
+    "ios:preparar": "pnpm add @capacitor/ios@^6.2.0 && cap add ios",
+    "ios:sincronizar": "pnpm --filter @mi-setup/ui build:movil && cap sync ios",
+    "ios:abrir": "cap open ios"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^6.0.1",

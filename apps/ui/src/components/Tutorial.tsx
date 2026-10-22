@@ -23,28 +23,17 @@ export interface GrupoTutorial {
 const EVENTO = "mi-setup:tutorial";
 
 /** Versión de las novedades de abajo: al subirla, el tutorial se vuelve a abrir solo con lo nuevo. */
-export const VERSION_NOVEDADES = "0.11.2b";
+export const VERSION_NOVEDADES = "0.11.3b";
 
 /** Lo nuevo de esta versión; cada línea sale solo si la cuenta puede usar ese apartado. */
 const NOVEDADES: readonly { modulo: ModuleId; texto: string }[] = [
-  { modulo: "ajustes", texto: "La app ya está en español, inglés, portugués, francés, alemán e italiano (Ajustes → Apariencia → Idioma)." },
-  { modulo: "finanzas_personales", texto: "Mis finanzas: resumen de la semana con gráfica, pagos divididos por monto o porcentaje con enlace o imagen para cobrar, y Rendimientos con las tasas del día." },
-  { modulo: "inversiones", texto: "Inversiones: ficha de cada acción con estadísticas, gráficas, finanzas y noticias, y botones a sitios confiables para invertir." },
-  { modulo: "cripto", texto: "Cripto: estadísticas y gráficas de cada moneda, y botones a sitios confiables para comprar." },
-  { modulo: "ia", texto: "IA: chats con proyectos, memoria y skills; mueve, exporta e importa chats, y usa modelos gratis en tu VPS." },
-  { modulo: "boveda", texto: "La huella usa la ventana de Android para abrir la bóveda." },
-  { modulo: "notas", texto: "Notas: guarda todos los adjuntos en un .zip." },
-  { modulo: "vps_seguridad", texto: "Seguridad del servidor: reinicia el VPS, Docker, Mi Setup o un servicio, con confirmación." },
-  { modulo: "vps_archivos", texto: "Archivos del VPS: «Organizar» ya no pisa archivos que se llamen igual." },
-  { modulo: "pterodactyl", texto: "Pterodactyl: instala extensiones de Blueprint desde un archivo o desde la tienda gratis." },
-  { modulo: "herramientas", texto: "Herramientas: QR con formas y logo, y vista previa HTML que se adapta o se abre en una ventana flotante." },
-  { modulo: "host_local", texto: "Servidores en mi PC: mapa de semillas con estructuras e historial, y servidores desde un modpack." },
-  { modulo: "codigo", texto: "Código: abre y edita un archivo de tu equipo también desde el navegador o el celular." },
-  { modulo: "editor_fotos", texto: "Editor de fotos: borrador, cuentagotas, atajos de teclado y paneles como Photoshop." },
-  { modulo: "editor_video", texto: "Editor de video: transiciones, efectos, calidades hasta 4K y difuminar marcas de agua de tus propios videos." },
-  { modulo: "documentos", texto: "Documentos: firma un PDF o una foto justo donde tú quieras." },
-  { modulo: "sitios", texto: "Sitios y apps: editor cómodo en el celular, botones que llevan a una página, un enlace o un archivo, y exportar o importar sitios." },
-  { modulo: "sitios", texto: "Sitios y apps: «Comunidad» para que tus visitantes suban proyectos y comenten, con filtro de groserías, antivirus y tu aprobación." },
+  { modulo: "ajustes", texto: "Letras más legibles: sube el contraste, cambia el color de las letras o ponles sombra (Ajustes → Apariencia). Las barras de transparencia ya se mueven fluidas." },
+  { modulo: "ajustes", texto: "Logo nuevo de Mi Setup, y en iPhone ya se instala desde Safari (Ajustes → Descargar apps → iPhone y iPad)." },
+  { modulo: "notas", texto: "Bloc de notas: «En vivo» también en el celular vertical, y la nota de voz ya no pide permiso de más." },
+  { modulo: "ia", texto: "IA: crear o editar un proyecto en el celular ya no se esconde detrás de la lista de chats." },
+  { modulo: "novedades", texto: "Vigilar precios: ya funciona con páginas grandes como Amazon." },
+  { modulo: "host_local", texto: "Semillas: ver el Nether ya no da error." },
+  { modulo: "vps_seguridad", texto: "Encendido y servicios: el buscador se ve también con el celular vertical." },
 ];
 
 /** Vuelve a abrir el tutorial (botón en Ajustes). */

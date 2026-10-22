@@ -73,6 +73,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Sin este permiso el WebView rechaza el micrófono aunque RECORD_AUDIO ya esté dado. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />

@@ -382,6 +382,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
       "Mis claves: pon tus propias claves de IA, Gemini, TMDB o CurseForge y decide si las compartes (con aviso).",
       "Servicios y claves (cuenta maestra o con permiso): las claves de API del servidor.",
       "Idioma: español, inglés, portugués, francés, alemán o italiano (también se elige al entrar).",
+      "Letras más legibles (Apariencia): contraste de las explicaciones, color de las letras y sombra suave, para leer bien encima del fondo de pantalla.",
     ],
   },
 };

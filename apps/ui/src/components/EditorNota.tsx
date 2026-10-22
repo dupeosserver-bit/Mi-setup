@@ -588,7 +588,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
             <Boton tamano="sm" variante={modo === "editar" ? "primario" : "fantasma"} icono={PenLine} onClick={() => setModo("editar")}>
               Escribir
             </Boton>
-            <Boton tamano="sm" variante={modo === "vivo" ? "primario" : "fantasma"} icono={Columns2} onClick={() => setModo("vivo")} className="hidden sm:inline-flex">
+            <Boton tamano="sm" variante={modo === "vivo" ? "primario" : "fantasma"} icono={Columns2} onClick={() => setModo("vivo")}>
               En vivo
             </Boton>
             <Boton tamano="icono" variante="fantasma" icono={Palette} aria-label="Color de la nota" title="Color de la nota" onClick={() => setColores((v) => !v)} />
@@ -730,9 +730,9 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
               onPaste={pegar}
               onDrop={soltar}
               onDragOver={(e) => e.preventDefault()}
-              className="min-h-[40vh] flex-1 resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none placeholder:text-tenue"
+              className={cx("flex-1 resize-none bg-transparent", modo === "vivo" ? "min-h-[30vh]" : "min-h-[40vh]", "px-4 py-3 text-sm leading-relaxed outline-none placeholder:text-tenue")}
             />
-            {modo === "vivo" ? <div className="min-h-[20vh] border-t border-borde md:border-l md:border-t-0">{pagina}</div> : null}
+            {modo === "vivo" ? <div className="min-h-[30vh] overflow-auto border-t border-borde md:border-l md:border-t-0">{pagina}</div> : null}
           </div>
         </>
       ) : (

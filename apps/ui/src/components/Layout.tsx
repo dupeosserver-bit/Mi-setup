@@ -76,7 +76,10 @@ function useFondo(fondo: string | null, fondoPc: string | null, ajuste: "auto" |
   }, [url]);
   if (!url) return undefined;
   const velo = "linear-gradient(color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent), color-mix(in srgb, var(--fondo) calc(var(--velo, 90) * 1%), transparent))";
-  const completo = ajuste === "completo" || (ajuste === "auto" && forma !== null && Math.abs(Math.log(forma / ancho)) > Math.log(1.4));
+  // En el celular (pantalla táctil) «Automático» siempre llena la pantalla, también al girarlo:
+  // si no, una foto vertical se veía chiquita en horizontal.
+  const tactil = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  const completo = ajuste === "completo" || (ajuste === "auto" && !tactil && forma !== null && Math.abs(Math.log(forma / ancho)) > Math.log(1.4));
   if (!completo) return { backgroundImage: `${velo}, url(${url})`, backgroundSize: "cover", backgroundPosition: "center" };
   // Imagen completa al centro y, detrás, la misma imagen llenando la pantalla pero oscurecida.
   return {

@@ -44,6 +44,26 @@ function aplicarVidrio(p: Preferencias): void {
   }
 }
 
+const COLORES_LECTURA = { blanco: "#ffffff", crema: "#fff4d6", celeste: "#cfe8ff", negro: "#0b0b0f" } as const;
+
+/** Letras más legibles: refuerza el texto secundario y, si se pide, le pone sombra. */
+function aplicarLectura(p: Preferencias): void {
+  const raiz = document.documentElement;
+  const l = p.lectura;
+  raiz.style.removeProperty("--texto-2");
+  const fijo = l.color !== "tema" ? COLORES_LECTURA[l.color] : null;
+  const mezcla = l.contraste === "maximo" ? 100 : l.contraste === "alto" ? 60 : 0;
+  if (fijo) raiz.style.setProperty("--texto", fijo);
+  else raiz.style.removeProperty("--texto");
+  if (mezcla) {
+    const estilo = getComputedStyle(raiz);
+    const texto = fijo ?? estilo.getPropertyValue("--texto").trim();
+    const tenue = estilo.getPropertyValue("--texto-2").trim();
+    if (texto && tenue) raiz.style.setProperty("--texto-2", `color-mix(in srgb, ${texto} ${mezcla}%, ${tenue})`);
+  } else if (fijo) raiz.style.setProperty("--texto-2", `color-mix(in srgb, ${fijo} 75%, transparent)`);
+  raiz.dataset["sombraTexto"] = l.sombra ? "si" : "no";
+}
+
 /** Aplica tema, fuente y zoom al documento. */
 export function aplicarPreferencias(p: Preferencias): void {
   const raiz = document.documentElement;
@@ -54,6 +74,7 @@ export function aplicarPreferencias(p: Preferencias): void {
     const poner = () => {
       raiz.dataset["tema"] = consulta.matches ? "claro" : "oscuro";
       aplicarVidrio(p);
+      aplicarLectura(p);
     };
     poner();
     consulta.addEventListener("change", poner);
@@ -62,6 +83,7 @@ export function aplicarPreferencias(p: Preferencias): void {
     raiz.dataset["tema"] = p.tema;
   }
   aplicarVidrio(p);
+  aplicarLectura(p);
   raiz.style.setProperty("--fuente", FUENTES_APP[p.fuente].css);
   // El zoom escala el tamaño base: toda la interfaz usa rem, así que crece o se achica entera.
   raiz.style.fontSize = `${(16 * p.zoom) / 100}px`;
@@ -97,17 +119,24 @@ export function usePreferencias() {
 }
 
 /** Cambia una parte de las preferencias, la aplica al momento y la guarda en el servidor. */
+let esperaGuardar: ReturnType<typeof setTimeout> | null = null;
+
 export function useGuardarPreferencias() {
   const actuales = usePreferencias();
   const m = useMutation({
     mutationFn: (p: Preferencias) => api<Preferencias>("/api/preferencias", { metodo: "PUT", cuerpo: p }),
-    onSuccess: (p) => queryClient.setQueryData(["preferencias"], p),
   });
   return (cambio: (p: Preferencias) => Preferencias) => {
-    const nuevas = cambio(actuales);
+    // Siempre sobre lo último (no sobre lo que había al pintar), para que las barras no regresen.
+    const nuevas = cambio(queryClient.getQueryData<Preferencias>(["preferencias"]) ?? actuales);
     aplicarPreferencias(nuevas);
     queryClient.setQueryData(["preferencias"], nuevas);
-    m.mutate(nuevas);
+    // Al mover una barra rápido solo se manda lo último, un momento después de soltarla.
+    if (esperaGuardar) clearTimeout(esperaGuardar);
+    esperaGuardar = setTimeout(() => {
+      esperaGuardar = null;
+      m.mutate(queryClient.getQueryData<Preferencias>(["preferencias"]) ?? nuevas);
+    }, 400);
   };
 }
 

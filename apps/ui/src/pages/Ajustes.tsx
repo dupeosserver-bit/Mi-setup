@@ -310,6 +310,28 @@ function Apariencia() {
             </Campo>
           </div>
         </Tarjeta>
+        <Tarjeta titulo="Letras más legibles">
+          <p className="mb-3 text-xs text-tenue">Si algunas explicaciones no se alcanzan a leer (sobre todo encima del fondo de pantalla), súbeles el contraste o cámbiales el color.</p>
+          <div className="space-y-4">
+            <Campo etiqueta="Contraste de las explicaciones">
+              <Selector value={prefs.lectura.contraste} onChange={(e) => guardar((p) => ({ ...p, lectura: { ...p.lectura, contraste: e.target.value as "normal" | "alto" | "maximo" } }))}>
+                <option value="normal">Normal</option>
+                <option value="alto">Alto (recomendado con fondo de pantalla)</option>
+                <option value="maximo">Máximo (igual que los títulos)</option>
+              </Selector>
+            </Campo>
+            <Campo etiqueta="Color de las letras" ayuda="Con fondo oscuro se leen mejor blanco o crema; con tema claro, negro.">
+              <Selector value={prefs.lectura.color} onChange={(e) => guardar((p) => ({ ...p, lectura: { ...p.lectura, color: e.target.value as "tema" | "blanco" | "crema" | "celeste" | "negro" } }))}>
+                <option value="tema">El del tema</option>
+                <option value="blanco">Blanco</option>
+                <option value="crema">Crema (cansa menos la vista)</option>
+                <option value="celeste">Celeste</option>
+                <option value="negro">Negro (para temas claros)</option>
+              </Selector>
+            </Campo>
+            <Interruptor activo={prefs.lectura.sombra} alCambiar={(v) => guardar((p) => ({ ...p, lectura: { ...p.lectura, sombra: v } }))} etiqueta="Sombra suave detrás de las letras (ayuda con fondos de pantalla con mucho detalle)" />
+          </div>
+        </Tarjeta>
         <Tarjeta titulo="Fondo transparente">
           {apariencia?.fondo ? null : (
             <p className="mb-3 text-xs text-tenue">Primero pon un fondo de pantalla (en «Imágenes», lo cambia la cuenta maestra); luego aquí lo dejas ver.</p>

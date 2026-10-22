@@ -47,11 +47,13 @@ export interface OpcionesDescarga {
   timeoutMs?: number;
   maxBytes?: number;
   maxRedirecciones?: number;
+  /** Si la página pasa del límite, devuelve lo que alcanzó a leer en vez de fallar. */
+  cortar?: boolean;
 }
 
 /** Descarga texto (HTML) de una URL pública. */
 export async function descargarTextoSeguro(urlTexto: string, opciones: OpcionesDescarga = {}): Promise<string> {
-  const { timeoutMs = 15_000, maxBytes = 2_000_000, maxRedirecciones = 3 } = opciones;
+  const { timeoutMs = 15_000, maxBytes = 2_000_000, maxRedirecciones = 3, cortar = false } = opciones;
   let url = new URL(urlTexto);
   for (let salto = 0; ; salto++) {
     await validarDestino(url);
@@ -77,6 +79,7 @@ export async function descargarTextoSeguro(urlTexto: string, opciones: OpcionesD
       total += value.byteLength;
       if (total > maxBytes) {
         await lector.cancel();
+        if (cortar) break;
         throw new HttpError(502, "La página es demasiado grande");
       }
       partes.push(value);

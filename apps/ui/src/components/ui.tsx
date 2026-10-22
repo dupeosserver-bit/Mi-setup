@@ -278,7 +278,7 @@ export function Modal({
   }, [abierto, alCerrar]);
   if (!abierto) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onMouseDown={alCerrar}>
+    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onMouseDown={alCerrar}>
       <div
         className={cx("max-h-[92vh] w-full overflow-y-auto rounded-t-tarjeta border border-borde bg-superficie p-5 sm:rounded-tarjeta safe-bottom", ancho)}
         onMouseDown={(e) => e.stopPropagation()}
@@ -319,7 +319,7 @@ export function avisarError(error: unknown): void {
 export function Avisos() {
   const lista = useAvisos((s) => s.lista);
   return (
-    <div className="pointer-events-none fixed bottom-20 left-1/2 z-[60] flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 flex-col gap-2 md:bottom-6">
+    <div className="pointer-events-none fixed bottom-20 left-1/2 z-[95] flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 flex-col gap-2 md:bottom-6">
       {lista.map((a) => {
         const Icono = a.tono === "ok" ? CheckCircle2 : a.tono === "error" ? AlertTriangle : Info;
         return (

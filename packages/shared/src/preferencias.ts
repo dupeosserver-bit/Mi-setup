@@ -104,6 +104,17 @@ export const preferenciasSchema = z.object({
       ajuste: z.enum(["auto", "llenar", "completo"]).default("auto"),
     })
     .default({}),
+  /** Que se lean mejor los textos (sobre todo encima de un fondo de pantalla). */
+  lectura: z
+    .object({
+      /** Qué tan fuertes se ven los textos secundarios (explicaciones, ayudas). */
+      contraste: z.enum(["normal", "alto", "maximo"]).default("normal"),
+      /** Color de esos textos: el del tema o uno fijo. */
+      color: z.enum(["tema", "blanco", "crema", "celeste", "negro"]).default("tema"),
+      /** Sombra suave detrás de las letras. */
+      sombra: z.boolean().default(false),
+    })
+    .default({}),
   terminal: z
     .object({
       tema: z.enum(claves(TEMAS_TERMINAL)).default("mi-setup"),

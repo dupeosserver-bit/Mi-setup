@@ -231,7 +231,9 @@ export function Semillas() {
             >
               <canvas ref={lienzo} className="absolute inset-0" />
               {marcadores.map((m, i) => {
-                const e = ESTRUCTURAS.find((x) => x.id === m.tipo && x.dim === dim)!;
+                // Al cambiar de dimensión pueden quedar marcadores de la anterior un instante.
+                const e = ESTRUCTURAS.find((x) => x.id === m.tipo && x.dim === dim);
+                if (!e) return null;
                 const p = aPantalla(m.x, m.z);
                 return (
                   <span

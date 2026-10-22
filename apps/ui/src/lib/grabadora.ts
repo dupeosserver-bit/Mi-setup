@@ -23,8 +23,16 @@ export async function grabarAudio(): Promise<Grabacion> {
   let flujo: MediaStream;
   try {
     flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-  } catch {
-    throw new Error("Permite el micrófono para grabar");
+  } catch (e) {
+    // Algunos celulares no aceptan los ajustes de audio: se intenta con el micrófono tal cual.
+    try {
+      flujo = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      const nombre = e instanceof DOMException ? e.name : "";
+      if (nombre === "NotFoundError") throw new Error("No se encontró un micrófono");
+      if (nombre === "NotReadableError") throw new Error("Otra app está usando el micrófono; ciérrala e intenta otra vez");
+      throw new Error("Permite el micrófono para grabar (en el celular: Ajustes → Apps → Mi Setup → Permisos → Micrófono)");
+    }
   }
   const tipo = tipoAudio();
   const grabadora = new MediaRecorder(flujo, tipo ? { mimeType: tipo, audioBitsPerSecond: 48_000 } : undefined);

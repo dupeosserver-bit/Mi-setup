@@ -1,6 +1,6 @@
 {
   "name": "@mi-setup/shared",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "etapa": "b",
   "private": true,
   "type": "module",

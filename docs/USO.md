@@ -594,3 +594,29 @@ tar -xzf /root/mi-setup.tar.gz -C /opt/mi-setup/app && cd /opt/mi-setup/app && d
 ### Actualizar el VPS
 
 Igual que siempre (`docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans`). Después sube `MiSetup-0.11.2.exe`, su `.blockmap`, `latest.yml` y `MiSetup-0.11.2b.apk` a `/opt/mi-setup/descargas/` y corre `python3 /opt/mi-setup/app/deploy/limpiar-descargas.py`.
+
+## Versión 0.11.3b
+
+- **Bloc de notas**: «En vivo» también en el celular vertical (arriba escribes, abajo ves la página). La nota de voz ya no pide permiso cuando ya se dio (faltaba el permiso `MODIFY_AUDIO_SETTINGS` en Android: hay que instalar el APK nuevo).
+- **Fondo de pantalla**: al girar el celular sigue llenando la pantalla (en «Automático» los celulares siempre llenan; la imagen completa con relleno queda para la PC).
+- **IA**: crear o editar un proyecto en el celular ya no queda detrás de la lista de chats.
+- **Páginas 1, 2, 3…**: al cambiar de página la pantalla se queda donde estaba.
+- **Semillas**: ver el Nether ya no da el error «Cannot read properties of undefined».
+- **Encendido y servicios**: el buscador se ve con el celular vertical.
+- **Letras más legibles** (Ajustes → Apariencia): contraste de las explicaciones, color de las letras (tema, blanco, crema, celeste o negro) y sombra suave. Las barras de transparencia ya se mueven fluidas (se guarda solo lo último, un momento después de soltar).
+- **Vigilar precios**: las páginas grandes (Amazon y otras) se leen hasta 10 MB; si pasan, se usa lo leído en vez de dar «La página es demasiado grande».
+- **Logo nuevo** en la web, Windows y Android (`assets/branding/icon.png`, generado con `pnpm branding`).
+- **iPhone (base)**: la web se instala desde Safari → Compartir → **Agregar a inicio** y abre a pantalla completa (manifest y etiquetas de Apple). Instrucciones en Ajustes → Descargar apps → iPhone y iPad. La app nativa queda preparada para hacerse en una Mac (ver abajo).
+
+### iPhone como app nativa (para después, necesita una Mac)
+
+En una Mac con Xcode:
+
+```bash
+pnpm install
+pnpm --filter @mi-setup/mobile ios:preparar
+pnpm --filter @mi-setup/mobile ios:sincronizar
+pnpm --filter @mi-setup/mobile ios:abrir
+```
+
+Para que otras personas la instalen hace falta una cuenta de Apple Developer (99 USD al año) y publicarla en TestFlight o la App Store. La huella (Face ID) y las notificaciones necesitan ajustes propios de iOS.

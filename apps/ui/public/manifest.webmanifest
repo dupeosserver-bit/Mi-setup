@@ -1,0 +1,15 @@
+{
+  "name": "Mi Setup",
+  "short_name": "Mi Setup",
+  "description": "Tu servidor, tus apps y tu día en un solo lugar.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    { "src": "branding/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "branding/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

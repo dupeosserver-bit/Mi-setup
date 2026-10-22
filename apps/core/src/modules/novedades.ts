@@ -15,6 +15,9 @@ import { idParams, type ModuleDeps } from "./common.js";
 import { pedirJson } from "./http-json.js";
 import { descargarTextoSeguro } from "./red-segura.js";
 
+/** Las tiendas grandes (Amazon, Mercado Libre…) mandan páginas de 3 a 8 MB: se leen hasta 10 MB y, si pasan, se usa lo leído. */
+const PAGINA_TIENDA = { maxBytes: 10_000_000, cortar: true, timeoutMs: 20_000 };
+
 // ---------------------------------------------------------------- caché simple en memoria
 
 const cache = new Map<string, { hasta: number; valor: unknown }>();
@@ -202,7 +205,7 @@ function vigilanteDto(w: typeof priceWatches.$inferSelect) {
 async function revisarUno(deps: ModuleDeps, w: typeof priceWatches.$inferSelect) {
   const ahora = deps.now();
   try {
-    const html = await descargarTextoSeguro(w.url);
+    const html = await descargarTextoSeguro(w.url, PAGINA_TIENDA);
     const { precio, texto } = extraerPrecio(html, w.selector);
     const anterior = w.lastPrice === null ? null : Number(w.lastPrice);
     const [act] = await deps.db
@@ -629,7 +632,7 @@ export function novedadesRoutes(deps: ModuleDeps) {
     // Probar una página antes de guardar: dice qué precio encontró y cómo.
     app.post("/api/novedades/vigilante/probar", escribir, async (request) => {
       const d = vigilanteSchema.pick({ url: true, selector: true }).parse(request.body);
-      const html = await descargarTextoSeguro(d.url);
+      const html = await descargarTextoSeguro(d.url, PAGINA_TIENDA);
       if (!d.selector) return detectarPrecio(html);
       return { ...extraerPrecio(html, d.selector), metodo: `selector ${d.selector}` };
     });

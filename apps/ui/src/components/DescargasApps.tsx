@@ -66,6 +66,31 @@ export function DescargasApps() {
         </div>
       </Tarjeta>
       <SeccionActualizaciones />
+      <Tarjeta titulo="iPhone y iPad">
+        <p className="mb-2 text-sm text-tenue">Mi Setup se instala como app desde Safari (no hace falta la App Store):</p>
+        <ol className="list-decimal space-y-1 pl-5 text-sm text-tenue">
+          <li>
+            En el iPhone abre <b className="text-texto">Safari</b> y entra a <b className="text-texto">{API_BASE || window.location.origin}</b>.
+          </li>
+          <li>
+            Toca <b className="text-texto">Compartir</b> (el cuadro con la flecha) → <b className="text-texto">Agregar a inicio</b> → <b className="text-texto">Agregar</b>.
+          </li>
+          <li>Ábrela desde el ícono: se ve a pantalla completa, como una app. Entra con tu cuenta.</li>
+        </ol>
+        <Boton
+          tamano="sm"
+          className="mt-3"
+          icono={Copy}
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(API_BASE || window.location.origin)
+              .then(() => avisar("Dirección copiada: mándasela a quien tenga iPhone"))
+              .catch(() => avisar(API_BASE || window.location.origin, "info"))
+          }
+        >
+          Copiar la dirección para un iPhone
+        </Boton>
+      </Tarjeta>
       <Tarjeta titulo="¿Android dice que la app es peligrosa?">
         <ol className="list-decimal space-y-1 pl-5 text-sm text-tenue">
           <li>Es normal con apps que no vienen de la Play Store: Android avisa con todas las apps instaladas "a mano".</li>
