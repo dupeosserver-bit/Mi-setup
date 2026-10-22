@@ -3907,5 +3907,12 @@
 "Sombra suave detrás de las letras (ayuda con fondos de pantalla con mucho detalle)": "Sombra suave atrás das letras (ajuda com papéis de parede cheios de detalhes)",
 "Permite el micrófono para grabar (en el celular: Ajustes → Apps → Mi Setup → Permisos → Micrófono)": "Permita o microfone para gravar (no celular: Configurações → Apps → Mi Setup → Permissões → Microfone)",
 "No se encontró un micrófono": "Nenhum microfone encontrado",
-"Otra app está usando el micrófono; ciérrala e intenta otra vez": "Outro app está usando o microfone; feche-o e tente de novo"
+"Otra app está usando el micrófono; ciérrala e intenta otra vez": "Outro app está usando o microfone; feche-o e tente de novo",
+"Letras más legibles (Apariencia): contraste de las explicaciones, color de las letras y sombra suave, para leer bien encima del fondo de pantalla.": "Letras mais legíveis (Aparência): contraste das explicações, cor das letras e sombra suave, para ler bem sobre o papel de parede.",
+"Sitio oficial actualizado y publicado": "Site oficial atualizado e publicado",
+"Sitio oficial actualizado (sin publicar)": "Site oficial atualizado (sem publicar)",
+"Pone la wiki, las capturas, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.": "Atualiza a wiki, as capturas, o logo e a versão com esta versão do Mi Setup. Se já estiver publicado, o novo também é publicado.",
+"Actualizar el sitio oficial": "Atualizar o site oficial",
+"Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "As páginas são substituídas pelas desta versão. O que você mudou à mão no editor se perde (fica no histórico de versões).",
+"Actualizar con esta versión": "Atualizar com esta versão"
 }

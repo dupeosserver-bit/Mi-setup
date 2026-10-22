@@ -13,7 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, eq } from "drizzle-orm";
-import { siteAssets, sites, users } from "../../db/schema.js";
+import { siteAssets, sites, siteVersions, users } from "../../db/schema.js";
 import { VERSION } from "../../version.js";
 import type { ModuleDeps } from "../common.js";
 import { carpetaArchivos } from "../herramientas.js";
@@ -44,6 +44,7 @@ img{max-width:100%;display:block}
 .nav{position:sticky;top:0;z-index:20;background:rgba(11,13,18,.92);border-bottom:1px solid #252b37}
 .nav .ancho{display:flex;align-items:center;gap:16px;min-height:62px;flex-wrap:wrap}
 .logo{font-weight:800;font-size:18px;color:#eceff5;display:flex;gap:10px;align-items:center}
+.logo img{width:32px;height:32px;border-radius:9px;object-fit:cover}
 .logo b{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#b49cff,#7dd3fc);display:grid;place-items:center;color:#111;font-size:15px}
 .menu{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
 .menu a{color:#98a2b6;padding:7px 12px;border-radius:10px;font-size:14px}
@@ -114,13 +115,13 @@ const PAGINAS = [
 ] as const;
 type IdPagina = (typeof PAGINAS)[number][0];
 
-function marco(activa: IdPagina, cuerpo: string): string {
+function marco(activa: IdPagina, cuerpo: string, logo: string | null): string {
   const enlaces = (clase: string) =>
     `<div class="menu ${clase}">${PAGINAS.slice(1)
       .map(([id, t, r]) => `<a href="${r}"${id === activa ? ' class="activo"' : ""}>${t}</a>`)
       .join("")}</div>`;
   return `<div class="aviso-ia">🤖 Hecho con IA · El autor no pide créditos · Esta es la página oficial de Mi Setup</div>
-<nav class="nav"><div class="ancho"><a class="logo" href="/"><b>M</b> Mi Setup</a>${enlaces("menu-escritorio")}<details class="menu-movil"><summary aria-label="Menú">☰</summary>${enlaces("")}</details></div></nav>
+<nav class="nav"><div class="ancho"><a class="logo" href="/">${logo ? `<img src="${logo}" alt="" width="32" height="32">` : "<b>M</b>"} Mi Setup</a>${enlaces("menu-escritorio")}<details class="menu-movil"><summary aria-label="Menú">☰</summary>${enlaces("")}</details></div></nav>
 <main class="pagina"><div class="ancho">${cuerpo}</div></main>
 <footer><div class="ancho"><span>Mi Setup · Página oficial · Hecho con IA (el autor no pide créditos) · Código abierto (MIT)</span><span><a href="https://x.com/${X_OFICIAL}" target="_blank" rel="noopener">𝕏 @${X_OFICIAL}</a> · <a href="${GITHUB}" target="_blank" rel="noopener">GitHub</a></span></div></footer>`;
 }
@@ -240,7 +241,7 @@ ${wiki
   };
 
   return {
-    paginas: PAGINAS.map(([id, nombre]) => ({ nombre: id === "demo" ? "Demo en vivo" : nombre, html: marco(id, paginas[id]) })),
+    paginas: PAGINAS.map(([id, nombre]) => ({ nombre: id === "demo" ? "Demo en vivo" : nombre, html: marco(id, paginas[id], img("logo")) })),
     css: CSS_OFICIAL,
   };
 }
@@ -292,14 +293,29 @@ export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
       .returning();
   }
   if (!sitio) return;
+  const ahora = await generarContenido(deps, sitio, false);
+  await setSetting(db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
+}
 
-  // Capturas: se suben como imágenes del sitio (las de antes se reemplazan).
+const IMAGENES = ["logo", "inicio", "finanzas", "notas", "calendario", "ia", "sitios", "herramientas", "editor-fotos", "finanzas-celular", "notas-celular"];
+const rutaDe = (nombre: string, i: number) =>
+  i === 0
+    ? "/"
+    : `/${nombre
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")}`;
+
+async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSelect, publicar: boolean): Promise<Date> {
+  const { db } = deps;
   const dir = join(carpetaArchivos(deps), "sitios", sitio.id);
   await mkdir(dir, { recursive: true });
   const previas = await db.select().from(siteAssets).where(eq(siteAssets.siteId, sitio.id));
   const ids = new Map<string, string>();
-  for (const nombre of ["inicio", "finanzas", "notas", "calendario", "ia", "sitios", "herramientas", "editor-fotos", "finanzas-celular", "notas-celular"]) {
-    const ruta = join(CARPETA_OFICIAL, "capturas", `${nombre}.png`);
+  for (const nombre of IMAGENES) {
+    const ruta = nombre === "logo" ? join(CARPETA_OFICIAL, "logo.png") : join(CARPETA_OFICIAL, "capturas", `${nombre}.png`);
     if (!existsSync(ruta)) continue;
     const datos = readFileSync(ruta);
     const previa = previas.find((a) => a.name === `${nombre}.png`);
@@ -317,6 +333,22 @@ export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
   const id = sitio.id;
   const contenido = armarSitioOficial((n) => (ids.has(n) ? `/api/sitios/${id}/archivos/${ids.get(n)}` : null), leerWiki(), VERSION);
   const ahora = deps.now();
-  await db.update(sites).set({ draft: { importado: contenido }, updatedAt: ahora }).where(eq(sites.id, id));
-  await setSetting(db, CLAVE, { sitio: id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
+  const ajustes = { ...(sitio.settings as Record<string, unknown>), ...(ids.has("logo") ? { icono: ids.get("logo") } : {}) };
+  const cambios: Partial<typeof sites.$inferInsert> = { draft: { importado: contenido }, settings: ajustes, updatedAt: ahora };
+  if (publicar) {
+    const publico = (t: string) => t.split(`/api/sitios/${id}/archivos/`).join("/_archivos/");
+    const paginas = contenido.paginas.map((p, i) => ({ ruta: rutaDe(p.nombre, i), titulo: i === 0 ? "" : p.nombre, html: publico(p.html), css: publico(contenido.css), privada: false }));
+    cambios.published = { paginas };
+    cambios.publishedAt = ahora;
+    await db.insert(siteVersions).values({ siteId: id, draft: { importado: contenido }, published: { paginas }, note: `Actualizado a la versión ${VERSION}` });
+  }
+  await db.update(sites).set(cambios).where(eq(sites.id, id));
+  return ahora;
+}
+
+export async function actualizarSitioOficial(deps: ModuleDeps, sitio: typeof sites.$inferSelect): Promise<{ publicado: boolean }> {
+  const publicar = Boolean(sitio.published);
+  const ahora = await generarContenido(deps, sitio, publicar);
+  await setSetting(deps.db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
+  return { publicado: publicar };
 }

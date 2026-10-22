@@ -1,6 +1,8 @@
 # Caddy: único servicio expuesto (80/443). HTTPS automático con Let's Encrypt.
 # Los hosts vienen de APP_HOST y NTFY_HOST (docker-compose.yml).
 
+# Mientras core se reinicia (al actualizar) Caddy espera hasta 30 s en vez de responder 502.
+
 # Sitios hechos con el creador (nombre.DOMINIO o dominio propio): Caddy pide el
 # certificado al momento, solo si Mi Setup confirma que ese sitio existe y está publicado.
 {
@@ -9,10 +11,17 @@
 	}
 }
 
+(core) {
+	reverse_proxy core:3000 {
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+}
+
 {$APP_HOST} {
 	encode zstd gzip
 	header -Server
-	reverse_proxy core:3000
+	import core
 }
 
 {$NTFY_HOST} {
@@ -32,5 +41,5 @@ https:// {
 	}
 	encode zstd gzip
 	header -Server
-	reverse_proxy core:3000
+	import core
 }

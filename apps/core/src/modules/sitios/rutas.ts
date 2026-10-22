@@ -23,6 +23,7 @@ import { SLUG_VALIDO, SLUGS_RESERVADOS, type DetectorSitios } from "./detector.j
 import { armarPagina, type AjustesSitio, type PaginaPublicada } from "./publico.js";
 import { RUNTIME } from "./runtime.js";
 import type { ServicioComunidad } from "./comunidad.js";
+import { actualizarSitioOficial, SLUG_OFICIAL } from "./oficial.js";
 import { armarPaquete, cambiarIds, leerImportacion, ponerArchivos, type ArchivoPaquete } from "./paquete.js";
 
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -216,6 +217,14 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       const dns = await asegurarDnsDeSitio(deps, s.customDomain ?? `${s.slug}.${deps.config.env.DOMAIN}`).catch(() => "no_se_pudo" as const);
       await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "sitio_publicado", module: "sitios", target: s.slug, outcome: "ok", details: { dns }, ...clientInfo(request) });
       return { ok: true, url: urlPublica(s), dns };
+    });
+
+    app.post("/api/sitios/:id/oficial/actualizar", escribir, async (request) => {
+      const s = await sitioDe(request, true);
+      if (s.slug !== SLUG_OFICIAL || deps.config.env.EDICION === "publica") throw new HttpError(400, "Solo el sitio oficial se actualiza así");
+      const r = await actualizarSitioOficial(deps, s);
+      await refrescarDominios();
+      return r;
     });
 
     app.post("/api/sitios/:id/despublicar", escribir, async (request) => {

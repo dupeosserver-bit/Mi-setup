@@ -787,6 +787,15 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   const [editor, setEditor] = useState("");
   const verPtero = usePuede("pterodactyl") && !PUBLICA;
   const esMaestra = useMe().data?.usuario.role === "maestra";
+  const actualizarOficial = useMutation({
+    mutationFn: () => api<{ publicado: boolean }>(`/api/sitios/${sitio.id}/oficial/actualizar`, { metodo: "POST" }),
+    onSuccess: (r) => {
+      avisar(r.publicado ? "Sitio oficial actualizado y publicado" : "Sitio oficial actualizado (sin publicar)");
+      invalidar(sitio.id);
+      invalidar();
+    },
+    onError: avisarError,
+  });
   const archivos = useQuery({ queryKey: ["sitios", sitio.id, "archivos"], queryFn: () => api<Archivo[]>(`/api/sitios/${sitio.id}/archivos`) });
   const ptero = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string; direccion?: string }[]>("/api/ptero/servidores"), enabled: verPtero, retry: false });
   const editores = useQuery({ queryKey: ["sitios", sitio.id, "editores"], queryFn: () => api<{ id: string; correo: string; nombre: string }[]>(`/api/sitios/${sitio.id}/editores`) });
@@ -868,6 +877,19 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
           <Interruptor activo={a.avisos !== false} alCambiar={(v) => setA({ ...a, avisos: v })} etiqueta="Avisarme al celular cuando llegue un mensaje o pedido" />
         </div>
       </Tarjeta>
+      {sitio.slug === "misetup" && esMaestra && !PUBLICA ? (
+        <Tarjeta titulo="Sitio oficial" icono={RefreshCw}>
+          <p className="mb-3 text-sm text-tenue">Pone la wiki, las capturas, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.</p>
+          <Boton
+            variante="primario"
+            icono={RefreshCw}
+            cargando={actualizarOficial.isPending}
+            onClick={() => void confirmar({ titulo: "Actualizar el sitio oficial", mensaje: "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones)." }).then((ok) => ok && actualizarOficial.mutate())}
+          >
+            Actualizar con esta versión
+          </Boton>
+        </Tarjeta>
+      ) : null}
       <Tarjeta titulo="Comunidad" icono={MessagesSquare}>
         <Interruptor
           activo={Boolean(a.comunidad?.activa)}

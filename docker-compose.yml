@@ -5,8 +5,17 @@
 
 name: mi-setup
 
+# Los registros de cada contenedor se cortan en 3 archivos de 10 MB para no llenar el disco.
+x-registros: &registros
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   misetup-db:
+    <<: *registros
     image: postgres:16-alpine
     container_name: misetup-db
     restart: unless-stopped
@@ -25,6 +34,7 @@ services:
       retries: 10
 
   core:
+    <<: *registros
     build:
       context: .
       dockerfile: deploy/Dockerfile
@@ -105,6 +115,7 @@ services:
       - web
 
   ntfy:
+    <<: *registros
     image: binwiederhier/ntfy:v2.11.0
     container_name: misetup-ntfy
     restart: unless-stopped
@@ -128,6 +139,7 @@ services:
   # Luego descarga el modelo: docker exec misetup-ollama ollama pull llama3.2:3b
   # No publica puertos: solo core lo alcanza por la red interna "web".
   ollama:
+    <<: *registros
     image: ollama/ollama:0.6.8
     container_name: misetup-ollama
     restart: unless-stopped
@@ -145,6 +157,7 @@ services:
   # es opcional: se enciende con COMPOSE_PROFILES=comunidad en el .env.
   # Sin él, los proyectos quedan «sin revisar» y no se pueden aprobar.
   clamav:
+    <<: *registros
     image: clamav/clamav:1.4
     container_name: misetup-clamav
     restart: unless-stopped
@@ -155,6 +168,7 @@ services:
       - web
 
   caddy:
+    <<: *registros
     image: caddy:2-alpine
     container_name: misetup-caddy
     restart: unless-stopped
