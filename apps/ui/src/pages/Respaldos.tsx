@@ -1,12 +1,32 @@
-/** Respaldos: crear copias (carpetas, Pterodactyl, VPS completo), base de datos de Mi Setup y servidores de juego. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Archive, Boxes, CalendarClock, Database, Download, FileJson, FolderArchive, Gamepad2, HardDrive, Loader2, Plus, RotateCcw, Server, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import {
+  Archive,
+  Boxes,
+  CalendarClock,
+  CircleX,
+  Database,
+  Download,
+  FileJson,
+  FolderArchive,
+  Gamepad2,
+  HardDrive,
+  Loader2,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Server,
+  Trash2,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { usePaginado } from "../components/Paginas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
-import { api, descargar } from "../lib/api";
-import { confirmar } from "../lib/confirmar";
-import { copiarSeguro } from "../lib/boveda/utilidades";
+import { SUAVE } from "../components/vps/piezas";
 import { PUBLICA } from "../edicion";
+import { api, descargar } from "../lib/api";
+import { copiarSeguro } from "../lib/boveda/utilidades";
+import { confirmar } from "../lib/confirmar";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { fmtBytes, fmtFechaHora, haceCuanto } from "../lib/formato";
 import { RespaldosServidor } from "./Pterodactyl";
@@ -21,75 +41,82 @@ interface ServidorVps {
   nombre: string;
   host: string;
 }
+interface ArchivoRespaldo {
+  nombre: string;
+  bytes: number;
+  fecha: string;
+  estado: "listo" | "en_curso" | "error" | "restaurando" | "error_restaurar";
+}
 interface EstadoVps {
   carpeta: string;
   disco: { total: number; usado: number; libre: number };
-  archivos: { nombre: string; bytes: number; fecha: string; estado: "listo" | "en_curso" | "error" | "restaurando" | "error_restaurar" }[];
+  archivos: ArchivoRespaldo[];
   errores: Record<string, string>;
 }
 type TipoRespaldo = "carpeta" | "vps" | "base" | "pterodactyl";
 
 const LIMITE_DESCARGA = 300 * 1024 * 1024;
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const NOMBRE_TIPO: Record<TipoRespaldo, string> = { carpeta: "Carpeta", vps: "VPS completo", base: "Base de Mi Setup", pterodactyl: "Todo Pterodactyl" };
+const ESTILO_TIPO: Record<TipoRespaldo, { icono: LucideIcon; tono: string; color: string }> = {
+  base: { icono: Database, tono: SUAVE.acento, color: "var(--acento)" },
+  pterodactyl: { icono: Boxes, tono: "bg-[color-mix(in_srgb,#4c8dff_14%,transparent)] text-sky-300", color: "#4c8dff" },
+  carpeta: { icono: FolderArchive, tono: "bg-[color-mix(in_srgb,#ec4899_14%,transparent)] text-pink-300", color: "#ec4899" },
+  vps: { icono: Server, tono: SUAVE.aviso, color: "var(--aviso)" },
+};
 
-/** Elegir el servidor de juego y crear su respaldo con el panel (Wings). */
+function tipoDe(nombre: string): TipoRespaldo {
+  const n = nombre.replace(/^auto-/, "");
+  if (n.startsWith("vps-completo-")) return "vps";
+  if (n.startsWith("pterodactyl-")) return "pterodactyl";
+  if (n.endsWith(".sql.gz") || n.startsWith("base-")) return "base";
+  return "carpeta";
+}
+
+const limpio = (nombre: string) => nombre.replace(/\.(parte|error|restaurando|restaurar-error)$/, "");
+
 function RespaldoJuego() {
   const puede = usePuede("pterodactyl", "escritura");
   const servidores = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/ptero/servidores"), retry: false, enabled: puede });
-  const [id, setId] = useState("");
-  const actual = id || servidores.data?.[0]?.id || "";
   const crear = useMutation({
     mutationFn: (ids: string[]) => Promise.all(ids.map((x) => api(`/api/ptero/servidores/${x}/respaldos`, { metodo: "POST" }))),
     onSuccess: () => {
-      avisar("Respaldo pedido al panel. Aparece en «Servidores de juego» cuando termine.");
+      avisar("Respaldo pedido al panel. Aparece abajo cuando termine.");
       void queryClient.invalidateQueries({ queryKey: ["ptero"] });
     },
     onError: avisarError,
   });
   if (!puede || !servidores.data?.length) return null;
   return (
-    <div className="rounded-xl border border-borde bg-fondo p-3">
-      <p className="flex items-center gap-2 text-sm font-medium">
-        <Gamepad2 className="h-4 w-4" /> Servidor de juego (Pterodactyl)
-      </p>
-      <p className="mt-1 text-xs text-tenue">Usa el respaldo del panel: guarda el mundo y los archivos del servidor sin apagarlo.</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Selector value={actual} onChange={(e) => setId(e.target.value)} className="h-9 w-56 text-sm">
-          {servidores.data.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nombre}
-            </option>
-          ))}
-        </Selector>
-        <Boton variante="primario" icono={Gamepad2} cargando={crear.isPending} onClick={() => crear.mutate([actual])}>
-          Respaldar este servidor
-        </Boton>
-        {servidores.data.length > 1 ? (
-          <Boton
-            cargando={crear.isPending}
-            onClick={async () => {
-              if (await confirmar({ titulo: "Respaldar todos", mensaje: `Se pedirá un respaldo de los ${servidores.data!.length} servidores de juego al panel.`, boton: "Respaldar todos" })) crear.mutate(servidores.data!.map((s) => s.id));
-            }}
-          >
-            Respaldar todos
+    <div className="space-y-1.5">
+      {servidores.data.map((s) => (
+        <div key={s.id} className="flex items-center gap-3 border-b border-borde py-2 last:border-0">
+          <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-lg", SUAVE.acento)}>
+            <Gamepad2 className="h-4 w-4" />
+          </span>
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold">{s.nombre}</p>
+          <Boton tamano="sm" cargando={crear.isPending && crear.variables?.length === 1 && crear.variables[0] === s.id} disabled={crear.isPending} onClick={() => crear.mutate([s.id])}>
+            Respaldar
           </Boton>
-        ) : null}
-      </div>
+        </div>
+      ))}
+      {servidores.data.length > 1 ? (
+        <Boton
+          tamano="sm"
+          className="w-full"
+          disabled={crear.isPending}
+          onClick={async () => {
+            if (await confirmar({ titulo: "Respaldar todos", mensaje: `Se pedirá un respaldo de los ${servidores.data!.length} servidores de juego al panel.`, boton: "Respaldar todos" })) crear.mutate(servidores.data!.map((s) => s.id));
+          }}
+        >
+          Respaldar todos
+        </Boton>
+      ) : null}
+      <p className="text-xs text-tenue">Usa el respaldo del panel: guarda el mundo y los archivos sin apagar el servidor.</p>
     </div>
   );
 }
 
-function Opcion({ icono: Icono, titulo, texto, onClick, cargando }: { icono: typeof Archive; titulo: string; texto: string; onClick: () => void; cargando: boolean }) {
-  return (
-    <button type="button" disabled={cargando} onClick={onClick} className={cx("rounded-xl border border-borde bg-fondo p-3 text-left transition-colors hover:bg-tarjeta disabled:opacity-60")}>
-      <p className="flex items-center gap-2 text-sm font-medium">
-        {cargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icono className="h-4 w-4" />} {titulo}
-      </p>
-      <p className="mt-1 text-xs text-tenue">{texto}</p>
-    </button>
-  );
-}
-
-/** Restaurar un respaldo: aparte (para sacar lo que necesites) o en su lugar. */
 function Restaurar({ servidorId, nombre, alCerrar, alTerminar }: { servidorId: string; nombre: string; alCerrar: () => void; alTerminar: () => void }) {
   const soloAparte = /^(auto-)?vps-completo-/.test(nombre);
   const esBase = nombre.endsWith(".sql.gz");
@@ -107,15 +134,15 @@ function Restaurar({ servidorId, nombre, alCerrar, alTerminar }: { servidorId: s
   return (
     <Modal abierto titulo={`Restaurar ${nombre}`} alCerrar={alCerrar}>
       <div className="space-y-3 text-sm">
-        <label className="flex items-start gap-2 rounded-xl border border-borde p-3">
-          <input type="radio" checked={modo === "aparte"} onChange={() => setModo("aparte")} className="mt-1" />
+        <label className={cx("flex items-start gap-3 rounded-xl border p-3", modo === "aparte" ? "border-acento" : "border-borde")}>
+          <input type="radio" checked={modo === "aparte"} onChange={() => setModo("aparte")} className="mt-1 accent-[var(--acento)]" />
           <span>
             <b>En una carpeta aparte</b>
             <span className="block text-xs text-tenue">Se saca en /opt/mi-setup/restaurados/ sin tocar nada. Luego copias lo que necesites (en Archivos).</span>
           </span>
         </label>
-        <label className={cx("flex items-start gap-2 rounded-xl border border-borde p-3", soloAparte && "opacity-50")}>
-          <input type="radio" disabled={soloAparte} checked={modo === "lugar"} onChange={() => setModo("lugar")} className="mt-1" />
+        <label className={cx("flex items-start gap-3 rounded-xl border p-3", modo === "lugar" ? "border-peligro" : "border-borde", soloAparte && "opacity-50")}>
+          <input type="radio" disabled={soloAparte} checked={modo === "lugar"} onChange={() => setModo("lugar")} className="mt-1 accent-[var(--error)]" />
           <span>
             <b>En su lugar</b>
             <span className="block text-xs text-tenue">
@@ -132,7 +159,7 @@ function Restaurar({ servidorId, nombre, alCerrar, alTerminar }: { servidorId: s
             <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="RESTAURAR" />
           </Campo>
         ) : null}
-        <Boton variante={modo === "lugar" ? "peligro" : "primario"} icono={RotateCcw} cargando={restaurar.isPending} disabled={modo === "lugar" && texto !== "RESTAURAR"} onClick={() => restaurar.mutate()}>
+        <Boton variante={modo === "lugar" ? "peligro" : "primario"} icono={RotateCcw} className="w-full" cargando={restaurar.isPending} disabled={modo === "lugar" && texto !== "RESTAURAR"} onClick={() => restaurar.mutate()}>
           Restaurar
         </Boton>
       </div>
@@ -153,10 +180,7 @@ interface Programacion {
   ultimo: string | null;
   ultimoError: string | null;
 }
-const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-const NOMBRE_TIPO: Record<TipoRespaldo, string> = { carpeta: "Carpeta", vps: "VPS completo", base: "Base de Mi Setup", pterodactyl: "Todo Pterodactyl" };
 
-/** Respaldos automáticos: diarios o semanales; se guardan los últimos N. */
 function Automaticos({ servidorId }: { servidorId: string }) {
   const q = useQuery({ queryKey: ["respaldos", "automaticos"], queryFn: () => api<Programacion[]>("/api/respaldos/automaticos"), retry: false });
   const [f, setF] = useState({ tipo: "base" as TipoRespaldo, ruta: "/opt/mi-setup", frecuencia: "diario" as "diario" | "semanal", dia: 0, hora: 3, conservar: 7 });
@@ -177,36 +201,45 @@ function Automaticos({ servidorId }: { servidorId: string }) {
   return (
     <Tarjeta titulo="Respaldos automáticos" icono={CalendarClock}>
       <ErrorCaja error={q.error} />
-      <div className="space-y-1">
-        {q.data?.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-fondo px-3 py-2 text-xs">
-            <span className="min-w-0 flex-1">
-              <b>{NOMBRE_TIPO[p.tipo]}</b>
-              {p.ruta ? ` ${p.ruta}` : ""} · {p.frecuencia === "diario" ? "cada día" : `cada ${DIAS[p.dia]}`} a las {String(p.hora).padStart(2, "0")}:00 · guarda {p.conservar}
-              <span className="block text-tenue">{p.ultimo ? `Último: ${haceCuanto(p.ultimo)}` : "Todavía no corre"}</span>
-              {p.ultimoError ? <span className="block text-peligro">{p.ultimoError}</span> : null}
-            </span>
-            <Interruptor activo={p.activo} alCambiar={() => cambiar.mutate(p)} etiqueta={p.activo ? "Activo" : "Pausado"} />
-            <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar" onClick={() => borrar.mutate(p.id)} />
-          </div>
-        ))}
-        {q.data?.length === 0 ? <p className="text-sm text-tenue">Ninguno todavía.</p> : null}
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
-        <Selector value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoRespaldo })} className="h-9 text-sm sm:col-span-2">
+      <ul className="divide-y divide-borde">
+        {q.data?.map((p) => {
+          const { icono: Icono, tono } = ESTILO_TIPO[p.tipo];
+          return (
+            <li key={p.id} className={cx("flex items-center gap-3 py-2.5", !p.activo && "opacity-60")}>
+              <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-lg", tono)}>
+                <Icono className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1 text-xs">
+                <p className="text-sm font-semibold">
+                  {NOMBRE_TIPO[p.tipo]} {p.ruta ? <span className="font-mono text-xs font-normal text-tenue">{p.ruta}</span> : null}
+                </p>
+                <p className="text-tenue">
+                  {p.frecuencia === "diario" ? "Cada día" : `Cada ${DIAS[p.dia]}`} a las {String(p.hora).padStart(2, "0")}:00 · guarda {p.conservar} · {p.ultimo ? `último ${haceCuanto(p.ultimo)}` : "todavía no corre"}
+                </p>
+                {p.ultimoError ? <p className="flex items-center gap-1 text-peligro"><TriangleAlert className="h-3 w-3" />{p.ultimoError}</p> : null}
+              </div>
+              <Interruptor activo={p.activo} alCambiar={() => cambiar.mutate(p)} etiqueta={p.activo ? "Activo" : "Pausado"} />
+              <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar" onClick={() => borrar.mutate(p.id)} />
+            </li>
+          );
+        })}
+        {q.data?.length === 0 ? <li className="py-2 text-sm text-tenue">Ninguno todavía.</li> : null}
+      </ul>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <Selector value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoRespaldo })} className="h-9 text-sm" aria-label="Qué respaldar">
           {Object.entries(NOMBRE_TIPO).map(([id, t]) => (
             <option key={id} value={id}>
               {t}
             </option>
           ))}
         </Selector>
-        {f.tipo === "carpeta" ? <Entrada value={f.ruta} onChange={(e) => setF({ ...f, ruta: e.target.value })} className="h-9 text-sm sm:col-span-2" /> : null}
-        <Selector value={f.frecuencia} onChange={(e) => setF({ ...f, frecuencia: e.target.value as "diario" | "semanal" })} className="h-9 text-sm">
+        {f.tipo === "carpeta" ? <Entrada value={f.ruta} onChange={(e) => setF({ ...f, ruta: e.target.value })} className="h-9 font-mono text-sm" aria-label="Carpeta" /> : null}
+        <Selector value={f.frecuencia} onChange={(e) => setF({ ...f, frecuencia: e.target.value as "diario" | "semanal" })} className="h-9 text-sm" aria-label="Cada cuánto">
           <option value="diario">Cada día</option>
           <option value="semanal">Cada semana</option>
         </Selector>
         {f.frecuencia === "semanal" ? (
-          <Selector value={f.dia} onChange={(e) => setF({ ...f, dia: Number(e.target.value) })} className="h-9 text-sm">
+          <Selector value={f.dia} onChange={(e) => setF({ ...f, dia: Number(e.target.value) })} className="h-9 text-sm" aria-label="Día">
             {DIAS.map((d, i) => (
               <option key={d} value={i}>
                 {d}
@@ -228,188 +261,161 @@ function Automaticos({ servidorId }: { servidorId: string }) {
             </option>
           ))}
         </Selector>
-        <Boton variante="primario" icono={Plus} cargando={crear.isPending} onClick={() => crear.mutate()} disabled={!servidorId}>
+        <Boton tamano="sm" variante="primario" icono={Plus} className="h-9" cargando={crear.isPending} onClick={() => crear.mutate()} disabled={!servidorId}>
           Programar
         </Boton>
       </div>
-      <p className="mt-2 text-xs text-tenue">Se guardan en el mismo VPS con el nombre «auto-…»; al pasar del número elegido se borran los más viejos. Si falla, te llega un aviso.</p>
+      <p className="mt-2 text-xs text-tenue">Se guardan en el mismo servidor como «auto-…». Al pasar del número elegido se borran los más viejos. Si falla, te llega un aviso.</p>
     </Tarjeta>
   );
 }
 
-/** Crear respaldos en el VPS: carpeta, Pterodactyl, base de Mi Setup o el VPS completo. */
-function CrearRespaldo() {
-  const servidores = useQuery({ queryKey: ["vps", "servidores"], queryFn: () => api<ServidorVps[]>("/api/vps/servidores"), retry: false });
-  const [sid, setSid] = useState("");
-  const [ruta, setRuta] = useState("/opt/mi-setup");
-  const [restaurar, setRestaurar] = useState<string | null>(null);
-  const actual = sid || servidores.data?.[0]?.id || "";
+function Crear({ icono: Icono, titulo, texto, tono, cargando, alCrear, principal, children }: { icono: LucideIcon; titulo: string; texto: string; tono: string; cargando: boolean; alCrear: () => void; principal?: boolean; children?: ReactNode }) {
+  return (
+    <section className="flex min-w-0 flex-col gap-2 rounded-tarjeta border border-borde bg-superficie p-4">
+      <span className={cx("grid h-10 w-10 place-items-center rounded-xl", tono)}>
+        <Icono className="h-5 w-5" />
+      </span>
+      <h3 className="mt-1 text-base font-bold">{titulo}</h3>
+      <p className="text-xs text-tenue">{texto}</p>
+      {children}
+      <div className="mt-auto pt-1">
+        <Boton tamano="sm" variante={principal ? "primario" : "secundario"} icono={Plus} cargando={cargando} onClick={alCrear}>
+          Crear respaldo
+        </Boton>
+      </div>
+    </section>
+  );
+}
+
+function Guardados({ servidorId, host, alRestaurar }: { servidorId: string; host: string; alRestaurar: (nombre: string) => void }) {
   const estado = useQuery({
-    queryKey: ["respaldos", "vps", actual],
-    queryFn: () => api<EstadoVps>(`/api/respaldos/vps?servidorId=${actual}`),
-    enabled: Boolean(actual),
+    queryKey: ["respaldos", "vps", servidorId],
+    queryFn: () => api<EstadoVps>(`/api/respaldos/vps?servidorId=${servidorId}`),
+    enabled: Boolean(servidorId),
     retry: false,
-    // Mientras haya un respaldo en curso se revisa seguido.
     refetchInterval: (q) => (q.state.data?.archivos.some((a) => a.estado === "en_curso" || a.estado === "restaurando") ? 4000 : 30_000),
   });
-  const crear = useMutation({
-    mutationFn: (b: { tipo: TipoRespaldo; ruta?: string }) => api<{ nombre: string }>("/api/respaldos/vps", { cuerpo: { servidorId: actual, ...b } }),
-    onSuccess: (r) => {
-      avisar(`Respaldo iniciado (${r.nombre}). Sigue en segundo plano en el VPS.`);
-      void estado.refetch();
-    },
-    onError: avisarError,
-  });
   const borrar = useMutation({
-    mutationFn: (nombre: string) => api(`/api/respaldos/vps?servidorId=${actual}&nombre=${encodeURIComponent(nombre)}`, { metodo: "DELETE" }),
+    mutationFn: (nombre: string) => api(`/api/respaldos/vps?servidorId=${servidorId}&nombre=${encodeURIComponent(nombre)}`, { metodo: "DELETE" }),
     onSuccess: () => void estado.refetch(),
     onError: avisarError,
   });
   const d = estado.data;
-  const enCurso = crear.isPending ? crear.variables?.tipo : null;
-  const host = servidores.data?.find((s) => s.id === actual)?.host ?? "TU_IP";
+  const pg = usePaginado(d?.archivos, 8);
+  const porTipo = (d?.archivos ?? []).reduce<Record<TipoRespaldo, number>>((acc, a) => ({ ...acc, [tipoDe(a.nombre)]: acc[tipoDe(a.nombre)] + a.bytes }), { base: 0, pterodactyl: 0, carpeta: 0, vps: 0 });
+  const totalRespaldos = Object.values(porTipo).reduce((a, b) => a + b, 0);
+  const total = d ? Math.max(1, d.disco.total) : 1;
   return (
-    <Tarjeta
-      titulo="Crear respaldo"
-      icono={FolderArchive}
-      acciones={
-        servidores.data && servidores.data.length > 1 ? (
-          <Selector value={actual} onChange={(e) => setSid(e.target.value)} className="h-8 w-48 text-xs">
-            {servidores.data.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </Selector>
-        ) : null
-      }
-    >
-      <ErrorCaja error={servidores.error} />
-      {servidores.data?.length === 0 ? <Vacio icono={Server} texto="Agrega tu VPS en la sección VPS para crear respaldos desde aquí." /> : null}
-      {actual ? (
-        <div className="space-y-3">
-          {d ? (
-            <div>
-              <div className="h-2 overflow-hidden rounded-full bg-fondo">
-                <div className="h-full bg-acento" style={{ width: `${Math.min(100, (d.disco.usado / Math.max(1, d.disco.total)) * 100)}%` }} />
-              </div>
-              <p className="mt-1 flex items-center gap-1 text-xs text-tenue">
-                <HardDrive className="h-3 w-3" /> Disco del VPS: {fmtBytes(d.disco.usado)} usados · {fmtBytes(d.disco.libre)} libres de {fmtBytes(d.disco.total)}
-              </p>
+    <Tarjeta titulo="Respaldos guardados" icono={Archive}>
+      <ErrorCaja error={estado.error} />
+      {estado.isLoading ? <Cargando /> : null}
+      {d ? (
+        <>
+          <div className="mb-3 rounded-xl border border-borde bg-fondo p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-tenue">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <HardDrive className="h-3.5 w-3.5 shrink-0" /> Guardados en <span className="truncate font-mono">{d.carpeta}</span>
+              </span>
+              <span className="text-base font-bold text-texto">{fmtBytes(totalRespaldos)}</span>
             </div>
-          ) : null}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {PUBLICA ? null : <Opcion icono={Boxes} titulo="Todo Pterodactyl" texto="Los archivos de todos tus servidores de juego, la configuración de Wings y el panel." cargando={enCurso === "pterodactyl"} onClick={() => crear.mutate({ tipo: "pterodactyl" })} />}
-            <Opcion icono={Database} titulo="Base de datos de Mi Setup" texto="Una copia ahora mismo de tus notas, finanzas, sitios y demás." cargando={enCurso === "base"} onClick={() => crear.mutate({ tipo: "base" })} />
-            <Opcion
-              icono={Server}
-              titulo="VPS completo"
-              texto="Casi todo el disco (sin imágenes de Docker ni caché). Puede pesar varios GB."
-              cargando={enCurso === "vps"}
-              onClick={async () => {
-                const libre = d ? ` Te quedan ${fmtBytes(d.disco.libre)} libres.` : "";
-                if (await confirmar({ titulo: "Respaldar todo el VPS", mensaje: `Puede ocupar hasta ${d ? fmtBytes(d.disco.usado) : "varios GB"} y tardar varios minutos.${libre} Corre en segundo plano.`, boton: "Crear respaldo completo" })) crear.mutate({ tipo: "vps" });
-              }}
-            />
-            <div className="rounded-xl border border-borde bg-fondo p-3">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <FolderArchive className="h-4 w-4" /> Una carpeta
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Entrada value={ruta} onChange={(e) => setRuta(e.target.value)} placeholder="/opt/mi-setup" className="h-9 text-sm" />
-                <Boton tamano="sm" variante="primario" cargando={enCurso === "carpeta"} disabled={!ruta.startsWith("/")} onClick={() => crear.mutate({ tipo: "carpeta", ruta })}>
-                  Respaldar
-                </Boton>
-              </div>
+            <div className="mt-2 flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-tarjeta">
+              {(Object.keys(porTipo) as TipoRespaldo[]).map((t) =>
+                porTipo[t] > 0 ? <span key={t} style={{ width: `${Math.max(1, (porTipo[t] / total) * 100)}%`, background: ESTILO_TIPO[t].color }} title={`${NOMBRE_TIPO[t]}: ${fmtBytes(porTipo[t])}`} /> : null,
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-tenue">
+              {(Object.keys(porTipo) as TipoRespaldo[]).map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-sm" style={{ background: ESTILO_TIPO[t].color }} />
+                  {NOMBRE_TIPO[t]}
+                </span>
+              ))}
+              <span>
+                Libre en el servidor <b className="text-texto">{fmtBytes(d.disco.libre)}</b>
+              </span>
             </div>
           </div>
-          {PUBLICA ? null : <RespaldoJuego />}
-          {d && d.disco.libre < 5 * 1024 ** 3 ? (
-            <p className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-2 text-xs">
-              <TriangleAlert className="h-4 w-4 shrink-0 text-amber-400" /> Queda poco espacio en el VPS. Descarga los respaldos viejos y bórralos del VPS.
+          {d.disco.libre < 5 * 1024 ** 3 ? (
+            <p className="mb-3 flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--aviso)_10%,transparent)] p-2 text-xs">
+              <TriangleAlert className="h-4 w-4 shrink-0 text-aviso" /> Queda poco espacio en el servidor. Descarga los respaldos viejos y bórralos de aquí.
             </p>
           ) : null}
-          <ErrorCaja error={estado.error} />
-          {estado.isLoading ? <Cargando /> : null}
-          {d ? (
-            <div>
-              <p className="mb-1 text-xs text-tenue">Guardados en {d.carpeta} (en el VPS):</p>
-              {d.archivos.length === 0 ? <p className="text-sm text-tenue">Todavía no hay respaldos hechos desde aquí.</p> : null}
-              <ul className="max-h-80 space-y-1 overflow-auto">
-                {d.archivos.map((a) => (
-                  <li key={a.nombre} className="rounded-lg bg-fondo px-3 py-1.5 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate">{a.nombre.replace(/\.(parte|error|restaurando|restaurar-error)$/, "")}</span>
-                      {a.estado === "en_curso" ? (
-                        <Insignia tono="aviso">
-                          <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
-                          Creando… {fmtBytes(a.bytes)}
-                        </Insignia>
-                      ) : a.estado === "restaurando" ? (
-                        <Insignia tono="aviso">
-                          <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
-                          Restaurando…
-                        </Insignia>
-                      ) : a.estado === "error_restaurar" ? (
-                        <Insignia tono="peligro">No se pudo restaurar</Insignia>
-                      ) : a.estado === "error" ? (
-                        <Insignia tono="peligro">Falló</Insignia>
-                      ) : (
-                        <span className="shrink-0 text-tenue">
-                          {haceCuanto(a.fecha)} · {fmtBytes(a.bytes)}
-                        </span>
-                      )}
-                      {a.estado === "listo" && a.bytes <= LIMITE_DESCARGA ? (
-                        <button
-                          type="button"
-                          aria-label={`Descargar ${a.nombre}`}
-                          className="text-tenue hover:text-texto"
-                          onClick={() => void descargar(`/api/respaldos/vps/descargar?servidorId=${actual}&nombre=${encodeURIComponent(a.nombre)}`, a.nombre).catch(avisarError)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
-                      {a.estado === "listo" ? (
-                        <button type="button" aria-label={`Restaurar ${a.nombre}`} title="Restaurar" className="text-tenue hover:text-texto" onClick={() => setRestaurar(a.nombre)}>
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
-                      {a.estado !== "en_curso" && a.estado !== "restaurando" ? (
-                        <button
-                          type="button"
-                          aria-label={`Borrar ${a.nombre}`}
-                          className="text-tenue hover:text-texto"
-                          onClick={async () => {
-                            if (await confirmar({ titulo: "Borrar respaldo", mensaje: `${a.nombre.replace(/\.error$/, "")} se borra del VPS para siempre.`, peligroso: true, boton: "Borrar" })) borrar.mutate(a.nombre);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
+          {d.archivos.length === 0 ? <Vacio icono={Archive} texto="Todavía no hay respaldos hechos desde aquí." /> : null}
+          <ul className="divide-y divide-borde">
+            {pg.visibles.map((a) => {
+              const tipo = tipoDe(a.nombre);
+              const { icono: Icono, tono } = ESTILO_TIPO[tipo];
+              return (
+                <li key={a.nombre} className="py-2">
+                  <div className="flex items-center gap-3">
+                    <span className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-lg", tono)}>
+                      <Icono className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{limpio(a.nombre)}</p>
+                      <p className="truncate text-xs text-tenue">
+                        {NOMBRE_TIPO[tipo]} · {fmtFechaHora(a.fecha)}
+                      </p>
                     </div>
-                    {(a.estado === "error" || a.estado === "error_restaurar") && d.errores[a.nombre] ? <p className="mt-1 text-[11px] text-peligro">{d.errores[a.nombre]}</p> : null}
-                    {a.estado === "listo" && a.bytes > LIMITE_DESCARGA ? (
-                      <button type="button" className="mt-1 text-[11px] text-acento underline" onClick={() => void copiarSeguro(`scp root@${host}:${d.carpeta}/${a.nombre} .`, "Comando copiado")}>
-                        Muy grande para bajarlo aquí: copiar comando scp
-                      </button>
+                    {a.estado === "en_curso" ? (
+                      <Insignia tono="aviso">
+                        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                        Creando… {fmtBytes(a.bytes)}
+                      </Insignia>
+                    ) : a.estado === "restaurando" ? (
+                      <Insignia tono="aviso">
+                        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                        Restaurando…
+                      </Insignia>
+                    ) : a.estado === "error_restaurar" ? (
+                      <Insignia tono="peligro">No se pudo restaurar</Insignia>
+                    ) : a.estado === "error" ? (
+                      <span className={cx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", SUAVE.peligro)}>
+                        <CircleX className="h-3 w-3" />
+                        Falló
+                      </span>
+                    ) : (
+                      <span className="hidden shrink-0 text-xs text-tenue sm:block">{fmtBytes(a.bytes)}</span>
+                    )}
+                    {a.estado === "listo" && a.bytes <= LIMITE_DESCARGA ? (
+                      <Boton
+                        tamano="icono"
+                        variante="fantasma"
+                        icono={Download}
+                        aria-label={`Descargar ${a.nombre}`}
+                        onClick={() => void descargar(`/api/respaldos/vps/descargar?servidorId=${servidorId}&nombre=${encodeURIComponent(a.nombre)}`, a.nombre).catch(avisarError)}
+                      />
                     ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
+                    {a.estado === "listo" ? <Boton tamano="icono" variante="fantasma" icono={RotateCcw} aria-label={`Restaurar ${a.nombre}`} title="Restaurar" onClick={() => alRestaurar(a.nombre)} /> : null}
+                    {a.estado !== "en_curso" && a.estado !== "restaurando" ? (
+                      <Boton
+                        tamano="icono"
+                        variante="fantasma"
+                        icono={Trash2}
+                        aria-label={`Borrar ${a.nombre}`}
+                        className="hover:text-peligro"
+                        onClick={async () => {
+                          if (await confirmar({ titulo: "Borrar respaldo", mensaje: `${limpio(a.nombre)} se borra del servidor para siempre.`, peligroso: true, boton: "Borrar" })) borrar.mutate(a.nombre);
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                  {(a.estado === "error" || a.estado === "error_restaurar") && d.errores[a.nombre] ? <p className="ml-12 mt-1 text-xs text-peligro">{d.errores[a.nombre]}</p> : null}
+                  {a.estado === "listo" && a.bytes > LIMITE_DESCARGA ? (
+                    <button type="button" className="ml-12 mt-1 text-xs text-acento underline" onClick={() => void copiarSeguro(`scp root@${host}:${d.carpeta}/${a.nombre} .`, "Comando copiado")}>
+                      Muy grande para bajarlo aquí: copiar comando para tu PC
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {pg.paginas}
+        </>
       ) : null}
-      {restaurar ? <Restaurar servidorId={actual} nombre={restaurar} alCerrar={() => setRestaurar(null)} alTerminar={() => void estado.refetch()} /> : null}
     </Tarjeta>
   );
-}
-
-/** Los automáticos usan el primer VPS (o el que elijas en «Crear respaldo»). */
-function AutomaticosDelVps() {
-  const servidores = useQuery({ queryKey: ["vps", "servidores"], queryFn: () => api<ServidorVps[]>("/api/vps/servidores"), retry: false });
-  const id = servidores.data?.[0]?.id;
-  return id ? <Automaticos servidorId={id} /> : null;
 }
 
 function ServidoresJuego() {
@@ -417,39 +423,38 @@ function ServidoresJuego() {
   const servidores = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/ptero/servidores"), retry: false });
   const actual = id || servidores.data?.[0]?.id || "";
   return (
-    <Tarjeta
-      titulo="Servidores de juego"
-      icono={Gamepad2}
-      acciones={
-        servidores.data?.length ? (
-          <Selector value={actual} onChange={(e) => setId(e.target.value)} className="h-8 w-56 text-xs">
-            {servidores.data.map((s) => (
-              <option key={s.id} value={s.id}>{s.nombre}</option>
-            ))}
-          </Selector>
-        ) : null
-      }
-    >
+    <Tarjeta titulo="Servidores de juego" icono={Gamepad2}>
       <ErrorCaja error={servidores.error} />
       {servidores.data?.length === 0 ? <Vacio icono={Gamepad2} texto="No hay servidores en el panel." /> : null}
-      {actual ? <RespaldosServidor key={actual} id={actual} /> : null}
+      <RespaldoJuego />
+      {servidores.data?.length ? (
+        <div className="mt-3 border-t border-borde pt-3">
+          <Selector value={actual} onChange={(e) => setId(e.target.value)} className="mb-2 h-9 text-sm" aria-label="Ver respaldos de">
+            {servidores.data.map((s) => (
+              <option key={s.id} value={s.id}>
+                {`Respaldos de ${s.nombre}`}
+              </option>
+            ))}
+          </Selector>
+          {actual ? <RespaldosServidor key={actual} id={actual} /> : null}
+        </div>
+      ) : null}
     </Tarjeta>
   );
 }
 
-/** Corre deploy/respaldo.sh en el VPS ahora y/o lo deja en el cron diario (4:15). */
 function RespaldoDiarioBase({ alTerminar }: { alTerminar: () => void }) {
   const correr = useMutation({
     mutationFn: (d: { ahora: boolean; programar: boolean }) => api<{ programado: boolean }>("/api/respaldos/base/script", { cuerpo: d }),
-    onSuccess: (r, d) => {
+    onSuccess: (_r, d) => {
       avisar(d.programar ? (d.ahora ? "Respaldo hecho y programado cada día a las 4:15" : "Programado cada día a las 4:15") : "Respaldo hecho");
       alTerminar();
     },
     onError: avisarError,
   });
   return (
-    <div className="mb-3 rounded-xl bg-fondo p-3 text-sm">
-      <p className="text-tenue">El respaldo diario no está corriendo en tu VPS. Hazlo aquí (corre el script deploy/respaldo.sh: base + archivos subidos, guarda 14 días):</p>
+    <div className="mb-3 rounded-xl border border-[color-mix(in_srgb,var(--aviso)_40%,transparent)] bg-[color-mix(in_srgb,var(--aviso)_7%,var(--superficie))] p-3 text-sm">
+      <p className="text-tenue">El respaldo diario no está corriendo en tu servidor. Hazlo aquí (base + archivos subidos, guarda 14 días):</p>
       <div className="mt-2 flex flex-wrap gap-2">
         <Boton tamano="sm" variante="primario" icono={Database} cargando={correr.isPending && correr.variables?.programar} disabled={correr.isPending} onClick={() => correr.mutate({ ahora: true, programar: true })}>
           Respaldar ahora y cada día
@@ -462,60 +467,135 @@ function RespaldoDiarioBase({ alTerminar }: { alTerminar: () => void }) {
   );
 }
 
+function BaseMiSetup({ maestra }: { maestra: boolean }) {
+  const base = useQuery({ queryKey: ["respaldos", "base"], queryFn: () => api<EstadoBase>("/api/respaldos/base"), retry: false });
+  const pg = usePaginado(base.data?.archivos, 6);
+  return (
+    <Tarjeta titulo="Base de datos de Mi Setup" icono={Database} acciones={base.data ? <Insignia tono={base.data.alDia ? "ok" : "peligro"}>{base.data.alDia ? "Al día" : "Atrasado"}</Insignia> : null}>
+      <ErrorCaja error={base.error} />
+      {base.isLoading ? <Cargando /> : null}
+      {base.data?.ultimo ? (
+        <p className="mb-3 text-sm">
+          Último: <span className="font-medium">{base.data.ultimo.nombre}</span> · {haceCuanto(base.data.ultimo.fecha)} · {fmtBytes(base.data.ultimo.bytes)}
+        </p>
+      ) : base.data ? (
+        <Vacio icono={Archive} texto="Aún no hay respaldos en la carpeta." />
+      ) : null}
+      {maestra && base.data && !base.data.alDia ? <RespaldoDiarioBase alTerminar={() => void base.refetch()} /> : null}
+      <ul className="divide-y divide-borde">
+        {pg.visibles.map((a) => (
+          <li key={a.nombre} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+            <span className="min-w-0 truncate">{a.nombre}</span>
+            <span className="flex shrink-0 items-center gap-2 text-tenue">
+              {fmtFechaHora(a.fecha)} · {fmtBytes(a.bytes)}
+              {maestra ? (
+                <Boton tamano="icono" variante="fantasma" icono={Download} aria-label={`Descargar ${a.nombre}`} onClick={() => void descargar(`/api/respaldos/base/descargar/${encodeURIComponent(a.nombre)}`, a.nombre).catch(avisarError)} />
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {pg.paginas}
+    </Tarjeta>
+  );
+}
+
+function MisDatos() {
+  return (
+    <Tarjeta titulo="Mis datos" icono={FileJson}>
+      <p className="text-sm text-tenue">Descarga todo lo tuyo (notas, tareas, finanzas, suscripciones, calendario, enlaces, prompts y tu lista por ver) en un archivo. Guárdalo en tu PC o en la nube.</p>
+      <Boton className="mt-3" icono={Download} onClick={() => void descargar("/api/respaldos/mis-datos", `mis-datos-${new Date().toISOString().slice(0, 10)}.json`).catch(avisarError)}>
+        Descargar mis datos
+      </Boton>
+      <p className="mt-3 text-xs text-tenue">Tus archivos subidos (música, videos, compartidos) viven en el volumen misetup_archivos del servidor; el script de respaldo también los copia (ver USO.md).</p>
+    </Tarjeta>
+  );
+}
+
 export default function Respaldos() {
   const verPtero = usePuede("pterodactyl");
   const maestra = useMe().data?.usuario.role === "maestra";
-  const base = useQuery({ queryKey: ["respaldos", "base"], queryFn: () => api<EstadoBase>("/api/respaldos/base"), retry: false });
+  const servidores = useQuery({ queryKey: ["vps", "servidores"], queryFn: () => api<ServidorVps[]>("/api/vps/servidores"), retry: false, enabled: maestra });
+  const [sid, setSid] = useState("");
+  const [ruta, setRuta] = useState("/opt/mi-setup");
+  const [restaurar, setRestaurar] = useState<string | null>(null);
+  const actual = sid || servidores.data?.[0]?.id || "";
+  const host = servidores.data?.find((s) => s.id === actual)?.host ?? "TU_IP";
+  const crear = useMutation({
+    mutationFn: (b: { tipo: TipoRespaldo; ruta?: string }) => api<{ nombre: string }>("/api/respaldos/vps", { cuerpo: { servidorId: actual, ...b } }),
+    onSuccess: (r) => {
+      avisar(`Respaldo iniciado (${r.nombre}). Sigue en segundo plano en el servidor.`);
+      void queryClient.invalidateQueries({ queryKey: ["respaldos", "vps", actual] });
+    },
+    onError: avisarError,
+  });
+  const enCurso = crear.isPending ? crear.variables?.tipo : null;
+
   return (
     <>
-      <Encabezado titulo="Respaldos" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {maestra ? (
-          <div className="lg:col-span-2">
-            <CrearRespaldo />
-            <AutomaticosDelVps />
-          </div>
-        ) : null}
-        <Tarjeta
-          titulo="Base de datos de Mi Setup"
-          icono={Database}
-          acciones={base.data ? <Insignia tono={base.data.alDia ? "ok" : "peligro"}>{base.data.alDia ? "Al día" : "Atrasado"}</Insignia> : null}
-        >
-          <ErrorCaja error={base.error} />
-          {base.isLoading ? <Cargando /> : null}
-          {base.data?.ultimo ? (
-            <p className="mb-3 text-sm">
-              Último: <span className="font-medium">{base.data.ultimo.nombre}</span> · {haceCuanto(base.data.ultimo.fecha)} · {fmtBytes(base.data.ultimo.bytes)}
-            </p>
-          ) : base.data ? (
-            <Vacio icono={Archive} texto="Aún no hay respaldos en la carpeta." />
+      <Encabezado
+        titulo="Respaldos"
+        descripcion="Copias de tu servidor para no perder nada."
+        acciones={
+          <>
+            {servidores.data && servidores.data.length > 1 ? (
+              <div className="w-44">
+                <Selector value={actual} onChange={(e) => setSid(e.target.value)} className="h-10 text-sm" aria-label="Servidor">
+                  {servidores.data.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </Selector>
+              </div>
+            ) : null}
+            <Boton icono={RefreshCw} onClick={() => void queryClient.invalidateQueries({ queryKey: ["respaldos"] })}>
+              Actualizar
+            </Boton>
+          </>
+        }
+      />
+      {maestra ? (
+        <>
+          <ErrorCaja error={servidores.error} />
+          {servidores.data?.length === 0 ? <Vacio icono={Server} texto="Agrega tu servidor en Terminal para crear respaldos desde aquí." /> : null}
+          {actual ? (
+            <div className={cx("mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2", PUBLICA ? "xl:grid-cols-3" : "xl:grid-cols-4")}>
+              <Crear icono={FolderArchive} titulo="Una carpeta" texto="Elige qué carpeta guardar." tono={ESTILO_TIPO.carpeta.tono} cargando={enCurso === "carpeta"} alCrear={() => (ruta.startsWith("/") ? crear.mutate({ tipo: "carpeta", ruta }) : avisar("La carpeta debe empezar con /", "error"))}>
+                <Entrada value={ruta} onChange={(e) => setRuta(e.target.value)} placeholder="/opt/mi-setup" className="h-9 font-mono text-sm" aria-label="Carpeta a respaldar" />
+              </Crear>
+              {PUBLICA ? null : (
+                <Crear icono={Boxes} titulo="Todo Pterodactyl" texto="Los archivos de tus servidores de juego, Wings y el panel." tono={ESTILO_TIPO.pterodactyl.tono} cargando={enCurso === "pterodactyl"} alCrear={() => crear.mutate({ tipo: "pterodactyl" })} />
+              )}
+              <Crear icono={Database} titulo="Base de Mi Setup" texto="Tus notas, finanzas, sitios y demás, ahora mismo." tono={ESTILO_TIPO.base.tono} principal cargando={enCurso === "base"} alCrear={() => crear.mutate({ tipo: "base" })} />
+              <Crear
+                icono={Server}
+                titulo="VPS completo"
+                texto="Casi todo el disco. Puede pesar varios GB."
+                tono={ESTILO_TIPO.vps.tono}
+                cargando={enCurso === "vps"}
+                alCrear={async () => {
+                  if (await confirmar({ titulo: "Respaldar todo el servidor", mensaje: "Puede ocupar varios GB y tardar varios minutos. Corre en segundo plano.", boton: "Crear respaldo completo" })) crear.mutate({ tipo: "vps" });
+                }}
+              />
+            </div>
           ) : null}
-          {maestra && base.data && !base.data.alDia ? <RespaldoDiarioBase alTerminar={() => void base.refetch()} /> : null}
-          <ul className="max-h-80 space-y-1 overflow-auto">
-            {base.data?.archivos.map((a) => (
-              <li key={a.nombre} className="flex justify-between gap-2 rounded-lg bg-fondo px-3 py-1.5 text-xs">
-                <span className="truncate">{a.nombre}</span>
-                <span className="flex shrink-0 items-center gap-2 text-tenue">
-                  {fmtFechaHora(a.fecha)} · {fmtBytes(a.bytes)}
-                  {maestra ? (
-                    <button type="button" aria-label={`Descargar ${a.nombre}`} className="hover:text-texto" onClick={() => void descargar(`/api/respaldos/base/descargar/${encodeURIComponent(a.nombre)}`, a.nombre).catch(avisarError)}>
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Tarjeta>
-        {!PUBLICA && verPtero ? <ServidoresJuego /> : null}
-        <Tarjeta titulo="Mis datos" icono={FileJson}>
-          <p className="text-sm text-tenue">Descarga todo lo tuyo (notas, tareas, finanzas, suscripciones, calendario, enlaces, prompts y tu lista por ver) en un archivo. Guárdalo en tu PC o en la nube.</p>
-          <Boton className="mt-3" icono={Download} onClick={() => void descargar("/api/respaldos/mis-datos", `mis-datos-${new Date().toISOString().slice(0, 10)}.json`).catch(avisarError)}>
-            Descargar mis datos
-          </Boton>
-          <p className="mt-3 text-xs text-tenue">Tus archivos subidos (música, videos, compartidos) viven en el volumen misetup_archivos del VPS; el script de respaldo también los copia (ver USO.md).</p>
-        </Tarjeta>
+        </>
+      ) : null}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-4">
+          {maestra && actual ? <Guardados servidorId={actual} host={host} alRestaurar={setRestaurar} /> : null}
+          <BaseMiSetup maestra={maestra} />
+        </div>
+        <div className="min-w-0 space-y-4">
+          {maestra && actual ? <Automaticos servidorId={actual} /> : null}
+          {!PUBLICA && verPtero ? <ServidoresJuego /> : null}
+          <MisDatos />
+        </div>
       </div>
+      {restaurar && actual ? (
+        <Restaurar servidorId={actual} nombre={restaurar} alCerrar={() => setRestaurar(null)} alTerminar={() => void queryClient.invalidateQueries({ queryKey: ["respaldos", "vps", actual] })} />
+      ) : null}
     </>
   );
 }
