@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(AutorrellenoPlugin.class);
+        registerPlugin(SpotifyRemotoPlugin.class);
         super.onCreate(savedInstanceState);
         String ruta = rutaDe(getIntent());
         // En frío: se carga la app directo en ese apartado.

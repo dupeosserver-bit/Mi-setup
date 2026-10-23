@@ -20,6 +20,22 @@ import { currentUser } from "../security/rbac.js";
 import { idParams, requireCipher, type ModuleDeps } from "./common.js";
 import { disposicion, carpetaArchivos } from "./herramientas.js";
 import { deleteSetting, getSetting, setSetting } from "./settings.js";
+import {
+  SCOPES_SPOTIFY,
+  mapearDispositivos,
+  mapearEstado,
+  mapearPista,
+  mapearPlaylist,
+  paginar,
+  parecidasSinRepetir,
+  pistasDePlaylist,
+  pkce,
+  type DispositivoSp,
+  type Pista,
+  type PistaSp,
+  type PlaylistSp,
+  type ReproductorSp,
+} from "./spotify.js";
 
 const MAX_MEDIA = 4 * 1024 * 1024 * 1024;
 const TIPOS = ["musica", "videos"] as const;
@@ -98,19 +114,21 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
   const urlBase = () => (deps.config.isProduction ? `https://${deps.config.env.APP_HOST}` : `http://localhost:${deps.config.env.PORT}`);
   const retornoSpotify = () => `${urlBase()}/api/musica/spotify/callback`;
 
+  const credencialesSpotify = (cuerpo: Record<string, string>) => {
+    const id = deps.config.env.SPOTIFY_CLIENT_ID;
+    if (!id) throw missingConfig("SPOTIFY_CLIENT_ID");
+    const sec = deps.config.env.SPOTIFY_CLIENT_SECRET;
+    const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+    if (sec) headers.authorization = `Basic ${Buffer.from(`${id}:${sec}`).toString("base64")}`;
+    return { headers, body: new URLSearchParams(sec ? cuerpo : { ...cuerpo, client_id: id }) };
+  };
+
   async function tokensSpotify(userId: string): Promise<string> {
     const guardado = await getSetting<string>(db, `spotify:${userId}`);
     if (!guardado) throw new HttpError(400, "Conecta tu cuenta de Spotify primero", "spotify_no_conectado");
     const t = JSON.parse(requireCipher(deps).decrypt(guardado)) as TokensSpotify;
     if (t.vence > Date.now() + 60_000) return t.acceso;
-    const id = deps.config.env.SPOTIFY_CLIENT_ID;
-    const sec = deps.config.env.SPOTIFY_CLIENT_SECRET;
-    if (!id || !sec) throw missingConfig(!id ? "SPOTIFY_CLIENT_ID" : "SPOTIFY_CLIENT_SECRET");
-    const r = await fetch("https://accounts.spotify.com/api/token", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", authorization: `Basic ${Buffer.from(`${id}:${sec}`).toString("base64")}` },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: t.refresco }),
-    });
+    const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST", ...credencialesSpotify({ grant_type: "refresh_token", refresh_token: t.refresco }) });
     if (!r.ok) throw new HttpError(400, "Spotify pidió volver a conectar la cuenta", "spotify_no_conectado");
     const d = (await r.json()) as { access_token: string; expires_in: number; refresh_token?: string };
     const nuevos: TokensSpotify = { acceso: d.access_token, refresco: d.refresh_token ?? t.refresco, vence: Date.now() + d.expires_in * 1000 };
@@ -118,7 +136,7 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     return nuevos.acceso;
   }
 
-  async function spotify(userId: string, ruta: string, opciones: { metodo?: string; cuerpo?: unknown } = {}) {
+  async function spotify<T = unknown>(userId: string, ruta: string, opciones: { metodo?: string; cuerpo?: unknown; tolerar?: boolean } = {}): Promise<T | null> {
     const token = await tokensSpotify(userId);
     const r = await fetch(`https://api.spotify.com/v1${ruta}`, {
       method: opciones.metodo ?? "GET",
@@ -127,10 +145,28 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       signal: AbortSignal.timeout(10_000),
     });
     if (r.status === 204) return null;
+    if (opciones.tolerar && (r.status === 404 || r.status === 403 || r.status === 400)) return null;
     if (r.status === 404) throw new HttpError(404, "Abre Spotify en algún equipo (celular, PC o bocina) y vuelve a intentar.");
     if (r.status === 403) throw new HttpError(403, "Spotify solo deja controlar la música con cuenta Premium.");
+    if (r.status === 429) throw new HttpError(429, "Spotify pidió esperar un momento. Intenta de nuevo en unos segundos.");
     if (!r.ok) throw new HttpError(502, `Spotify respondió ${r.status}`);
-    return r.json() as Promise<unknown>;
+    const texto = await r.text();
+    return texto ? (JSON.parse(texto) as T) : null;
+  }
+
+  async function parecidas(userId: string, actual: Pista, excluir: string[]): Promise<Pista[]> {
+    const rec = await spotify<{ tracks: PistaSp[] }>(userId, `/recommendations?limit=20&market=MX&seed_tracks=${actual.id}${actual.artistaId ? `&seed_artists=${actual.artistaId}` : ""}`, { tolerar: true });
+    const candidatas: Pista[] = (rec?.tracks ?? []).map(mapearPista);
+    if (candidatas.length < 10 && actual.artistaId) {
+      const top = await spotify<{ tracks: PistaSp[] }>(userId, `/artists/${actual.artistaId}/top-tracks?market=MX`, { tolerar: true });
+      candidatas.push(...(top?.tracks ?? []).map(mapearPista));
+    }
+    if (candidatas.length < 10) {
+      const artista = actual.artistas.split(",")[0]!.trim();
+      const b = await spotify<{ tracks: { items: PistaSp[] } }>(userId, `/search?type=track&limit=20&market=MX&q=${encodeURIComponent(`artist:"${artista}"`)}`, { tolerar: true });
+      candidatas.push(...(b?.tracks.items ?? []).map(mapearPista));
+    }
+    return parecidasSinRepetir(candidatas, [actual.id, ...excluir], 10);
   }
 
   return async function (app: FastifyInstance): Promise<void> {
@@ -228,9 +264,10 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       const user = currentUser(request);
       const { can } = await import("@mi-setup/shared");
       if (!can(user, modulo(tipo), "lectura")) throw new HttpError(403, "Sin permiso");
+      const { pagina, porPagina } = z.object({ pagina: z.coerce.number().int().min(1).optional(), porPagina: z.coerce.number().int().min(1).max(50).default(6) }).parse(request.query);
       const filas = await db.select().from(mediaFiles).where(and(eq(mediaFiles.userId, user.id), eq(mediaFiles.kind, tipo))).orderBy(desc(mediaFiles.createdAt));
       const vence = Date.now() + 6 * 60 * 60_000;
-      return filas.map((m) => ({
+      const mapear = (m: (typeof filas)[number]) => ({
         id: m.id,
         titulo: m.title,
         tamano: m.size,
@@ -238,7 +275,10 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
         progreso: m.progress,
         url: `/api/media/archivo/${m.id}?t=${firmarMedia(secreto(), m.id, vence)}`,
         creado: m.createdAt.toISOString(),
-      }));
+      });
+      if (pagina === undefined) return filas.map(mapear);
+      const p = paginar(filas, pagina, porPagina);
+      return { ...p, items: p.items.map(mapear) };
     });
 
     app.post("/api/media/:tipo", { config: { acceso: { autenticado: true } }, bodyLimit: MAX_MEDIA + 1024 * 1024 }, async (request) => {
@@ -248,8 +288,8 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       if (!can(user, modulo(tipo), "escritura")) throw new HttpError(403, "Sin permiso");
       const archivo = await request.file({ limits: { fileSize: MAX_MEDIA, files: 1 } });
       if (!archivo) throw new HttpError(400, "Falta el archivo");
-      const esperado = tipo === "musica" ? /^audio\// : /^video\//;
-      if (!esperado.test(archivo.mimetype)) throw new HttpError(415, tipo === "musica" ? "Solo archivos de audio (MP3, M4A…)" : "Solo videos (MP4, WebM…)");
+      const esperado = tipo === "musica" ? /^(audio\/|video\/mp4$)/ : /^video\//;
+      if (!esperado.test(archivo.mimetype)) throw new HttpError(415, tipo === "musica" ? "Solo audio (MP3, M4A…) o MP4" : "Solo videos (MP4, WebM…)");
       await mkdir(dirMedia, { recursive: true });
       const guardado = randomBytes(16).toString("hex");
       const ruta = join(dirMedia, guardado);
@@ -310,38 +350,40 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     // ---------------------------------------------------------------- Spotify
     const musLeer = { config: { acceso: { modulo: "musica" as const, nivel: "lectura" as const } } };
     const musEscribir = { config: { acceso: { modulo: "musica" as const, nivel: "escritura" as const } } };
+    const uriSpotify = /^spotify:(track|album|playlist|artist):\w+$/;
+    const idSpotify = z.string().regex(/^\w{10,40}$/);
 
     app.get("/api/musica/spotify/conectar", musEscribir, async (request) => {
       const id = deps.config.env.SPOTIFY_CLIENT_ID;
       if (!id) throw missingConfig("SPOTIFY_CLIENT_ID");
       const estado = randomBytes(24).toString("base64url");
-      await setSetting(db, `spotify-estado:${estado}`, { userId: currentUser(request).id, vence: Date.now() + 10 * 60_000 }, deps.now());
+      const { verificador, reto } = pkce();
+      await setSetting(db, `spotify-estado:${estado}`, { userId: currentUser(request).id, vence: Date.now() + 10 * 60_000, verificador }, deps.now());
       const url = new URL("https://accounts.spotify.com/authorize");
       url.search = new URLSearchParams({
         client_id: id,
         response_type: "code",
         redirect_uri: retornoSpotify(),
         state: estado,
-        scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing",
+        scope: SCOPES_SPOTIFY.join(" "),
+        code_challenge_method: "S256",
+        code_challenge: reto,
       }).toString();
       return { url: url.toString() };
     });
 
     app.get("/api/musica/spotify/callback", { config: { acceso: { publico: true } } }, async (request, reply) => {
       const { code, state } = z.object({ code: z.string().max(2000).optional(), state: z.string().max(200) }).parse(request.query);
-      const pendiente = await getSetting<{ userId: string; vence: number }>(db, `spotify-estado:${state}`);
+      const pendiente = await getSetting<{ userId: string; vence: number; verificador?: string }>(db, `spotify-estado:${state}`);
       await deleteSetting(db, `spotify-estado:${state}`);
       const pagina = (texto: string) =>
         reply.type("text/html; charset=utf-8").send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;background:#121212;color:#eee;display:grid;place-items:center;min-height:90vh"><p>${texto}</p></body>`);
       if (!pendiente || pendiente.vence < Date.now() || !code) return pagina("No se pudo conectar Spotify. Vuelve a intentarlo desde la app.");
-      const id = deps.config.env.SPOTIFY_CLIENT_ID ?? "";
-      const sec = deps.config.env.SPOTIFY_CLIENT_SECRET ?? "";
       const r = await fetch("https://accounts.spotify.com/api/token", {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", authorization: `Basic ${Buffer.from(`${id}:${sec}`).toString("base64")}` },
-        body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: retornoSpotify() }),
+        ...credencialesSpotify({ grant_type: "authorization_code", code, redirect_uri: retornoSpotify(), ...(pendiente.verificador ? { code_verifier: pendiente.verificador } : {}) }),
       });
-      if (!r.ok) return pagina("Spotify no aceptó la conexión. Revisa el Client Secret y la Redirect URI.");
+      if (!r.ok) return pagina("Spotify no aceptó la conexión. Revisa el Client ID, el Client Secret y la Redirect URI.");
       const d = (await r.json()) as { access_token: string; refresh_token: string; expires_in: number };
       const tokens: TokensSpotify = { acceso: d.access_token, refresco: d.refresh_token, vence: Date.now() + d.expires_in * 1000 };
       await setSetting(db, `spotify:${pendiente.userId}`, requireCipher(deps).encrypt(JSON.stringify(tokens)), deps.now());
@@ -353,39 +395,109 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       return { ok: true };
     });
 
+    app.get("/api/musica/spotify/app", musLeer, async () => ({ clientId: deps.config.env.SPOTIFY_CLIENT_ID ?? null, retorno: "misetup://spotify" }));
+
     app.get("/api/musica/spotify/estado", musLeer, async (request) => {
       const user = currentUser(request);
       if (!(await getSetting(db, `spotify:${user.id}`))) return { conectado: false, configurado: Boolean(deps.config.env.SPOTIFY_CLIENT_ID) };
-      const d = (await spotify(user.id, "/me/player")) as {
-        is_playing?: boolean;
-        progress_ms?: number;
-        device?: { name: string };
-        item?: { name: string; duration_ms: number; artists: { name: string }[]; album: { images: { url: string }[] } };
-      } | null;
-      return {
-        conectado: true,
-        configurado: true,
-        sonando: d?.is_playing ?? false,
-        equipo: d?.device?.name ?? null,
-        cancion: d?.item ? { nombre: d.item.name, artistas: d.item.artists.map((a) => a.name).join(", "), portada: d.item.album.images[0]?.url ?? null, duracion: d.item.duration_ms, progreso: d.progress_ms ?? 0 } : null,
-      };
+      const d = await spotify<ReproductorSp>(user.id, "/me/player?market=MX", { tolerar: true });
+      let guardada = false;
+      if (d?.item?.id) guardada = Boolean((await spotify<boolean[]>(user.id, `/me/tracks/contains?ids=${d.item.id}`, { tolerar: true }))?.[0]);
+      return mapearEstado(d, guardada);
     });
 
     app.post("/api/musica/spotify/control", musEscribir, async (request) => {
-      const d = z.object({ accion: z.enum(["play", "pause", "next", "previous"]), uri: z.string().regex(/^spotify:(track|album|playlist|artist):\w+$/).optional() }).parse(request.body);
+      const d = z
+        .object({
+          accion: z.enum(["play", "pause", "next", "previous", "aleatorio"]),
+          uri: z.string().regex(uriSpotify).optional(),
+          uris: z.array(z.string().regex(uriSpotify)).max(100).optional(),
+          desde: z.number().int().min(0).max(10_000).optional(),
+          encendido: z.boolean().optional(),
+          dispositivo: z.string().max(80).optional(),
+        })
+        .parse(request.body);
       const user = currentUser(request);
-      if (d.accion === "next" || d.accion === "previous") await spotify(user.id, `/me/player/${d.accion}`, { metodo: "POST" });
-      else if (d.accion === "pause") await spotify(user.id, "/me/player/pause", { metodo: "PUT" });
-      else await spotify(user.id, "/me/player/play", { metodo: "PUT", ...(d.uri ? { cuerpo: d.uri.startsWith("spotify:track") ? { uris: [d.uri] } : { context_uri: d.uri } } : {}) });
+      const enEquipo = d.dispositivo ? `?device_id=${encodeURIComponent(d.dispositivo)}` : "";
+      if (d.accion === "next" || d.accion === "previous") await spotify(user.id, `/me/player/${d.accion}${enEquipo}`, { metodo: "POST" });
+      else if (d.accion === "pause") await spotify(user.id, `/me/player/pause${enEquipo}`, { metodo: "PUT" });
+      else if (d.accion === "aleatorio") await spotify(user.id, `/me/player/shuffle?state=${d.encendido ? "true" : "false"}${d.dispositivo ? `&device_id=${encodeURIComponent(d.dispositivo)}` : ""}`, { metodo: "PUT" });
+      else {
+        const cuerpo = d.uris?.length ? { uris: d.uris, ...(d.desde ? { offset: { position: d.desde } } : {}) } : d.uri ? (d.uri.startsWith("spotify:track") ? { uris: [d.uri] } : { context_uri: d.uri, ...(d.desde ? { offset: { position: d.desde } } : {}) }) : undefined;
+        await spotify(user.id, `/me/player/play${enEquipo}`, { metodo: "PUT", ...(cuerpo ? { cuerpo } : {}) });
+      }
       return { ok: true };
+    });
+
+    app.get("/api/musica/spotify/dispositivos", musLeer, async (request) => {
+      const d = await spotify<{ devices: DispositivoSp[] }>(currentUser(request).id, "/me/player/devices");
+      return mapearDispositivos(d?.devices ?? []);
+    });
+
+    app.post("/api/musica/spotify/transferir", musEscribir, async (request) => {
+      const { id, sonar } = z.object({ id: z.string().min(1).max(80), sonar: z.boolean().default(true) }).parse(request.body);
+      await spotify(currentUser(request).id, "/me/player", { metodo: "PUT", cuerpo: { device_ids: [id], play: sonar } });
+      return { ok: true };
+    });
+
+    app.put("/api/musica/spotify/biblioteca/:id", musEscribir, async (request) => {
+      const id = idSpotify.parse((request.params as { id: string }).id);
+      const { guardar } = z.object({ guardar: z.boolean() }).parse(request.body);
+      await spotify(currentUser(request).id, `/me/tracks?ids=${id}`, { metodo: guardar ? "PUT" : "DELETE" });
+      return { guardada: guardar };
+    });
+
+    app.post("/api/musica/spotify/parecidas", musEscribir, async (request) => {
+      const user = currentUser(request);
+      const d = await spotify<ReproductorSp>(user.id, "/me/player?market=MX", { tolerar: true });
+      if (!d?.item?.id) throw new HttpError(400, "No suena nada en Spotify. Dale play a una canción y vuelve a tocar la varita.");
+      const cola = await spotify<{ queue: PistaSp[] }>(user.id, "/me/player/queue", { tolerar: true });
+      const lista = await parecidas(user.id, mapearPista(d.item), (cola?.queue ?? []).map((p) => p.id));
+      for (const p of lista) await spotify(user.id, `/me/player/queue?uri=${encodeURIComponent(p.uri)}`, { metodo: "POST" });
+      return { agregadas: lista.length, canciones: lista };
+    });
+
+    app.get("/api/musica/spotify/playlists", musLeer, async (request) => {
+      const d = await spotify<{ items: (PlaylistSp | null)[] }>(currentUser(request).id, "/me/playlists?limit=50");
+      return (d?.items ?? []).filter((p): p is PlaylistSp => Boolean(p)).map(mapearPlaylist);
+    });
+
+    app.get("/api/musica/spotify/playlists/:id", musLeer, async (request) => {
+      const id = idSpotify.parse((request.params as { id: string }).id);
+      const user = currentUser(request);
+      const [info, d] = await Promise.all([
+        spotify<PlaylistSp>(user.id, `/playlists/${id}?fields=id,uri,name,images,tracks.total,owner.display_name`),
+        spotify<{ items: { track: PistaSp | null }[] }>(user.id, `/playlists/${id}/tracks?limit=100&market=MX`),
+      ]);
+      return { ...(info ? mapearPlaylist(info) : { id, uri: `spotify:playlist:${id}`, nombre: "", portada: null, total: 0, de: "" }), pistas: pistasDePlaylist(d?.items ?? []) };
+    });
+
+    app.get("/api/musica/spotify/recientes", musLeer, async (request) => {
+      const d = await spotify<{ items: { track: PistaSp; played_at: string }[] }>(currentUser(request).id, "/me/player/recently-played?limit=20");
+      const vistas = new Set<string>();
+      return (d?.items ?? [])
+        .filter((i) => (vistas.has(i.track.id) ? false : (vistas.add(i.track.id), true)))
+        .map((i) => ({ ...mapearPista(i.track), cuando: i.played_at }));
+    });
+
+    app.get("/api/musica/spotify/top", musLeer, async (request) => {
+      const user = currentUser(request);
+      const tuyo = await spotify<{ items: PistaSp[] }>(user.id, "/me/top/tracks?limit=50&time_range=short_term", { tolerar: true });
+      if (tuyo?.items.length) return { fuente: "tuyo" as const, pistas: tuyo.items.map(mapearPista) };
+      const b = await spotify<{ playlists: { items: (PlaylistSp | null)[] } }>(user.id, `/search?type=playlist&limit=5&market=MX&q=${encodeURIComponent("Top 50 México")}`, { tolerar: true });
+      for (const pl of b?.playlists.items ?? []) {
+        if (!pl) continue;
+        const d = await spotify<{ items: { track: PistaSp | null }[] }>(user.id, `/playlists/${pl.id}/tracks?limit=50&market=MX`, { tolerar: true });
+        const pistas = pistasDePlaylist(d?.items ?? []);
+        if (pistas.length) return { fuente: "mexico" as const, pistas };
+      }
+      return { fuente: "ninguna" as const, pistas: [] };
     });
 
     app.get("/api/musica/spotify/buscar", musLeer, async (request) => {
       const { q } = z.object({ q: z.string().trim().min(1).max(100) }).parse(request.query);
-      const d = (await spotify(currentUser(request).id, `/search?type=track&limit=15&market=MX&q=${encodeURIComponent(q)}`)) as {
-        tracks: { items: { uri: string; name: string; artists: { name: string }[]; album: { images: { url: string }[] } }[] };
-      };
-      return d.tracks.items.map((t) => ({ uri: t.uri, nombre: t.name, artistas: t.artists.map((a) => a.name).join(", "), portada: t.album.images.at(-1)?.url ?? null }));
+      const d = await spotify<{ tracks: { items: PistaSp[] } }>(currentUser(request).id, `/search?type=track&limit=15&market=MX&q=${encodeURIComponent(q)}`);
+      return (d?.tracks.items ?? []).map(mapearPista);
     });
   };
 }

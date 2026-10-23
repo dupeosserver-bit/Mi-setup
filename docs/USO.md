@@ -316,7 +316,7 @@ Se ponen en Ajustes → Servicios y claves (o en el `.env`):
 | Variable | Para qué | Cómo conseguirla |
 |---|---|---|
 | `TMDB_API_KEY` | Películas y series | Cuenta gratis en themoviedb.org → Ajustes → API → "API Key" (o el token de lectura largo). |
-| `SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET` | Controlar Spotify | developer.spotify.com → Create app → Redirect URI `https://TU-DOMINIO/api/musica/spotify/callback` → Web API. Controlar la música necesita Premium. |
+| `SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET` | Controlar Spotify | developer.spotify.com → Create app → Redirect URI `https://TU-DOMINIO/api/musica/spotify/callback` (y `misetup://spotify` para el celular) → Web API y Android. Controlar la música necesita Premium. Ver «Música con Spotify» abajo. |
 | `ARCHIVOS_DIR` | Dónde se guardan los archivos subidos | Ya viene en Docker: `/data/archivos` (volumen `misetup_archivos`). |
 
 ### Publicar la versión 0.5 en el VPS
@@ -620,3 +620,33 @@ pnpm --filter @mi-setup/mobile ios:abrir
 ```
 
 Para que otras personas la instalen hace falta una cuenta de Apple Developer (99 USD al año) y publicarla en TestFlight o la App Store. La huella (Face ID) y las notificaciones necesitan ajustes propios de iOS.
+
+## Música con Spotify (0.11.4b)
+
+Cada dueño de Mi Setup usa su propia app de Spotify (en modo desarrollo Spotify deja hasta 5 personas por app).
+
+1. Entra a developer.spotify.com → **Create app**.
+2. En **Redirect URIs** agrega `https://TU-DOMINIO/api/musica/spotify/callback` y, para el celular, `misetup://spotify`.
+3. Marca **Web API** y **Android**. En Android pon el paquete `net.mexicanland.misetup` y la huella SHA1 de la llave con la que firmas el APK (`keytool -list -v -keystore TU-LLAVE`).
+4. Copia el Client ID y el Client Secret en **Ajustes → Servicios y claves** (`SPOTIFY_CLIENT_ID` y `SPOTIFY_CLIENT_SECRET`). El secret es opcional: sin él la conexión usa solo PKCE.
+5. En **Música** toca **Conectar Spotify** y acepta.
+
+Qué hace la pantalla:
+
+- **Dónde suena** (botón de la laptop): pasa la música entre tu celular, la PC (con la app oficial de Spotify abierta), consolas y bocinas con Spotify Connect.
+- **Varita**: busca canciones parecidas a la que suena y las mete a la cola. Si Spotify no da recomendaciones a tu app, usa las más escuchadas del mismo artista.
+- **Corazón**: guarda o quita la canción de tu biblioteca; cambia de color al momento y regresa si Spotify falla.
+- **Mis playlists** con portadas y **Reproducir todo**, **Escuchado hace poco** y **Tu Top 50** (si todavía no hay, se muestra el Top 50 México).
+- **Tu música**: tus MP3 y MP4 del servidor, de 6 en 6 con páginas.
+
+### Que suene en el celular sin abrir Spotify (Android)
+
+La app de Android trae un puente para el **Spotify App Remote SDK**: la música suena en segundo plano con la app de Spotify instalada y cuenta Premium, sin sacarte de Mi Setup. La primera vez Spotify pide permiso una sola vez.
+
+Spotify no publica ese SDK en Maven, así que se agrega a mano antes de compilar el APK:
+
+1. Baja `spotify-app-remote-release-X.Y.Z.aar` de https://github.com/spotify/android-sdk/releases (la más reciente que conocemos es la 0.8.0; usa la más nueva que aparezca).
+2. Cópialo a `apps/mobile/android/app/libs/`.
+3. Compila el APK como siempre (`pnpm --filter @mi-setup/mobile apk`).
+
+Si el archivo no está, el APK compila igual y la música se controla con Spotify Connect (el celular tiene que tener Spotify abierto).

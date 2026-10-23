@@ -42,6 +42,9 @@ android {
     }
 }
 
+def aarSpotify = fileTree(dir: 'libs', include: ['spotify-app-remote*.aar'])
+android.sourceSets.main.java.srcDirs += aarSpotify.isEmpty() ? 'src/sinSpotify/java' : 'src/conSpotify/java'
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
@@ -57,6 +60,10 @@ dependencies {
     // Huella para el autocompletado (la misma versión que usa el plugin de biometría)
     // 1.1.0 detecta bien la huella en Android 11+ (la 1.0.1 a veces dice que no hay); también la usa el plugin de huella.
     implementation 'androidx.biometric:biometric:1.1.0'
+    if (!aarSpotify.isEmpty()) {
+        implementation files(aarSpotify.files.toList())
+        implementation 'com.google.code.gson:gson:2.10.1'
+    }
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

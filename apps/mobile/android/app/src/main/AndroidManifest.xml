@@ -82,6 +82,7 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <package android:name="com.spotify.music" />
     </queries>
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>
