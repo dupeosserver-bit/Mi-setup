@@ -274,8 +274,12 @@ export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
   let sitio: typeof sites.$inferSelect | undefined;
   if (guardado) {
     [sitio] = await db.select().from(sites).where(eq(sites.id, guardado.sitio));
-    // Lo borraron o ya lo editaron: no se toca.
-    if (!sitio || guardado.version === VERSION || sitio.updatedAt.toISOString() !== guardado.actualizado || sitio.published) return;
+    // Lo borraron, ya está en esta versión o apagaron «Actualizar sola con cada versión»: no se toca.
+    if (!sitio || guardado.version === VERSION || (sitio.settings as { actualizarSola?: boolean }).actualizarSola === false) return;
+    // Lo de antes (aunque se haya editado a mano) queda en el historial de versiones.
+    await db.insert(siteVersions).values({ siteId: sitio.id, draft: sitio.draft as object, published: (sitio.published as object | null) ?? { paginas: [] }, note: `Antes de actualizar a la versión ${VERSION}` });
+    await actualizarSitioOficial(deps, sitio);
+    return;
   } else {
     const [maestra] = await db.select({ id: users.id }).from(users).where(and(eq(users.role, "maestra"), eq(users.isActive, true))).orderBy(asc(users.createdAt)).limit(1);
     if (!maestra) return; // Se intenta otra vez al siguiente arranque.

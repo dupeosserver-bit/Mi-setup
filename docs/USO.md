@@ -723,7 +723,17 @@ Además de no traer Pterodactyl, Redes y streams, bots, Servidores en mi PC, Mi 
 
 ### Página oficial con video
 
-El inicio de la página oficial enseña un video del recorrido (PC y celular, sin sonido y en bucle). Capturas y video salen de la demo con datos de ejemplo.
+El inicio de la página oficial enseña un video del recorrido (PC y celular, sin sonido y en bucle). Capturas y video salen de la demo con datos de ejemplo. Al arrancar cada versión nueva la página oficial se pone al día sola, aunque esté publicada; lo de antes queda en su historial de versiones. Para que no se toque: Sitios → la página oficial → Ajustes → apaga «Actualizar sola con cada versión». Para hacerlo a mano: botón «Actualizar con esta versión».
+
+### Cambiar de servidor
+
+- **PC:** en el inicio de sesión toca «Cambiar servidor» o ve a Ajustes → Servidor. La app se cierra y se abre ya conectada al otro (necesita la app de Windows 0.11.5b).
+- **Celular y navegador (/app):** igual; cada servidor guarda su sesión.
+- Antes de cambiar se revisa que ese Mi Setup conteste. Si dice «No se pudo conectar», revisa en el VPS: `curl -sI https://app.mexicanland.net/api/health` y `docker logs --tail 30 misetup-caddy`.
+
+### Actualizar la app del celular
+
+La app solo ofrece actualizar cuando en `/opt/mi-setup/descargas` hay un APK más nuevo que el instalado (por ejemplo `MiSetup-0.11.5b.apk`). Si todavía no lo subes, no ofrece nada.
 
 ### Todo al día con cada versión
 

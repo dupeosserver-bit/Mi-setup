@@ -49,6 +49,8 @@ const ajustesSchema = z.object({
   fuentes: z.array(z.string().regex(/^[\w -]{2,40}$/)).max(5).optional(),
   servidores: z.array(z.object({ id: z.string().regex(/^[a-zA-Z0-9-]{8,36}$/), nombre: z.string().max(60), direccion: z.string().max(100).optional() })).max(10).optional(),
   avisos: z.boolean().optional(),
+  /** Sitio oficial: ponerse al día solo con cada versión (por omisión, sí). */
+  actualizarSola: z.boolean().optional(),
   /** Cómo se paga (transferencia, OXXO, PayPal…): se muestra al cliente al enviar su pedido. */
   pago: z.string().max(700).optional(),
   /** Comunidad: proyectos y comentarios de visitantes (con antivirus y aprobación). */

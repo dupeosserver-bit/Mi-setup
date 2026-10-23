@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld("miSetup", {
   plataforma: "pc",
   version: String(ipcRenderer.sendSync("version")),
   huella: String(ipcRenderer.sendSync("huella")),
+  /** Cambiar de instalación de Mi Setup: la app se reabre conectada a la otra. */
+  servidor: {
+    predeterminado: "https://setup.mexicanland.net",
+    recordados: () => ipcRenderer.sendSync("servidor:recordados") as string[],
+    cambiar: (url: string | null) => ipcRenderer.invoke("servidor:cambiar", url),
+  },
   metricas: () => ipcRenderer.invoke("metricas"),
   sistema: () => ipcRenderer.invoke("sistema"),
   abrirNavegadorPrivado: (url?: string) => ipcRenderer.send("privado", url),

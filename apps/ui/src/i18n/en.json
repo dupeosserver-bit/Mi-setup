@@ -4956,5 +4956,9 @@
 "Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo.": "New screenshots and a walkthrough video on PC and phone, with sample data.",
 "Videos en tus sitios": "Videos on your sites",
 "Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse.": "MP4 and WebM videos you upload to your site now play on the page instead of downloading.",
-"Usar en el navegador": "Use in the browser"
+"Usar en el navegador": "Use in the browser",
+"Pone la wiki, las capturas, el video, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.": "Brings the wiki, screenshots, video, logo and version up to date with this version of Mi Setup. If it's already published, the new content is published too.",
+"Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Update by itself with each version (the previous one stays in the version history)",
+"No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check the address and that this Mi Setup is running.",
+"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check your internet and that this Mi Setup is running."
 }

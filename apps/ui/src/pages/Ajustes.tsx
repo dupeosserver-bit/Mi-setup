@@ -34,7 +34,7 @@ import { CodigoQr } from "../components/CodigoQr";
 import { InsigniaRol } from "./Cuentas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { confirmar } from "../lib/confirmar";
-import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, api, olvidarServidor, servidoresRecordados } from "../lib/api";
+import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, api, olvidarServidor, origenServidor, servidorResponde, servidoresRecordados } from "../lib/api";
 import { useModelosExtra } from "../lib/ia-modelos";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
@@ -1133,16 +1133,13 @@ function ServidoresMiSetup() {
         className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          try {
-            const u = new URL(nuevo.trim());
-            if (u.protocol !== "https:") throw new Error();
-            ir(u.origin);
-          } catch {
-            avisarError(new Error("Escribe la dirección completa con https://"));
-          }
+          const origen = origenServidor(nuevo);
+          if (!origen) return avisarError(new Error("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com"));
+          // Antes de cambiar se revisa que ese Mi Setup conteste (si no, la app se quedaría sin poder entrar).
+          void servidorResponde(origen).then((ok) => (ok ? ir(origen) : avisarError(new Error(`No se pudo conectar con ${new URL(origen).host}. Revisa la dirección y que ese Mi Setup esté encendido.`))));
         }}
       >
-        <Entrada value={nuevo} onChange={(e) => setNuevo(e.target.value)} inputMode="url" placeholder="https://setup.otrodominio.com" />
+        <Entrada value={nuevo} onChange={(e) => setNuevo(e.target.value)} inputMode="url" placeholder="setup.otrodominio.com" />
         <Boton type="submit">Agregar</Boton>
       </form>
       {cajas}

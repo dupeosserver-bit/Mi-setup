@@ -11,6 +11,8 @@ export interface PuenteEscritorio {
   readonly plataforma: "pc";
   readonly version: string;
   readonly huella?: string;
+  /** Cambiar de servidor (0.11.5b o más nueva de la app de Windows). */
+  readonly servidor?: { readonly predeterminado: string; recordados(): string[]; cambiar(url: string | null): Promise<void> };
   metricas(): Promise<MetricasDispositivo>;
   sistema(): Promise<InfoEquipo>;
   abrirNavegadorPrivado(url?: string): void;

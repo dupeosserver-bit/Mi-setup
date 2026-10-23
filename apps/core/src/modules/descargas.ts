@@ -56,11 +56,19 @@ export function descargasRoutes(deps: ModuleDeps) {
       return { archivos: (await listarDescargas(dir)).map((f) => ({ ...f, url: `/api/descargas/${encodeURIComponent(f.nombre)}` })) };
     });
 
-    /** Versión del servidor y app de Android más nueva (la app avisa si hay versión nueva). */
+    /**
+     * App de Android más nueva que se puede bajar. `version` es la de ese APK (no la
+     * del servidor): si el APK nuevo todavía no se sube, la app no ofrece «actualizar»
+     * para luego instalar uno más viejo. `servidor` es la versión del servidor.
+     */
     app.get("/api/actualizaciones", { config: { acceso: { autenticado: true } } }, async () => {
       const archivos = await listarDescargas(carpetaDescargas(deps));
-      const apk = archivos.find((f) => f.tipo === "android");
-      return { version: VERSION, apk: apk ? { nombre: apk.nombre, url: `/api/descargas/${encodeURIComponent(apk.nombre)}`, fecha: apk.modificado } : null };
+      const apk = archivos.find((f) => f.tipo === "android" && f.version);
+      return {
+        version: apk?.version ?? VERSION,
+        servidor: VERSION,
+        apk: apk ? { nombre: apk.nombre, version: apk.version, url: `/api/descargas/${encodeURIComponent(apk.nombre)}`, fecha: apk.modificado } : null,
+      };
     });
 
     app.get("/api/descargas/:nombre", { config: { acceso: { publico: true } } }, async (request, reply) => {

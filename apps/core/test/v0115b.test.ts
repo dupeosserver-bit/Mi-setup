@@ -124,3 +124,50 @@ describe("0.11.5b · pnpm al-dia", () => {
     expect(readmeAlDia(readme, "0.11.6", "b")).toBe("> Versión actual: **0.11.6b** ·\n- `MiSetup-0.11.6.exe`\n- `MiSetup-0.11.6b.apk`");
   });
 });
+
+describe("0.11.5b · arreglos después de probarla", () => {
+  it("el celular solo ve como «nueva» la versión del APK que de verdad se baja", async () => {
+    dir = await mkdtemp(join(tmpdir(), "v0115b-"));
+    await writeFile(join(dir, "MiSetup-0.11.4b.apk"), "apk viejo");
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, DESCARGAS_DIR: dir }) });
+    await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123" });
+    const h = bearer((await ctx.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "u@x.test", password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
+    const leer = async () => (await ctx!.app.inject({ method: "GET", url: "/api/actualizaciones", headers: h })).json<{ version: string; servidor: string; apk: { nombre: string; version: string } | null }>();
+    // El servidor ya es 0.11.5b pero el APK nuevo todavía no se sube: no se ofrece el viejo como nuevo.
+    let r = await leer();
+    expect(r.version).toBe("0.11.4b");
+    expect(r.servidor).toMatch(/^\d+\.\d+\.\d+[ab]?$/);
+    expect(r.apk?.nombre).toBe("MiSetup-0.11.4b.apk");
+    await writeFile(join(dir, "MiSetup-0.11.5b.apk"), "apk nuevo");
+    r = await leer();
+    expect(r.version).toBe("0.11.5b");
+    expect(r.apk?.nombre).toBe("MiSetup-0.11.5b.apk");
+  });
+
+  it("el sitio oficial se pone al día solo con cada versión (aunque esté publicado) y guarda lo de antes", async () => {
+    const { eq } = await import("drizzle-orm");
+    const { sites, siteVersions } = await import("../src/db/schema.js");
+    const { sembrarSitioOficial } = await import("../src/modules/sitios/oficial.js");
+    const { setSetting, getSetting } = await import("../src/modules/settings.js");
+    dir = await mkdtemp(join(tmpdir(), "v0115b-"));
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir }) });
+    await seedUser(ctx.db, { email: "m@x.test", password: "clave-de-prueba-123", role: "maestra" });
+    await sembrarSitioOficial(ctx.deps);
+    const [s] = await ctx.db.select().from(sites);
+    // Publicado y editado a mano con una versión vieja de Mi Setup.
+    await ctx.db.update(sites).set({ draft: { pages: [] }, published: { paginas: [{ ruta: "/", titulo: "", html: "<p>viejo</p>", css: "" }] }, updatedAt: new Date() }).where(eq(sites.id, s!.id));
+    const guardado = await getSetting<{ sitio: string; version: string; actualizado: string }>(ctx.db, "sitio_oficial");
+    await setSetting(ctx.db, "sitio_oficial", { ...guardado!, version: "0.11.4b" }, new Date());
+    await sembrarSitioOficial(ctx.deps);
+    const [nuevo] = await ctx.db.select().from(sites);
+    expect((nuevo!.published as { paginas: { html: string }[] }).paginas[0]!.html).toContain('href="/app/"');
+    const notas = (await ctx.db.select().from(siteVersions).where(eq(siteVersions.siteId, s!.id))).map((v) => v.note);
+    expect(notas.some((n) => n.startsWith("Antes de actualizar"))).toBe(true);
+    // Con «Actualizar sola» apagado ya no se toca.
+    await ctx.db.update(sites).set({ settings: { ...(nuevo!.settings as object), actualizarSola: false }, published: { paginas: [{ ruta: "/", titulo: "", html: "<p>mío</p>", css: "" }] } }).where(eq(sites.id, s!.id));
+    await setSetting(ctx.db, "sitio_oficial", { ...guardado!, version: "0.11.4b" }, new Date());
+    await sembrarSitioOficial(ctx.deps);
+    const [quieto] = await ctx.db.select().from(sites);
+    expect((quieto!.published as { paginas: { html: string }[] }).paginas[0]!.html).toBe("<p>mío</p>");
+  });
+});

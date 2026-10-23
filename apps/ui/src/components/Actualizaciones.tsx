@@ -8,8 +8,11 @@ import { abrirExterno, escritorio, esMovil } from "../lib/plataforma";
 import { Boton, Insignia, cx } from "./ui";
 
 interface InfoActualizacion {
+  /** Versión del APK que se puede bajar (o la del servidor si no hay APK). */
   version: string;
-  apk: { nombre: string; url: string; fecha: string } | null;
+  /** Versión del servidor (0.11.5b o más nuevo). */
+  servidor?: string;
+  apk: { nombre: string; version?: string; url: string; fecha: string } | null;
 }
 
 export { compararVersiones };
@@ -76,7 +79,9 @@ export function SeccionActualizaciones() {
   const q = useActualizacion();
   const { elegido, efectivo, vinculado, puedeRechazar, poner } = useModoActualizacion();
   const pc = Boolean(escritorio());
-  const nueva = q.data ? compararVersiones(q.data.version, __VERSION_APP__) > 0 : false;
+  const servidor = q.data?.servidor ?? q.data?.version;
+  // En la PC manda la versión del servidor (el EXE se actualiza con latest.yml); en el celular, la del APK.
+  const nueva = q.data ? compararVersiones((pc ? servidor : q.data.version) ?? "", __VERSION_APP__) > 0 : false;
   const apk = q.data?.apk;
   return (
     <div className="space-y-4 text-sm">
@@ -84,7 +89,7 @@ export function SeccionActualizaciones() {
         <RefreshCw className="h-6 w-6 shrink-0 text-acento" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">
-            Esta app: {__VERSION_APP__} · Servidor: {q.data?.version ?? "…"}
+            Esta app: {__VERSION_APP__} · Servidor: {servidor ?? "…"}
           </p>
           <p className="text-tenue">{pc ? "En la PC se instala al cerrar la app." : esMovil() ? "En Android siempre se toca «Instalar» al final." : "En el navegador siempre ves la versión más nueva."}</p>
         </div>

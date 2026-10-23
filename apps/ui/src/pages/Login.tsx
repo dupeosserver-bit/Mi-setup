@@ -4,23 +4,35 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo, useAparienciaPublica } from "../components/Logo";
 import { Boton, Campo, Entrada, ErrorCaja, Selector } from "../components/ui";
-import { API_BASE, FALTA_SERVIDOR, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, WEB_OFICIAL, api, cambiarServidor, origenServidor, servidoresRecordados } from "../lib/api";
+import { FALTA_SERVIDOR, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_EN_USO, SERVIDOR_PREDETERMINADO_ACTUAL, WEB_OFICIAL, api, cambiarServidor, origenServidor, servidorResponde, servidoresRecordados } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { idiomaGuardado, ponerIdioma } from "../lib/idioma";
 import { nombrePorDefecto } from "../lib/plataforma";
 import { useSesion } from "../lib/sesion";
 
+/** Dirección escrita → revisa que ese Mi Setup conteste y se cambia a él. */
+function useElegirServidor(inicial: string) {
+  const [url, setUrl] = useState(inicial);
+  const [error, setError] = useState<string | null>(null);
+  const [revisando, setRevisando] = useState(false);
+  const usar = async () => {
+    const origen = origenServidor(url);
+    if (!origen) return setError("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com");
+    setRevisando(true);
+    setError(null);
+    const ok = await servidorResponde(origen);
+    setRevisando(false);
+    if (ok) cambiarServidor(origen);
+    else setError(`No se pudo conectar con ${new URL(origen).host}. Revisa la dirección y que ese Mi Setup esté encendido.`);
+  };
+  return { url, setUrl, error, revisando, usar };
+}
+
 /** Servidor al que se conecta la app (para usar la misma app con otra instalación de Mi Setup). */
 function Servidor() {
   const [editando, setEditando] = useState(false);
-  const [url, setUrl] = useState(API_BASE);
-  const [error, setError] = useState<string | null>(null);
-  const guardar = () => {
-    const origen = origenServidor(url);
-    if (origen) cambiarServidor(origen);
-    else setError("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com");
-  };
-  const otros = servidoresRecordados().filter((s) => !s.actual && s.url);
+  const { url, setUrl, error, revisando, usar } = useElegirServidor(SERVIDOR_EN_USO);
+  const otros = servidoresRecordados().filter((s) => !s.actual);
   if (!editando) {
     return (
       <div className="space-y-1">
@@ -36,7 +48,7 @@ function Servidor() {
       ) : null}
       <p className="flex items-center justify-center gap-1 text-center text-xs text-tenue">
         <Server className="h-3.5 w-3.5" />
-        <span className="truncate">{API_BASE ? new URL(API_BASE).host : ""}</span>
+        <span className="truncate">{SERVIDOR_EN_USO ? new URL(SERVIDOR_EN_USO).host : ""}</span>
         <button type="button" className="underline hover:text-texto" onClick={() => setEditando(true)}>
           Cambiar servidor
         </button>
@@ -51,10 +63,10 @@ function Servidor() {
       </Campo>
       {error ? <p className="text-xs text-peligro">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
-        <Boton tamano="sm" variante="primario" onClick={guardar}>
+        <Boton tamano="sm" variante="primario" cargando={revisando} onClick={() => void usar()}>
           Usar este servidor
         </Boton>
-        {SERVIDOR_PREDETERMINADO && API_BASE !== SERVIDOR_PREDETERMINADO ? (
+        {SERVIDOR_PREDETERMINADO_ACTUAL && SERVIDOR_EN_USO !== SERVIDOR_PREDETERMINADO_ACTUAL ? (
           <Boton tamano="sm" variante="fantasma" onClick={() => cambiarServidor(null)}>
             Volver al predeterminado
           </Boton>
@@ -86,14 +98,11 @@ function SoloEnApps() {
 
 /** Versión web de la página oficial: primero se escribe la dirección del Mi Setup de la persona. */
 function PrimerServidor() {
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const recordados = servidoresRecordados().filter((s) => s.url);
+  const { url, setUrl, error, revisando, usar } = useElegirServidor("");
+  const recordados = servidoresRecordados();
   const seguir = (e: FormEvent) => {
     e.preventDefault();
-    const origen = origenServidor(url);
-    if (origen) cambiarServidor(origen);
-    else setError("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com");
+    void usar();
   };
   return (
     <div className="flex min-h-full items-center justify-center p-4">
@@ -107,7 +116,7 @@ function PrimerServidor() {
           <Entrada value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" autoComplete="url" placeholder="setup.tudominio.com" required autoFocus />
         </Campo>
         {error ? <p className="text-xs text-peligro">{error}</p> : null}
-        <Boton type="submit" variante="primario" className="w-full" icono={ArrowRight}>
+        <Boton type="submit" variante="primario" className="w-full" icono={ArrowRight} cargando={revisando}>
           Continuar
         </Boton>
         {recordados.length ? (

@@ -4,6 +4,7 @@
  */
 import type { LoginResponse, ReauthRequirement } from "@mi-setup/shared";
 import { guardarBlob } from "./guardar";
+import { escritorio } from "./plataforma";
 import { pedirReauth } from "./reauth";
 import { useSesion } from "./sesion";
 
@@ -12,8 +13,12 @@ const CLAVE_SERVIDOR = "mi-setup.servidor";
 export const SERVIDOR_PREDETERMINADO = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 /** Versión web de la página oficial (misetup.…/app): no trae servidor, la persona escribe el suyo. */
 export const WEB_OFICIAL = import.meta.env.VITE_WEB === "1";
+/** El celular y la versión web guardan aquí a qué servidor hablan. */
+const ELIGE_EN_ESTA_PAGINA = Boolean(SERVIDOR_PREDETERMINADO) || WEB_OFICIAL;
+/** La app de PC abre la página del servidor elegido: el cambio lo hace Windows y la app se reabre. */
+const servidorPc = () => (typeof window === "undefined" ? undefined : escritorio()?.servidor);
 /** Las apps de PC y celular pueden conectarse a otro servidor de Mi Setup (p. ej. el de un familiar). */
-export const PUEDE_CAMBIAR_SERVIDOR = Boolean(SERVIDOR_PREDETERMINADO) || WEB_OFICIAL;
+export const PUEDE_CAMBIAR_SERVIDOR = ELIGE_EN_ESTA_PAGINA || Boolean(servidorPc());
 
 function servidorGuardado(): string | null {
   try {
@@ -23,9 +28,23 @@ function servidorGuardado(): string | null {
   }
 }
 
-export const API_BASE = ((PUEDE_CAMBIAR_SERVIDOR && servidorGuardado()) || SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
+export const API_BASE = ((ELIGE_EN_ESTA_PAGINA && servidorGuardado()) || SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
+/** Servidor al que se vuelve con «Volver al predeterminado» (vacío si no hay). */
+export const SERVIDOR_PREDETERMINADO_ACTUAL = SERVIDOR_PREDETERMINADO || servidorPc()?.predeterminado || "";
+/** Dirección completa del servidor en uso (en el navegador y en la PC es la de esta misma página). */
+export const SERVIDOR_EN_USO = API_BASE || (typeof window === "undefined" ? "" : window.location.origin);
 /** En la versión web todavía no se escribe la dirección del servidor. */
 export const FALTA_SERVIDOR = WEB_OFICIAL && !API_BASE;
+
+/** ¿Ese Mi Setup contesta? Se revisa antes de cambiarse a él. */
+export async function servidorResponde(origen: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${origen}/api/health`, { signal: AbortSignal.timeout(10_000) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 
 /** "setup.tudominio.com" o "https://setup.tudominio.com/" → "https://setup.tudominio.com" (null si no sirve). */
 export function origenServidor(texto: string): string | null {
@@ -60,12 +79,14 @@ function sesionesGuardadas(): Record<string, SesionGuardada> {
 
 /** Servidores de Mi Setup que usaste en este dispositivo (con su sesión, para cambiar sin volver a entrar). */
 export function servidoresRecordados(): { url: string; nombre: string | null; actual: boolean }[] {
+  const pc = servidorPc();
+  if (pc) return [{ url: SERVIDOR_EN_USO, nombre: useSesion.getState().usuario?.displayName ?? null, actual: true }, ...pc.recordados().map((url) => ({ url, nombre: null, actual: false }))];
   const s = sesionesGuardadas();
   const lista = new Map<string, string | null>();
   lista.set(API_BASE, useSesion.getState().usuario?.displayName ?? null);
   for (const [url, g] of Object.entries(s)) if (!lista.has(url)) lista.set(url, g.usuario?.displayName ?? g.usuario?.email ?? null);
   if (SERVIDOR_PREDETERMINADO && !lista.has(SERVIDOR_PREDETERMINADO)) lista.set(SERVIDOR_PREDETERMINADO, null);
-  return [...lista.entries()].map(([url, nombre]) => ({ url, nombre, actual: url === API_BASE }));
+  return [...lista.entries()].filter(([url]) => url).map(([url, nombre]) => ({ url, nombre, actual: url === API_BASE }));
 }
 
 export function olvidarServidor(url: string): void {
@@ -83,6 +104,11 @@ export function olvidarServidor(url: string): void {
  * este servidor se guarda y, si ya habías entrado al otro, se recupera la suya.
  */
 export function cambiarServidor(url: string | null): void {
+  const pc = servidorPc();
+  if (pc) {
+    void pc.cambiar(url);
+    return;
+  }
   const destino = (url ?? SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
   try {
     const sesiones = sesionesGuardadas();
@@ -163,12 +189,19 @@ export async function api<T = unknown>(ruta: string, opciones: OpcionesApi = {},
     await refrescar();
   }
   const json = opciones.cuerpo !== undefined && !opciones.formulario;
-  const res = await fetch(`${API_BASE}${ruta}`, {
-    method: opciones.metodo ?? (opciones.cuerpo !== undefined || opciones.formulario ? "POST" : "GET"),
-    headers: encabezados(json),
-    body: opciones.formulario ?? (json ? JSON.stringify(opciones.cuerpo) : undefined),
-    signal: opciones.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${ruta}`, {
+      method: opciones.metodo ?? (opciones.cuerpo !== undefined || opciones.formulario ? "POST" : "GET"),
+      headers: encabezados(json),
+      body: opciones.formulario ?? (json ? JSON.stringify(opciones.cuerpo) : undefined),
+      signal: opciones.signal,
+    });
+  } catch (err) {
+    if (opciones.signal?.aborted) throw err;
+    // «Failed to fetch»: no hubo respuesta (sin internet, servidor apagado o dirección equivocada).
+    throw new ApiError(0, `No se pudo conectar con ${SERVIDOR_EN_USO ? new URL(SERVIDOR_EN_USO).host : "el servidor"}. Revisa tu internet y que ese Mi Setup esté encendido.`, "sin_conexion");
+  }
 
   if (res.status === 401 && intento === 0 && !ruta.startsWith("/api/auth/login")) {
     if (await refrescar()) return api<T>(ruta, opciones, 1);

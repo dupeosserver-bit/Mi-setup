@@ -12,6 +12,7 @@ Tres instalaciones en el mismo VPS, edición pública sin nada de MexicanLand, p
 | 4 | `pnpm al-dia [versión]`: sube la versión (package.json y Android), compila la demo, saca capturas y video, rehace la wiki y pone al día el README. |
 | 5 | Botón «Usar en el navegador» en la página oficial → `misetup.mexicanland.net/app`: escribes la dirección de tu Mi Setup, entras y en el celular la agregas a inicio. Cada instalación acepta esa página (variable `APP_WEB_ORIGEN`). |
 | 6 | Cierre: «Qué hay de nuevo», documentos, pruebas y versión 0.11.5b (Android `versionCode` 15). Los sitios ya no pueden llamarse `test` ni `pruebas`. |
+| 7 | Arreglos después de probarla: en la app de PC se cambia de servidor desde el inicio de sesión y Ajustes (antes solo desde Archivo copiando la dirección). Antes de cambiar se revisa que el otro Mi Setup conteste, y «Failed to fetch» ahora dice en español con qué servidor no se pudo conectar. El celular solo ofrece actualizar si el APK que se baja es más nuevo (antes anunciaba 0.11.5b y bajaba el 0.11.4b). La página oficial se pone al día sola con cada versión aunque esté publicada (lo de antes queda en el historial; se apaga en Sitios → Ajustes → «Actualizar sola»). |
 
 ## Memoria (RAM) de cada instalación
 

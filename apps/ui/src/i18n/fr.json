@@ -4956,5 +4956,9 @@
 "Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo.": "Nouvelles captures et une vidéo de visite sur PC et téléphone, avec des données d'exemple.",
 "Videos en tus sitios": "Vidéos sur vos sites",
 "Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse.": "Les vidéos MP4 et WebM que vous mettez sur votre site se lisent maintenant dans la page au lieu de se télécharger.",
-"Usar en el navegador": "Utiliser dans le navigateur"
+"Usar en el navegador": "Utiliser dans le navigateur",
+"Pone la wiki, las capturas, el video, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.": "Met à jour le wiki, les captures, la vidéo, le logo et la version avec cette version de Mi Setup. S'il est déjà publié, le nouveau contenu est publié aussi.",
+"Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Se mettre à jour seule à chaque version (l'ancienne reste dans l'historique des versions)",
+"No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Impossible de se connecter à {0}. Vérifiez l'adresse et que ce Mi Setup est allumé.",
+"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Impossible de se connecter à {0}. Vérifiez votre connexion et que ce Mi Setup est allumé."
 }

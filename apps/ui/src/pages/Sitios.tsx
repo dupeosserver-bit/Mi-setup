@@ -60,6 +60,8 @@ import { localeActual } from "../lib/idioma";
 const EditorSitio = lazy(() => import("../components/EditorSitio").then((m) => ({ default: m.EditorSitio })));
 
 interface Ajustes {
+  /** Solo el sitio oficial: se pone al día solo con cada versión de Mi Setup. */
+  actualizarSola?: boolean;
   titulo?: string;
   descripcion?: string;
   icono?: string;
@@ -1127,7 +1129,14 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
       </Tarjeta>
       {sitio.slug === "misetup" && esMaestra && !PUBLICA ? (
         <Tarjeta titulo="Sitio oficial" icono={RefreshCw}>
-          <p className="mb-3 text-sm text-tenue">Pone la wiki, las capturas, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.</p>
+          <p className="mb-3 text-sm text-tenue">Pone la wiki, las capturas, el video, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.</p>
+          <div className="mb-3">
+            <Interruptor
+              activo={a.actualizarSola !== false}
+              alCambiar={(v) => setA({ ...a, actualizarSola: v })}
+              etiqueta="Actualizar sola con cada versión (lo de antes queda en el historial de versiones)"
+            />
+          </div>
           <Boton
             variante="primario"
             icono={RefreshCw}

@@ -43,13 +43,41 @@ function versionConEtapa(): string {
   }
 }
 
-function leerServidor(): string | null {
+/** "https://x.com/algo" → "https://x.com"; null si no es https. */
+function origenHttps(url: unknown): string | null {
   try {
-    const { url } = JSON.parse(readFileSync(ARCHIVO_SERVIDOR, "utf8")) as { url?: string };
-    return url && new URL(url).protocol === "https:" ? new URL(url).origin : null;
+    const u = new URL(String(url));
+    return u.protocol === "https:" ? u.origin : null;
   } catch {
     return null;
   }
+}
+
+function leerArchivoServidor(): { url?: string; recordados?: string[] } {
+  try {
+    return JSON.parse(readFileSync(ARCHIVO_SERVIDOR, "utf8")) as { url?: string; recordados?: string[] };
+  } catch {
+    return {};
+  }
+}
+
+function leerServidor(): string | null {
+  return origenHttps(leerArchivoServidor().url);
+}
+
+/** Servidores que ya usaste en esta PC (para volver con un toque), sin el actual. */
+function servidoresRecordados(): string[] {
+  const lista = (leerArchivoServidor().recordados ?? []).map(origenHttps).filter((u): u is string => Boolean(u));
+  return [...new Set([...lista, SERVIDOR_PREDETERMINADO])].filter((u) => u !== ORIGEN).slice(0, 8);
+}
+
+/** Guarda el servidor nuevo y reabre la app ya conectada a él. */
+function usarServidor(destino: string): void {
+  if (destino === ORIGEN) return;
+  const recordados = [ORIGEN, ...servidoresRecordados()].filter((u) => u !== destino).slice(0, 8);
+  writeFileSync(ARCHIVO_SERVIDOR, JSON.stringify({ url: destino, recordados }));
+  app.relaunch();
+  app.exit(0);
 }
 
 const URL_APP = process.env["MI_SETUP_URL"] ?? (DEV ? "http://localhost:5173" : (leerServidor() ?? SERVIDOR_PREDETERMINADO));
@@ -222,10 +250,7 @@ async function cambiarServidor(): Promise<void> {
     cancelId: nuevo ? 2 : 1,
   });
   const elegido = nuevo ? [nuevo, SERVIDOR_PREDETERMINADO, null][response] : [SERVIDOR_PREDETERMINADO, null][response];
-  if (!elegido || elegido === new URL(URL_APP).origin) return;
-  writeFileSync(ARCHIVO_SERVIDOR, JSON.stringify({ url: elegido }));
-  app.relaunch();
-  app.exit(0);
+  if (elegido) usarServidor(elegido);
 }
 
 function construirMenu(): void {
@@ -315,6 +340,14 @@ function registrarIpc(): void {
     const { registrarServidoresLocales } = require("./servidores-locales") as typeof import("./servidores-locales");
     servidoresLocales = registrarServidoresLocales(deLaApp, () => ventana);
   }
+  // Cambiar de servidor desde la pantalla de inicio de sesión o Ajustes (0.11.5b).
+  ipcMain.on("servidor:recordados", (e) => {
+    e.returnValue = deLaApp(e) ? servidoresRecordados() : [];
+  });
+  ipcMain.handle("servidor:cambiar", (e, url: unknown) => {
+    const destino = url === null ? SERVIDOR_PREDETERMINADO : origenHttps(url);
+    if (deLaApp(e) && destino) usarServidor(destino);
+  });
   ipcMain.on("version", (e) => {
     e.returnValue = versionConEtapa();
   });
