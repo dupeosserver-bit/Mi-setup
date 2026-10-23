@@ -183,6 +183,13 @@
       "when": 1792618166345,
       "tag": "0025_comunidad",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792758821441,
+      "tag": "0026_equipos-huella",
+      "breakpoints": true
     }
   ]
 }

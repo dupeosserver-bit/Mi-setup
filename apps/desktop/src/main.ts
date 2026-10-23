@@ -22,6 +22,7 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { autoUpdater } from "electron-updater";
+import { huellaEquipo } from "./huella";
 import { leerMetricas, leerSistema } from "./metricas";
 import { registrarArchivosLocales } from "./archivos-locales";
 import { registrarTerminalLocal } from "./terminal-local";
@@ -316,6 +317,9 @@ function registrarIpc(): void {
   }
   ipcMain.on("version", (e) => {
     e.returnValue = versionConEtapa();
+  });
+  ipcMain.on("huella", (e) => {
+    e.returnValue = deLaApp(e) ? huellaEquipo() : "";
   });
   ipcMain.handle("metricas", (e) => (deLaApp(e) ? leerMetricas() : null));
   ipcMain.handle("sistema", (e) => (deLaApp(e) ? leerSistema() : null));

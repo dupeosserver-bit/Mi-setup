@@ -5,11 +5,12 @@
  * - Web: navegador normal.
  */
 import { Capacitor } from "@capacitor/core";
-import type { InfoEquipo, MetricasDispositivo } from "@mi-setup/shared";
+import { clasificarAgente, type InfoEquipo, type MetricasDispositivo } from "@mi-setup/shared";
 
 export interface PuenteEscritorio {
   readonly plataforma: "pc";
   readonly version: string;
+  readonly huella?: string;
   metricas(): Promise<MetricasDispositivo>;
   sistema(): Promise<InfoEquipo>;
   abrirNavegadorPrivado(url?: string): void;
@@ -146,22 +147,49 @@ declare global {
   }
 }
 
-export type TipoDispositivo = "pc" | "celular" | "web";
+export type TipoDispositivo = "pc" | "tablet" | "celular";
 
 export const escritorio = (): PuenteEscritorio | null => window.miSetup ?? null;
 export const esMovil = (): boolean => Capacitor.isNativePlatform();
 
+const tactil = (): boolean => typeof window !== "undefined" && (navigator.maxTouchPoints ?? 0) > 1;
+
 export function tipoDispositivo(): TipoDispositivo {
   if (escritorio()) return "pc";
-  if (esMovil()) return "celular";
-  return "web";
+  if (esMovil()) return Math.min(screen.width, screen.height) >= 600 ? "tablet" : "celular";
+  return clasificarAgente(navigator.userAgent, tactil()).tipo;
+}
+
+export function sistemaDispositivo(): string {
+  const { sistema, cliente } = clasificarAgente(navigator.userAgent, tactil());
+  return escritorio() || esMovil() || cliente === "app" ? sistema : `${sistema} · navegador`;
 }
 
 export function nombrePorDefecto(): string {
   const tipo = tipoDispositivo();
-  if (tipo === "pc") return "PC";
-  if (tipo === "celular") return "Celular";
-  return "Navegador";
+  const base = tipo === "pc" ? "PC" : tipo === "tablet" ? "Tablet" : "Celular";
+  return escritorio() || esMovil() ? base : `Navegador (${base.toLowerCase()})`;
+}
+
+const CLAVE_HUELLA_WEB = "mi-setup.huella";
+
+export async function huellaDispositivo(): Promise<string | undefined> {
+  const pc = escritorio()?.huella;
+  if (pc) return pc;
+  if (esMovil()) {
+    const { Device } = await import("@capacitor/device");
+    const { identifier } = await Device.getId();
+    if (identifier) return `android:${identifier}`;
+  }
+  try {
+    const guardada = localStorage.getItem(CLAVE_HUELLA_WEB);
+    if (guardada) return guardada;
+    const nueva = `web:${crypto.randomUUID()}`;
+    localStorage.setItem(CLAVE_HUELLA_WEB, nueva);
+    return nueva;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Abre una URL fuera de la app (navegador del sistema). */

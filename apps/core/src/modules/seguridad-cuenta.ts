@@ -2,10 +2,11 @@
  * Sesiones abiertas de tu cuenta (viven en Equipos) y entradas recientes con
  * alertas de todo el servidor (viven en VPS → Seguridad del servidor).
  */
+import { clasificarAgente, MAX_HISTORIAL_SESIONES } from "@mi-setup/shared";
 import { and, count, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { auditLog, sessions, users } from "../db/schema.js";
+import { auditLog, devices, sessions, users, type SessionRow } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "./common.js";
@@ -18,6 +19,33 @@ export function seguridadCuentaRoutes(deps: ModuleDeps) {
   const conPin = { config: { acceso: { autenticado: true as const, reauth: "pin" as const } } };
 
   return async function (app: FastifyInstance): Promise<void> {
+    async function describir(filas: SessionRow[], sesionActual: string) {
+      const ids = [...new Set(filas.map((s) => s.deviceId).filter((d): d is string => !!d))];
+      const equipos = ids.length ? await db.select().from(devices).where(inArray(devices.id, ids)) : [];
+      const porId = new Map(equipos.map((d) => [d.id, d]));
+      const ahora = deps.now().getTime();
+      return filas.map((s) => {
+        const agente = clasificarAgente(s.userAgent);
+        const equipo = s.deviceId ? porId.get(s.deviceId) : undefined;
+        const tipo = equipo && equipo.kind !== "web" ? equipo.kind : agente.tipo;
+        return {
+          id: s.id,
+          dispositivo: equipo?.name ?? s.deviceName ?? "Sin nombre",
+          navegador: (s.userAgent ?? "").slice(0, 160),
+          ip: s.ip,
+          creada: s.createdAt.toISOString(),
+          ultimoUso: s.lastUsedAt.toISOString(),
+          actual: s.id === sesionActual,
+          tipo,
+          sistema: equipo?.platform ?? agente.sistema,
+          cliente: agente.cliente,
+          equipoId: equipo?.id ?? null,
+          estado: s.revokedAt ? ("cerrada" as const) : s.expiresAt.getTime() <= ahora ? ("vencida" as const) : ("abierta" as const),
+          cerrada: s.revokedAt?.toISOString() ?? null,
+        };
+      });
+    }
+
     app.get("/api/seguridad/sesiones", autenticado, async (request) => {
       const user = currentUser(request);
       const filas = await db
@@ -26,15 +54,18 @@ export function seguridadCuentaRoutes(deps: ModuleDeps) {
         .where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt), gt(sessions.expiresAt, deps.now())))
         .orderBy(desc(sessions.lastUsedAt))
         .limit(50);
-      return filas.map((s) => ({
-        id: s.id,
-        dispositivo: s.deviceName ?? "Sin nombre",
-        navegador: (s.userAgent ?? "").slice(0, 160),
-        ip: s.ip,
-        creada: s.createdAt.toISOString(),
-        ultimoUso: s.lastUsedAt.toISOString(),
-        actual: s.id === user.sessionId,
-      }));
+      return describir(filas, user.sessionId);
+    });
+
+    app.get("/api/seguridad/sesiones/historial", autenticado, async (request) => {
+      const user = currentUser(request);
+      const filas = await db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.userId, user.id))
+        .orderBy(desc(sessions.createdAt))
+        .limit(MAX_HISTORIAL_SESIONES);
+      return describir(filas, user.sessionId);
     });
 
     app.delete("/api/seguridad/sesiones/:id", conPin, async (request) => {

@@ -6,6 +6,7 @@ type AccionVentana = "minimizar" | "maximizar" | "cerrar" | "recargar" | "pantal
 contextBridge.exposeInMainWorld("miSetup", {
   plataforma: "pc",
   version: String(ipcRenderer.sendSync("version")),
+  huella: String(ipcRenderer.sendSync("huella")),
   metricas: () => ipcRenderer.invoke("metricas"),
   sistema: () => ipcRenderer.invoke("sistema"),
   abrirNavegadorPrivado: (url?: string) => ipcRenderer.send("privado", url),

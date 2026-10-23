@@ -3,10 +3,11 @@
  * (15 s; desconectado a los 45 s) y métricas en vivo solo mientras alguien mira.
  */
 import { can, OFFLINE_AFTER_MS, temas, type MetricasDispositivo } from "@mi-setup/shared";
-import { and, desc, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { devices } from "../db/schema.js";
+import { chatMessages, devices, remoteHosts, sessions } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { idParams, type ModuleDeps } from "./common.js";
@@ -64,9 +65,13 @@ export class Presencia {
 
 const registroSchema = z.object({
   nombre: z.string().trim().min(1).max(60),
-  tipo: z.enum(["pc", "celular", "web"]),
+  tipo: z.enum(["pc", "tablet", "celular", "web"]),
   plataforma: z.string().trim().max(60).optional(),
+  huella: z.string().trim().min(8).max(200).optional(),
+  id: z.string().uuid().optional(),
 });
+
+const hashHuella = (huella: string) => createHash("sha256").update(`mi-setup:equipo:${huella}`).digest("hex");
 
 export function equiposModule(deps: ModuleDeps) {
   const presencia = new Presencia(deps);
@@ -114,12 +119,67 @@ export function equiposModule(deps: ModuleDeps) {
     app.post("/api/equipos/registrar", { config: { acceso: { autenticado: true } } }, async (request) => {
       const user = currentUser(request);
       const body = registroSchema.parse(request.body);
-      const [creado] = await db
-        .insert(devices)
-        .values({ userId: user.id, name: body.nombre, kind: body.tipo, platform: body.plataforma ?? null })
-        .returning();
-      if (!creado) throw new HttpError(500, "No se pudo registrar el dispositivo");
-      return { id: creado.id };
+      const huella = body.huella ? hashHuella(body.huella) : null;
+      const ahora = deps.now();
+      const datos = { kind: body.tipo, platform: body.plataforma ?? null, lastSeenAt: ahora };
+      let id: string | null = null;
+
+      if (huella) {
+        const [mismo] = await db
+          .select({ id: devices.id })
+          .from(devices)
+          .where(and(eq(devices.userId, user.id), eq(devices.fingerprint, huella)))
+          .limit(1);
+        if (mismo) {
+          id = mismo.id;
+          const reinstalo = body.id !== mismo.id;
+          const [fila] = await db.select({ reinstalls: devices.reinstalls }).from(devices).where(eq(devices.id, mismo.id)).limit(1);
+          await db
+            .update(devices)
+            .set({ ...datos, reinstalls: (fila?.reinstalls ?? 0) + (reinstalo ? 1 : 0) })
+            .where(eq(devices.id, mismo.id));
+        } else if (body.id) {
+          const [propio] = await db
+            .update(devices)
+            .set({ ...datos, fingerprint: huella })
+            .where(and(eq(devices.id, body.id), eq(devices.userId, user.id), isNull(devices.fingerprint)))
+            .returning({ id: devices.id });
+          id = propio?.id ?? null;
+        }
+        if (id) {
+          const [actual] = await db.select().from(devices).where(eq(devices.id, id)).limit(1);
+          if (actual) {
+            const gemelos = await db
+              .select({ id: devices.id })
+              .from(devices)
+              .where(and(eq(devices.userId, user.id), isNull(devices.fingerprint), eq(devices.name, actual.name), eq(devices.kind, actual.kind), ne(devices.id, id)));
+            const ids = gemelos.map((g) => g.id);
+            if (ids.length) {
+              await db.update(chatMessages).set({ deviceId: id }).where(inArray(chatMessages.deviceId, ids));
+              await db.update(remoteHosts).set({ deviceId: id }).where(inArray(remoteHosts.deviceId, ids));
+              await db.update(sessions).set({ deviceId: id }).where(inArray(sessions.deviceId, ids));
+              await db.delete(devices).where(inArray(devices.id, ids));
+              for (const g of ids) presencia.olvidar(g);
+            }
+          }
+        }
+      }
+
+      if (!id) {
+        const [creado] = await db
+          .insert(devices)
+          .values({ userId: user.id, name: body.nombre, fingerprint: huella, ...datos })
+          .returning();
+        if (!creado) throw new HttpError(500, "No se pudo registrar el dispositivo");
+        id = creado.id;
+      }
+
+      await db.update(sessions).set({ deviceId: id }).where(and(eq(sessions.id, user.sessionId), eq(sessions.userId, user.id)));
+      await db
+        .update(sessions)
+        .set({ revokedAt: ahora })
+        .where(and(eq(sessions.userId, user.id), eq(sessions.deviceId, id), ne(sessions.id, user.sessionId), isNull(sessions.revokedAt)));
+      return { id };
     });
 
     app.get("/api/equipos", { config: { acceso: { modulo: "equipos", nivel: "lectura" } } }, async (request) => {
@@ -136,6 +196,7 @@ export function equiposModule(deps: ModuleDeps) {
           nombre: d.name,
           tipo: d.kind,
           plataforma: d.platform,
+          reinstalaciones: d.reinstalls,
           ultimaVez: d.lastSeenAt?.toISOString() ?? null,
           conectado: info.conectado,
           metricas: info.metricas,

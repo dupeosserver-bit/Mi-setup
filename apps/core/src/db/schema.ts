@@ -132,6 +132,7 @@ export const sessions = pgTable(
     reauthAt: timestamp("reauth_at", { withTimezone: true }),
     reauthMethod: reauthMethodEnum("reauth_method"),
     reauthFailures: integer("reauth_failures").notNull().default(0),
+    deviceId: uuid("device_id"),
   },
   (t) => [index("sessions_usuario").on(t.userId)],
 );
@@ -154,7 +155,7 @@ export const loginAttempts = pgTable(
 
 // ---------------------------------------------------------------- Plan 3: equipos y ajustes
 
-export const deviceKind = pgEnum("tipo_dispositivo", ["pc", "celular", "web"]);
+export const deviceKind = pgEnum("tipo_dispositivo", ["pc", "celular", "web", "tablet"]);
 
 export const devices = pgTable(
   "devices",
@@ -166,10 +167,15 @@ export const devices = pgTable(
     name: text("name").notNull(),
     kind: deviceKind("kind").notNull(),
     platform: text("platform"),
+    fingerprint: text("fingerprint"),
+    reinstalls: integer("reinstalls").notNull().default(0),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("devices_usuario").on(t.userId)],
+  (t) => [
+    index("devices_usuario").on(t.userId),
+    uniqueIndex("devices_huella").on(t.userId, t.fingerprint).where(sql`${t.fingerprint} is not null`),
+  ],
 );
 
 export const appSettings = pgTable("app_settings", {

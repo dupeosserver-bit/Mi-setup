@@ -16,7 +16,7 @@ interface Elemento {
   fecha: string;
 }
 
-const NOMBRE_EQUIPO = { pc: "PC", celular: "Celular", web: "Navegador" } as const;
+const NOMBRE_EQUIPO = { pc: "PC", tablet: "Tablet", celular: "Celular" } as const;
 
 export default function Portapapeles() {
   const puede = usePuede("portapapeles", "escritura");

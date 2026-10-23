@@ -7,7 +7,7 @@ import type { InfoEquipo, MetricasDispositivo } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Battery, Clock, Cpu, Gauge, Globe, HardDrive, MemoryStick, Monitor, MonitorSmartphone, type LucideIcon } from "lucide-react";
 import { fmtBps, fmtBytes, fmtDuracion } from "../lib/formato";
-import { leerMetricas, leerSistema, tipoDispositivo } from "../lib/plataforma";
+import { escritorio, esMovil, leerMetricas, leerSistema, tipoDispositivo } from "../lib/plataforma";
 import { cx } from "./ui";
 
 function Dato({ icono: Icono, etiqueta, valor }: { icono: LucideIcon; etiqueta: string; valor: string }) {
@@ -46,7 +46,7 @@ export function EsteEquipo() {
   const s = sistema.data;
   const met = m.data ?? {};
   const disco = met.discos?.reduce((t, d) => ({ usado: t.usado + d.usado, total: t.total + d.total }), { usado: 0, total: 0 });
-  const titulo = tipo === "pc" ? "Esta PC" : tipo === "celular" ? "Este celular" : "Este navegador";
+  const titulo = !escritorio() && !esMovil() ? "Este navegador" : tipo === "pc" ? "Esta PC" : tipo === "tablet" ? "Esta tablet" : "Este celular";
 
   return (
     <section className="space-y-3">

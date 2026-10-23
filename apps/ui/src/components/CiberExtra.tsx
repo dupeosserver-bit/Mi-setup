@@ -1,32 +1,23 @@
 /**
- * - Sesiones abiertas de tu cuenta (en Equipos) y entradas recientes del servidor (en VPS → Seguridad del servidor).
+ * - Entradas recientes del servidor (en VPS → Seguridad del servidor).
  * - Correos de Google: hasta 10 cuentas, filtraciones, bandeja revisada (qué abrir y qué no) y enviar revisando antes.
  */
 import { Paginas, usePaginado } from "./Paginas";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, LogOut, Mail, MailPlus, MonitorSmartphone, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Mail, MailPlus, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
-import { fmtFechaHora, haceCuanto } from "../lib/formato";
+import { fmtFechaHora } from "../lib/formato";
 import { abrirExterno } from "../lib/plataforma";
 import { useTema } from "../lib/tiempo-real";
 import { AreaTexto, Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "./ui";
 
-// ---------------------------------------------------------------- mi cuenta
+// ---------------------------------------------------------------- entradas
 
-interface Sesion {
-  id: string;
-  dispositivo: string;
-  navegador: string;
-  ip: string | null;
-  creada: string;
-  ultimoUso: string;
-  actual: boolean;
-}
 interface Inicio {
   fecha: string;
   tipo: string;
@@ -44,59 +35,6 @@ const TEXTO_INICIO: Record<string, { texto: string; tono: "ok" | "aviso" | "peli
   sesion_cerrada_remota: { texto: "Cerraste una sesión", tono: "neutro" },
   entrada_ssh: { texto: "Entraron por SSH", tono: "aviso" },
 };
-
-export function SesionesAbiertas() {
-  const sesiones = useQuery({ queryKey: ["seguridad", "sesiones"], queryFn: () => api<Sesion[]>("/api/seguridad/sesiones") });
-  const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["seguridad"] });
-  const cerrar = useMutation({ mutationFn: (id: string) => api(`/api/seguridad/sesiones/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
-  const otras = useMutation({
-    mutationFn: () => api<{ cerradas: number }>("/api/seguridad/sesiones/cerrar-otras", { metodo: "POST" }),
-    onSuccess: (r) => {
-      avisar(`Cerradas ${r.cerradas} sesión(es)`);
-      refrescar();
-    },
-    onError: avisarError,
-  });
-  return (
-    <Tarjeta
-      titulo="Dónde tienes la sesión abierta"
-      icono={MonitorSmartphone}
-      acciones={
-        (sesiones.data?.length ?? 0) > 1 ? (
-          <Boton
-            tamano="sm"
-            variante="peligro"
-            icono={LogOut}
-            cargando={otras.isPending}
-            onClick={async () => {
-              if (await confirmar({ titulo: "Cerrar todas menos esta", mensaje: "Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.", boton: "Cerrar las demás" })) otras.mutate();
-            }}
-          >
-            Cerrar todas menos esta
-          </Boton>
-        ) : null
-      }
-    >
-      <ErrorCaja error={sesiones.error} />
-      {sesiones.isLoading ? <Cargando /> : null}
-      <ul className="divide-y divide-borde">
-        {sesiones.data?.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {s.dispositivo} {s.actual ? <Insignia tono="ok">Este</Insignia> : null}
-              </p>
-              <p className="truncate text-xs text-tenue" title={s.navegador}>
-                {s.ip ?? "IP desconocida"} · usada {haceCuanto(s.ultimoUso)} · desde {fmtFechaHora(s.creada)}
-              </p>
-            </div>
-            {!s.actual ? <Boton tamano="sm" variante="fantasma" icono={LogOut} onClick={() => cerrar.mutate(s.id)}>Cerrar</Boton> : null}
-          </li>
-        ))}
-      </ul>
-    </Tarjeta>
-  );
-}
 
 export function EntradasRecientes() {
   const [pagina, setPagina] = useState(1);

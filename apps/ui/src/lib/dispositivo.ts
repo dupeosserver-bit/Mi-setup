@@ -5,7 +5,7 @@
  */
 import { HEARTBEAT_INTERVAL_MS } from "@mi-setup/shared";
 import { api } from "./api";
-import { leerMetricas, nombrePorDefecto, tipoDispositivo } from "./plataforma";
+import { huellaDispositivo, leerMetricas, nombrePorDefecto, sistemaDispositivo, tipoDispositivo } from "./plataforma";
 import { CLAVE_DISPOSITIVO, tiempoReal } from "./tiempo-real";
 
 export function dispositivoActual(): string | null {
@@ -14,12 +14,14 @@ export function dispositivoActual(): string | null {
 
 export async function asegurarDispositivo(): Promise<string> {
   const existente = dispositivoActual();
-  if (existente) return existente;
+  const huella = await huellaDispositivo().catch(() => undefined);
   const { id } = await api<{ id: string }>("/api/equipos/registrar", {
-    cuerpo: { nombre: nombrePorDefecto(), tipo: tipoDispositivo(), plataforma: navigator.platform || undefined },
+    cuerpo: { nombre: nombrePorDefecto(), tipo: tipoDispositivo(), plataforma: sistemaDispositivo(), huella, id: existente ?? undefined },
   });
-  localStorage.setItem(CLAVE_DISPOSITIVO, id);
-  tiempoReal.autenticar();
+  if (id !== existente) {
+    localStorage.setItem(CLAVE_DISPOSITIVO, id);
+    tiempoReal.autenticar();
+  }
   return id;
 }
 

@@ -6,6 +6,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   levelRank,
   isModuleId,
+  MAX_HISTORIAL_SESIONES,
   MODULE_IDS,
   effectiveLevel,
   REAUTH_WINDOW_MS,
@@ -19,7 +20,7 @@ import {
   type ReauthMethod,
   type ReauthRequest,
 } from "@mi-setup/shared";
-import { and, count, eq, gt, isNull, lt, min, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, lt, min, or, sql } from "drizzle-orm";
 import type { AuditWriter } from "../audit/audit.js";
 import type { Database } from "../db/client.js";
 import { biometricKeys, loginAttempts, sessions, userModulePermissions, users, type UserRow } from "../db/schema.js";
@@ -187,6 +188,14 @@ export class AuthService {
       reauthAt: now,
       reauthMethod: "password",
     });
+
+    const sobrantes = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.userId, user.id))
+      .orderBy(desc(sessions.createdAt))
+      .offset(MAX_HISTORIAL_SESIONES);
+    if (sobrantes.length) await db.delete(sessions).where(inArray(sessions.id, sobrantes.map((f) => f.id)));
 
     await this.deps.audit.record({
       actorType: "usuario",

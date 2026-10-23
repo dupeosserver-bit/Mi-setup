@@ -7,6 +7,7 @@ import {
   FUENTES_APP,
   FUENTES_TERMINAL,
   MODELOS_IA,
+  NOMBRE_TIPO_EQUIPO,
   IDIOMAS_APP,
   TEMAS_APP,
   TEMAS_TERMINAL,
@@ -34,7 +35,7 @@ import { useModelosExtra } from "../lib/ia-modelos";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
-import { tipoDispositivo } from "../lib/plataforma";
+import { sistemaDispositivo, tipoDispositivo } from "../lib/plataforma";
 import { idiomaGuardado } from "../lib/idioma";
 import { TEMAS_XTERM, useFlotantes, useGuardarPreferencias, usePreferencias, type ModoFlotantes } from "../lib/preferencias";
 import { hablar, vocesEspanol } from "../lib/voz";
@@ -781,7 +782,7 @@ function Seguridad() {
       </div>
       <div className="space-y-4">
         <Tarjeta titulo="Este dispositivo">
-          <p className="text-sm">Tipo: {tipoDispositivo() === "pc" ? "PC (app de Windows)" : tipoDispositivo() === "celular" ? "Celular (app de Android)" : "Navegador"}</p>
+          <p className="text-sm">Tipo: {NOMBRE_TIPO_EQUIPO[tipoDispositivo()]} · {sistemaDispositivo()}</p>
           <p className="mt-1 break-all text-xs text-tenue">Identificador: {dispositivoActual() ?? "sin registrar"}</p>
         </Tarjeta>
         <Tarjeta titulo="Sesión" icono={LogOut}>
