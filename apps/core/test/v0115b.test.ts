@@ -81,6 +81,7 @@ describe("0.11.5b · Mi Setup en el navegador (/app)", () => {
       const s = (await app.inject({ method: "POST", url: "/api/sitios", headers: h, payload: { nombre: slug, slug } })).json<{ id: string }>();
       await app.inject({ method: "POST", url: `/api/sitios/${s.id}/publicar`, headers: h, payload: { paginas: [{ ruta: "/", html: "<p>inicio</p>", css: "" }, { ruta: "/app", html: "<p>pagina app de la tienda</p>", css: "" }] } });
     }
+    expect((await app.inject({ method: "GET", url: "/api/sitios/dominio", headers: h })).json()).toEqual({ dominio: "mexicanland.net" });
     const oficial = { host: "misetup.mexicanland.net" };
     expect((await app.inject({ method: "GET", url: "/app", headers: oficial })).headers.location).toBe("/app/");
     for (const url of ["/app/", "/app/notas"]) {

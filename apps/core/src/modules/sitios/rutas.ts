@@ -131,6 +131,9 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       return reply.code(s?.p ? 200 : 404).send({ ok: Boolean(s?.p) });
     });
 
+    // Dominio de los sitios de esta instalación (nombre.<dominio>); cada instalación tiene el suyo.
+    app.get("/api/sitios/dominio", leer, async () => ({ dominio: deps.config.env.DOMAIN }));
+
     app.get("/api/sitios", leer, async (request) => {
       const user = currentUser(request);
       const compartidos = db.select({ id: siteEditors.siteId }).from(siteEditors).where(eq(siteEditors.userId, user.id));

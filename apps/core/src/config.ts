@@ -105,7 +105,7 @@ export const envBase = z.object({
      * (misetup.mexicanland.net/app). Se permite por CORS en cualquier instalación;
      * vacío = no se permite.
      */
-    APP_WEB_ORIGEN: z.string().default("https://misetup.mexicanland.net"),
+    APP_WEB_ORIGEN: z.union([z.literal(""), z.string().regex(/^https:\/\/[a-z0-9.-]+$/, "Debe ser https://dominio sin ruta")]).default("https://misetup.mexicanland.net"),
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */
     UPLOADS_DIR: optionalString,
     /** Solo desarrollo: "1" usa Postgres embebido en .data/pglite (sin Docker). */
@@ -167,7 +167,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
 
   // La app de Android (Capacitor) carga la UI desde https://localhost.
   const corsOrigins = [`https://${env.APP_HOST}`, "https://localhost", "capacitor://localhost"];
-  if (/^https:\/\/[a-z0-9.-]+$/.test(env.APP_WEB_ORIGEN)) corsOrigins.push(env.APP_WEB_ORIGEN);
+  if (env.APP_WEB_ORIGEN) corsOrigins.push(env.APP_WEB_ORIGEN);
   if (!isProduction) corsOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
 
   const ntfyUrl = env.NTFY_URL ?? `https://${env.NTFY_HOST}`;

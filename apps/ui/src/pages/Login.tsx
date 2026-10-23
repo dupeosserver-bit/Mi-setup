@@ -18,7 +18,7 @@ function Servidor() {
   const guardar = () => {
     const origen = origenServidor(url);
     if (origen) cambiarServidor(origen);
-    else setError("Escribe la dirección completa con https://, p. ej. https://setup.tudominio.com");
+    else setError("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com");
   };
   const otros = servidoresRecordados().filter((s) => !s.actual && s.url);
   if (!editando) {

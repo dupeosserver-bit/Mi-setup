@@ -38,19 +38,6 @@ export function origenServidor(texto: string): string | null {
   }
 }
 
-/** Dominio de los sitios: el del servidor sin su primera parte (setup.midominio.com → midominio.com). */
-export function dominioDeSitios(): string {
-  let host = typeof window === "undefined" ? "" : window.location.hostname;
-  try {
-    if (API_BASE) host = new URL(API_BASE).hostname;
-  } catch {
-    // Dirección rara guardada: se queda la de la página.
-  }
-  if (!host.includes(".") || /^[\d.]+$/.test(host)) return "tudominio.com";
-  const partes = host.split(".");
-  return partes.length > 2 ? partes.slice(1).join(".") : host;
-}
-
 /** Ruta del servidor (/uploads/…) como dirección completa: en el celular la app no vive en el mismo sitio que el servidor. */
 export const urlServidor = <T extends string | null | undefined>(ruta: T): T => (typeof ruta === "string" && ruta.startsWith("/") ? (`${API_BASE}${ruta}` as T) : ruta);
 

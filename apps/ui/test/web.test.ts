@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dominioDeSitios, origenServidor } from "../src/lib/api";
+import { origenServidor } from "../src/lib/api";
 
 describe("versión web: dirección del servidor", () => {
   it("acepta la dirección con o sin https:// y se queda solo con el origen", () => {
@@ -8,9 +8,5 @@ describe("versión web: dirección del servidor", () => {
     expect(origenServidor("http://setup.tudominio.com")).toBeNull();
     expect(origenServidor("localhost")).toBeNull();
     expect(origenServidor("")).toBeNull();
-  });
-
-  it("sin servidor ni página, los sitios usan un dominio de ejemplo", () => {
-    expect(dominioDeSitios()).toBe("tudominio.com");
   });
 });

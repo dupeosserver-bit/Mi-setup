@@ -8,7 +8,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -47,7 +47,7 @@ export async function servirDemo(extras = {}) {
       return;
     }
     let archivo = join(RAIZ_DEMO, ruta.replace(/^\/demo/, ""));
-    if (!archivo.startsWith(RAIZ_DEMO) || !existsSync(archivo) || statSync(archivo).isDirectory()) archivo = join(RAIZ_DEMO, "index.html");
+    if (!archivo.startsWith(RAIZ_DEMO + sep) || !existsSync(archivo) || statSync(archivo).isDirectory()) archivo = join(RAIZ_DEMO, "index.html");
     r.writeHead(200, { "content-type": TIPOS[extname(archivo)] ?? "application/octet-stream" });
     createReadStream(archivo).pipe(r);
   });

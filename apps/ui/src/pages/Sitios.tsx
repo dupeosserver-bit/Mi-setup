@@ -45,7 +45,7 @@ import { useSearchParams } from "react-router-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { subirImagenSitio } from "../components/EditorSitio";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
-import { API_BASE, api, descargar, dominioDeSitios } from "../lib/api";
+import { API_BASE, api, descargar } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { PUBLICA } from "../edicion";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
@@ -378,7 +378,7 @@ function Crear({ alCrear, alCerrar }: { alCrear: (s: Sitio) => void; alCerrar: (
                 }}
                 placeholder="dulcehogar"
               />
-              <span className="shrink-0 text-xs text-tenue">.{dominioDeSitios()}</span>
+              <span className="shrink-0 text-xs text-tenue">.<DominioSitios /></span>
             </div>
           </Campo>
         </div>
@@ -1019,6 +1019,12 @@ function Conexion({ sitio }: { sitio: Sitio }) {
 }
 
 // ---------------------------------------------------------------- ajustes
+/** Dominio de los sitios de este servidor (lo dice el servidor: cada instalación tiene el suyo). */
+function DominioSitios() {
+  const q = useQuery({ queryKey: ["sitios", "dominio"], queryFn: () => api<{ dominio: string }>("/api/sitios/dominio"), staleTime: Infinity });
+  return <>{q.data?.dominio ?? "…"}</>;
+}
+
 function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void }) {
   const [nombre, setNombre] = useState(sitio.nombre);
   const [slug, setSlug] = useState(sitio.slug);
@@ -1072,7 +1078,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
           <Campo etiqueta="Dirección (subdominio)">
             <div className="flex items-center gap-1">
               <Entrada value={slug} onChange={(e) => setSlug(aSlug(e.target.value))} />
-              <span className="shrink-0 text-xs text-tenue">.{dominioDeSitios()}</span>
+              <span className="shrink-0 text-xs text-tenue">.<DominioSitios /></span>
             </div>
           </Campo>
           <Campo etiqueta="Dominio propio (opcional)">
