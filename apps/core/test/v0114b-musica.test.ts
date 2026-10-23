@@ -113,6 +113,29 @@ describe("0.11.4b música: Spotify con respuestas simuladas", () => {
   });
 });
 
+describe("0.11.4b música: avisos de Spotify", () => {
+  it("pide volver a conectar si faltan permisos y Premium solo si Spotify lo dice", async () => {
+    const h = await preparar({ SPOTIFY_CLIENT_ID: "cliente-prueba" });
+    const app = ctx!.app;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entrada) => {
+      const url = String(entrada);
+      if (url.startsWith("https://accounts.spotify.com/api/token")) return respuesta({ access_token: "acceso", refresh_token: "refresco", expires_in: 3600 });
+      if (url.includes("/me/playlists")) return respuesta({ error: { status: 403, message: "Insufficient client scope" } }, 403);
+      if (url.includes("/me/player/recently-played")) return respuesta({ error: { status: 403, message: "Premium required", reason: "PREMIUM_REQUIRED" } }, 403);
+      return respuesta({}, 500);
+    });
+    const u = new URL((await app.inject({ method: "GET", url: "/api/musica/spotify/conectar", headers: h })).json<{ url: string }>().url);
+    await app.inject({ method: "GET", url: `/api/musica/spotify/callback?code=abc&state=${u.searchParams.get("state")}` });
+
+    const sinPermisos = await app.inject({ method: "GET", url: "/api/musica/spotify/playlists", headers: h });
+    expect(sinPermisos.statusCode).toBe(403);
+    expect(sinPermisos.body).toContain("Vuelve a conectar Spotify");
+    const sinPremium = await app.inject({ method: "GET", url: "/api/musica/spotify/recientes", headers: h });
+    expect(sinPremium.statusCode).toBe(403);
+    expect(sinPremium.body).toContain("Premium");
+  });
+});
+
 describe("0.11.4b música: tu música del servidor", () => {
   it("acepta MP3 y MP4 y entrega páginas de 6", async () => {
     const h = await preparar();

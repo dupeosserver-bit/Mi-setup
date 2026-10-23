@@ -147,7 +147,12 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     if (r.status === 204) return null;
     if (opciones.tolerar && (r.status === 404 || r.status === 403 || r.status === 400)) return null;
     if (r.status === 404) throw new HttpError(404, "Abre Spotify en algún equipo (celular, PC o bocina) y vuelve a intentar.");
-    if (r.status === 403) throw new HttpError(403, "Spotify solo deja controlar la música con cuenta Premium.");
+    if (r.status === 403) {
+      // Spotify marca la falta de Premium con PREMIUM_REQUIRED; otro 403 es una conexión sin los permisos nuevos.
+      const error = ((await r.json().catch(() => null)) as { error?: { reason?: string } } | null)?.error;
+      if (error?.reason === "PREMIUM_REQUIRED") throw new HttpError(403, "Spotify solo deja controlar la música con cuenta Premium.");
+      throw new HttpError(403, "Vuelve a conectar Spotify (botón de desconectar y luego Conectar) para dar los permisos nuevos.", "spotify_reconectar");
+    }
     if (r.status === 429) throw new HttpError(429, "Spotify pidió esperar un momento. Intenta de nuevo en unos segundos.");
     if (!r.ok) throw new HttpError(502, `Spotify respondió ${r.status}`);
     const texto = await r.text();

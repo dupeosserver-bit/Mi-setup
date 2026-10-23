@@ -55,7 +55,7 @@ const fechaBonita = (f: string) => new Date(`${f}T12:00:00`).toLocaleDateString(
 
 function Poster({ r, alAbrir }: { r: { titulo: string; poster: string | null; fecha?: string | null; calificacion?: number | null; tipo: TipoTmdb }; alAbrir: () => void }) {
   return (
-    <button type="button" onClick={alAbrir} className="group min-w-0 text-left">
+    <button type="button" onClick={alAbrir} className="group block w-full min-w-0 text-left">
       <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-fondo">
         {r.poster ? (
           <img src={r.poster} alt={r.titulo} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
