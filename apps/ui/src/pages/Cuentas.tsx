@@ -3,6 +3,7 @@
  * roles tipo Discord (nombre, color y permisos), desactivar y restablecer
  * contraseña. Los permisos de una cuenta = los suyos + los de sus roles.
  */
+import { usePaginado } from "../components/Paginas";
 import { MODULES, MODULE_IDS, moduloEnEdicion, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Crown, KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
@@ -333,6 +334,7 @@ function Detalle({ c }: { c: Cuenta }) {
 
 function ListaCuentas() {
   const lista = useQuery({ queryKey: ["cuentas"], queryFn: () => api<Cuenta[]>("/api/cuentas") });
+  const pgCu = usePaginado(lista.data, 10);
   const roles = useRoles();
   const [abierta, setAbierta] = useState<string | null>(null);
   const [nueva, setNueva] = useState(false);
@@ -346,7 +348,7 @@ function ListaCuentas() {
       </div>
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
-      {lista.data?.map((c) => (
+      {pgCu.visibles.map((c) => (
         <Tarjeta
           key={c.id}
           icono={c.rol === "maestra" ? ShieldCheck : UserCog}
@@ -383,6 +385,7 @@ function ListaCuentas() {
           ) : null}
         </Tarjeta>
       ))}
+      {pgCu.paginas}
       <Modal abierto={nueva} titulo="Nueva cuenta" alCerrar={() => setNueva(false)} ancho="max-w-2xl">
         <Nueva alCerrar={() => setNueva(false)} />
       </Modal>

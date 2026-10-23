@@ -1,4 +1,5 @@
 /** Alertas de caída: estado de VPS y monitores (revisión cada 60 s, aviso push al cambiar). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, Radar, Siren, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -115,6 +116,7 @@ export default function VpsAlertas() {
   const [nuevo, setNuevo] = useState(false);
   const monitores = useQuery({ queryKey: ["vps", "monitores"], queryFn: () => api<Monitor[]>("/api/vps/monitores"), refetchInterval: 30_000 });
 
+  const pgMon = usePaginado(monitores.data, 12);
   return (
     <>
       <Encabezado
@@ -134,8 +136,9 @@ export default function VpsAlertas() {
         <Tarjeta titulo="Monitores (servidores de juego, webs…)" icono={Radar}>
           <ErrorCaja error={monitores.error} />
           {monitores.data?.length ? (
+            <>
             <ul className="space-y-2">
-              {monitores.data.map((m) => (
+              {pgMon.visibles.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 rounded-xl bg-fondo p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{m.nombre}</p>
@@ -157,6 +160,8 @@ export default function VpsAlertas() {
                 </li>
               ))}
             </ul>
+            {pgMon.paginas}
+            </>
           ) : (
             <Vacio icono={Radar} texto="Agrega monitores para tus servidores de juego o páginas." />
           )}

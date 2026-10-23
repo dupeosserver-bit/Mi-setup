@@ -1,4 +1,5 @@
 /** Portapapeles compartido: copias en un equipo y lo pegas en otro. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ClipboardList, ClipboardPaste, Copy, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -44,6 +45,7 @@ export default function Portapapeles() {
     }
   };
 
+  const pgPp = usePaginado(lista.data, 12);
   return (
     <div className="space-y-4">
       <Encabezado titulo="Portapapeles" descripcion="Copia en un equipo y pega en otro. Se guardan los últimos 50." />
@@ -64,7 +66,7 @@ export default function Portapapeles() {
       {lista.isLoading ? <Cargando /> : null}
       {lista.data?.length === 0 ? <Vacio icono={ClipboardList} texto="Nada todavía. Lo que envíes aparece al momento en tus otros equipos." /> : null}
       <div className="space-y-2">
-        {lista.data?.map((c) => (
+        {pgPp.visibles.map((c) => (
           <div key={c.id} className="flex items-start gap-2 rounded-tarjeta border border-borde bg-superficie p-3">
             <button
               type="button"
@@ -81,6 +83,7 @@ export default function Portapapeles() {
           </div>
         ))}
       </div>
+      {pgPp.paginas}
       {puede && lista.data?.length ? (
         <Boton variante="fantasma" icono={Trash2} cargando={vaciar.isPending} onClick={() => vaciar.mutate()}>
           Vaciar todo

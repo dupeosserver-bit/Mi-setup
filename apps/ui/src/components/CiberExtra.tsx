@@ -3,6 +3,7 @@
  * - Mi cuenta: sesiones abiertas (cerrar las que no reconozcas) e inicios de sesión recientes con alertas.
  * - Correos de Google: varias cuentas, filtraciones, bandeja revisada (qué abrir y qué no) y enviar revisando antes.
  */
+import { usePaginado } from "./Paginas";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, LogOut, Mail, MailPlus, MonitorSmartphone, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
@@ -57,6 +58,7 @@ export function MiCuenta() {
     onError: avisarError,
   });
   const nuevos = (inicios.data ?? []).filter((i) => i.tipo === "login_nuevo_lugar" || i.tipo === "login_bloqueado").length;
+  const pgIni = usePaginado(inicios.data, 10);
   return (
     <div className="space-y-4">
       {nuevos ? (
@@ -105,7 +107,7 @@ export function MiCuenta() {
         <ErrorCaja error={inicios.error} />
         {inicios.data?.length === 0 ? <p className="text-sm text-tenue">Sin movimientos.</p> : null}
         <ul className="divide-y divide-borde">
-          {inicios.data?.map((i, n) => {
+          {pgIni.visibles.map((i, n) => {
             const t = TEXTO_INICIO[i.tipo] ?? { texto: i.tipo, tono: "neutro" as const };
             return (
               <li key={n} className="flex flex-wrap items-center gap-2 py-2 text-sm">
@@ -119,6 +121,7 @@ export function MiCuenta() {
             );
           })}
         </ul>
+        {pgIni.paginas}
         <p className="mt-2 text-xs text-tenue">A la cuenta maestra le llega aviso al celular cuando alguien entra desde un lugar nuevo. Para tus VPS, activa «Alertas de entrada por SSH» en VPS → Seguridad del servidor.</p>
       </Tarjeta>
     </div>
@@ -306,13 +309,14 @@ export function CorreosGoogle() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["correo-google"] }),
     onError: avisarError,
   });
+  const pgFil = usePaginado(filtraciones.data, 12);
   return (
     <div className="space-y-4">
       <Tarjeta titulo="¿Tus correos salieron en una filtración?" icono={ShieldAlert}>
         <ErrorCaja error={filtraciones.error} />
         {filtraciones.isLoading ? <Cargando texto="Revisando…" /> : null}
         <ul className="space-y-2">
-          {filtraciones.data?.map((f) => (
+          {pgFil.visibles.map((f) => (
             <li key={f.email} className="rounded-xl bg-fondo p-3 text-sm">
               <p className="flex flex-wrap items-center gap-2 font-medium">
                 {f.email}
@@ -327,6 +331,7 @@ export function CorreosGoogle() {
             </li>
           ))}
         </ul>
+        {pgFil.paginas}
         <p className="mt-2 text-xs text-tenue">Datos de XposedOrNot (gratis). Solo se revisan tu correo de Mi Setup y las cuentas que conectes.</p>
       </Tarjeta>
 

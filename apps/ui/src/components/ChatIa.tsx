@@ -442,7 +442,7 @@ export function ChatIa() {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-13rem)] min-h-[28rem] gap-4 md:h-[calc(100dvh-11rem)]">
+    <div className="flex h-full min-h-[22rem] gap-4">
       <aside className="hidden w-72 shrink-0 rounded-tarjeta border border-borde bg-superficie p-3 md:block">
         <Barra actual={actual} proyectoNuevo={proyectoNuevo} alAbrir={setActual} alNuevo={nuevo} />
       </aside>

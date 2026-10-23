@@ -1,4 +1,5 @@
 /** Autenticador 2FA: códigos TOTP calculados aquí; importar por enlace otpauth, imagen QR, cámara o a mano. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation } from "@tanstack/react-query";
 import jsQR from "jsqr";
 import { Copy, Download, ImageUp, Link2, Lock, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
@@ -231,6 +232,7 @@ function Contenido() {
   const [claveArchivo, setClaveArchivo] = useState("");
   const archivo = useRef<HTMLInputElement>(null);
   const lista = (data ?? []).filter((i) => !q || `${i.valor.emisor} ${i.valor.cuenta}`.toLowerCase().includes(q.toLowerCase()));
+  const pgAu = usePaginado(lista, 12);
   return (
     <>
       <Encabezado
@@ -261,10 +263,11 @@ function Contenido() {
       {data?.length ? <Entrada className="mb-3 max-w-sm" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} /> : null}
       {data?.length === 0 ? <Vacio icono={ShieldCheck} texto="Agrega tu primera cuenta con su QR o enlace otpauth." /> : null}
       <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-        {lista.map((i) => (
+        {pgAu.visibles.map((i) => (
           <Codigo key={i.id} id={i.id} cuenta={i.valor} puede={puede} />
         ))}
       </ul>
+      {pgAu.paginas}
       <Modal abierto={agregar} titulo="Agregar cuenta 2FA" alCerrar={() => setAgregar(false)}>
         <Agregar alTerminar={() => setAgregar(false)} />
       </Modal>

@@ -1,4 +1,5 @@
 /** Discord con tu bot: enviar mensajes o tarjetas, ver/editar/borrar/fijar mensajes, reaccionar y ver tus servidores. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, Pin, PinOff, RefreshCw, Send, SmilePlus, Trash2, Users } from "lucide-react";
 import { useState } from "react";
@@ -156,6 +157,7 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
     onSuccess: () => void lista.refetch(),
     onError: avisarError,
   });
+  const pgMsj = usePaginado(lista.data, 12);
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
@@ -171,7 +173,7 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
       <ErrorCaja error={lista.error} />
       {canal && lista.data?.length === 0 ? <Vacio texto="Sin mensajes en este canal." /> : null}
       <div className="space-y-2">
-        {lista.data?.map((m) => (
+        {pgMsj.visibles.map((m) => (
           <div key={m.id} className="rounded-xl border border-borde bg-superficie p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-tenue">
               <span className="font-medium text-texto">{m.autor}</span>
@@ -233,6 +235,7 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
           </div>
         ))}
       </div>
+      {pgMsj.paginas}
       <Modal abierto={editando !== null} titulo="Editar mensaje del bot" alCerrar={() => setEditando(null)}>
         <form
           className="space-y-3"

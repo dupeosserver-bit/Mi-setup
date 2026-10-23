@@ -1,4 +1,5 @@
 /** Vencimientos de dominios (RDAP), certificados SSL y VPS, con aviso anticipado. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CalendarClock, Globe, Lock, Plus, RefreshCw, Server, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -85,6 +86,7 @@ export default function Vencimientos() {
     setRevisando(null);
   };
 
+  const pgVen = usePaginado(data, 12);
   return (
     <>
       <Encabezado
@@ -96,7 +98,7 @@ export default function Vencimientos() {
       {isLoading ? <Cargando /> : null}
       {data?.length === 0 ? <Vacio icono={CalendarClock} texto="Agrega tus dominios, certificados y VPS." /> : null}
       <ul className="space-y-2">
-        {data?.map((v) => {
+        {pgVen.visibles.map((v) => {
           const Icono = ICONOS[v.tipo];
           const tono = v.dias === null ? "neutro" : v.dias < 0 ? "peligro" : v.dias <= v.avisarDias ? "aviso" : "ok";
           return (
@@ -131,6 +133,7 @@ export default function Vencimientos() {
           );
         })}
       </ul>
+      {pgVen.paginas}
       <Modal abierto={nuevo} titulo="Nuevo vencimiento" alCerrar={() => setNuevo(false)}>
         <Nuevo alTerminar={() => setNuevo(false)} />
       </Modal>

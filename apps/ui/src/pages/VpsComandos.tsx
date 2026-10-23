@@ -1,4 +1,5 @@
 /** Comandos guardados con confirmación (doble si son peligrosos). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ListChecks, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -104,6 +105,7 @@ export default function VpsComandos() {
     }
   };
 
+  const pgCom = usePaginado(data, 12);
   return (
     <>
       <Encabezado
@@ -120,7 +122,7 @@ export default function VpsComandos() {
       {isLoading ? <Cargando /> : null}
       {data?.length === 0 ? <Vacio icono={ListChecks} texto="Crea botones para tus scripts, por ejemplo vps-manager.sh." /> : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {data?.map((c) => (
+        {pgCom.visibles.map((c) => (
           <Tarjeta
             key={c.id}
             titulo={c.nombre}
@@ -163,6 +165,7 @@ export default function VpsComandos() {
           </Tarjeta>
         ))}
       </div>
+      {pgCom.paginas}
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo comando" : "Editar comando"} alCerrar={() => setEditando(null)}>
         {editando !== null ? <Formulario inicial={editando === "nuevo" ? null : editando} alTerminar={() => setEditando(null)} /> : null}
       </Modal>

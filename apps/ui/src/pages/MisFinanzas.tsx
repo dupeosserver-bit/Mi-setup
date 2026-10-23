@@ -2,6 +2,7 @@
  * Mis finanzas: gastos e ingresos con categoría, presupuestos, suscripciones con
  * aviso antes del cobro, y tu Excel (importar y exportar).
  */
+import { usePaginado } from "../components/Paginas";
 import { Rendimientos } from "../components/Rendimientos";
 import { COLOR_GASTOS, COLOR_INGRESOS, GastosSemana, TendenciaFinanzas } from "../components/FinanzasGraficas";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -194,6 +195,7 @@ function Movimientos({ mes }: { mes: string }) {
   const borrar = useMutation({ mutationFn: (id: string) => api(`/api/finanzas-personales/movimientos/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
   const [ticket, setTicket] = useState(false);
 
+  const pgMov = usePaginado(q.data, 12);
   return (
     <div className="space-y-4">
       {puede ? (
@@ -238,7 +240,7 @@ function Movimientos({ mes }: { mes: string }) {
       {q.isLoading ? <Cargando /> : null}
       {q.data?.length === 0 ? <Vacio icono={Wallet} texto="Sin movimientos este mes." /> : null}
       <div className="space-y-1">
-        {q.data?.map((m) => (
+        {pgMov.visibles.map((m) => (
           <div key={m.id} className="flex items-center gap-3 rounded-xl border border-borde bg-superficie px-3 py-2 text-sm">
             <span className="w-20 shrink-0 text-xs text-tenue">{new Date(`${m.fecha}T12:00:00`).toLocaleDateString(localeActual(), { day: "numeric", month: "short" })}</span>
             <div className="min-w-0 flex-1">
@@ -264,6 +266,7 @@ function Movimientos({ mes }: { mes: string }) {
           </div>
         ))}
       </div>
+      {pgMov.paginas}
       <TicketConFoto abierto={ticket} alCerrar={() => setTicket(false)} />
     </div>
   );

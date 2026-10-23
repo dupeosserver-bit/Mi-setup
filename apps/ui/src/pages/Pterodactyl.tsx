@@ -1,4 +1,5 @@
 /** Pterodactyl: servidores, consola, energía, archivos, respaldos, administración y panel web. */
+import { usePaginado } from "../components/Paginas";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Archive, ArrowLeft, ExternalLink, File, Folder, Gamepad2, Play, RotateCw, Send, Skull, Square } from "lucide-react";
@@ -183,13 +184,14 @@ export function RespaldosServidor({ id }: { id: string }) {
     },
     onError: avisarError,
   });
+  const pgBp = usePaginado(q.data, 12);
   return (
     <div className="space-y-2">
       {puede ? <Boton icono={Archive} cargando={crear.isPending} onClick={() => crear.mutate()}>Crear respaldo ahora</Boton> : null}
       <ErrorCaja error={q.error} />
       {q.data?.length === 0 ? <Vacio icono={Archive} texto="Este servidor no tiene respaldos." /> : null}
       <ul className="space-y-1">
-        {q.data?.map((b) => (
+        {pgBp.visibles.map((b) => (
           <li key={b.uuid} className="flex items-center justify-between gap-2 rounded-lg bg-fondo px-3 py-2 text-sm">
             <span className="truncate">{b.nombre}</span>
             <span className="flex shrink-0 items-center gap-2 text-xs text-tenue">
@@ -199,6 +201,7 @@ export function RespaldosServidor({ id }: { id: string }) {
           </li>
         ))}
       </ul>
+      {pgBp.paginas}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 /** Clientes y cobros: próximos cobros, vencidos, marcar como pagado. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Plus, Receipt, Trash2, UserPlus, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -123,6 +124,8 @@ export default function Clientes() {
   const activos = cobros.data?.filter((c) => c.estado === "activo") ?? [];
   const pendiente = activos.filter((c) => c.vencido).reduce((s, c) => s + c.monto, 0);
 
+  const pgCob = usePaginado(cobros.data, 12);
+  const pgCli = usePaginado(clientes.data, 12);
   return (
     <>
       <Encabezado
@@ -143,7 +146,7 @@ export default function Clientes() {
         <Tarjeta titulo={`Cobros activos (${activos.length})${pendiente ? ` · vencido ${fmtDinero(pendiente)}` : ""}`} icono={Receipt}>
           {cobros.data?.length === 0 ? <Vacio icono={Receipt} texto="Registra lo que te paga cada cliente." /> : null}
           <ul className="space-y-2">
-            {cobros.data?.map((c) => (
+            {pgCob.visibles.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-fondo p-3 text-sm">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{c.cliente} · {c.concepto}</p>
@@ -168,11 +171,12 @@ export default function Clientes() {
               </li>
             ))}
           </ul>
+          {pgCob.paginas}
         </Tarjeta>
         <Tarjeta titulo="Clientes" icono={Users}>
           {clientes.data?.length === 0 ? <Vacio icono={Users} texto="Sin clientes todavía." /> : null}
           <ul className="space-y-1">
-            {clientes.data?.map((c) => (
+            {pgCli.visibles.map((c) => (
               <li key={c.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-tarjeta">
                 <div className="min-w-0 flex-1">
                   <p className="truncate">{c.nombre}</p>
@@ -195,6 +199,7 @@ export default function Clientes() {
               </li>
             ))}
           </ul>
+          {pgCli.paginas}
         </Tarjeta>
       </div>
       <Modal abierto={modal === "cliente"} titulo="Nuevo cliente" alCerrar={() => setModal(null)}>

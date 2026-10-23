@@ -1,4 +1,5 @@
 /** Bots de Discord en el VPS: estado y reinicio. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -90,6 +91,7 @@ export default function VpsBots() {
     }
   };
 
+  const pgBots = usePaginado(data, 12);
   return (
     <>
       <Encabezado
@@ -105,7 +107,7 @@ export default function VpsBots() {
       {isLoading ? <Cargando /> : null}
       {data?.length === 0 ? <Vacio icono={Bot} texto="Agrega tus bots (servicio, pm2 o contenedor) para verlos y reiniciarlos." /> : null}
       <ul className="space-y-2">
-        {data?.map((b) => (
+        {pgBots.visibles.map((b) => (
           <li key={b.id} className="flex flex-wrap items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <Bot className="h-5 w-5 text-tenue" />
             <div className="min-w-0 flex-1">
@@ -128,6 +130,7 @@ export default function VpsBots() {
           </li>
         ))}
       </ul>
+      {pgBots.paginas}
       <Modal abierto={nuevo} titulo="Nuevo bot" alCerrar={() => setNuevo(false)}>
         <NuevoBot alTerminar={() => setNuevo(false)} />
       </Modal>

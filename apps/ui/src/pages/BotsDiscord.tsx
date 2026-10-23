@@ -3,6 +3,7 @@
  * por módulos (bienvenida, moderación, niveles, economía, tickets, roles, comandos, registros) y, si lo vendes,
  * le pones cliente, fecha de vencimiento y un enlace para que su dueño lo edite sin ver tu cuenta.
  */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Bot, CalendarClock, Copy, KeyRound, Link2, Plus, Trash2, Unlink } from "lucide-react";
 import { useState } from "react";
@@ -221,6 +222,7 @@ export default function BotsDiscord() {
   const [nuevo, setNuevo] = useState(false);
   const puede = usePuede("bots_discord", "escritura");
   const q = useQuery({ queryKey: ["bots"], queryFn: () => api<BotResumen[]>("/api/bots"), refetchInterval: 15_000 });
+  const pgBd = usePaginado(q.data, 12);
   if (elegido) return <Detalle id={elegido} alVolver={() => setParams({})} />;
   return (
     <div className="space-y-4">
@@ -233,7 +235,7 @@ export default function BotsDiscord() {
       {q.isLoading ? <Cargando /> : null}
       {q.data?.length === 0 ? <Vacio icono={Bot} texto="Crea tu primer bot: pegas el token de tu aplicación de Discord y listo." /> : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {q.data?.map((b) => (
+        {pgBd.visibles.map((b) => (
           <button key={b.id} type="button" onClick={() => setParams({ bot: b.id })} className="rounded-tarjeta border border-borde bg-superficie p-4 text-left transition-colors hover:bg-tarjeta">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-tenue" />
@@ -250,6 +252,7 @@ export default function BotsDiscord() {
           </button>
         ))}
       </div>
+      {pgBd.paginas}
       {nuevo ? (
         <Nuevo
           alCerrar={() => setNuevo(false)}

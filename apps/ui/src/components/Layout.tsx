@@ -8,7 +8,7 @@
  */
 import { MODULES, temas, type ModuleId } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ChevronsLeft, ChevronsRight, CircleHelp, LogOut, Menu, MessagesSquare, NotebookPen, Plus, Search, X, type LucideIcon } from "lucide-react";
+import { Bell, ChevronsLeft, ChevronsRight, CircleHelp, LogOut, Menu, MessagesSquare, NotebookPen, PanelLeftOpen, Plus, Search, X, type LucideIcon } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -16,6 +16,7 @@ import { AYUDA } from "../lib/ayuda";
 import { queryClient, useApariencia, useMe } from "../lib/consultas";
 import { olvidarDispositivo } from "../lib/dispositivo";
 import { mostrarNotificacion, prepararNotificaciones } from "../lib/notificaciones";
+import { useAcostado, useAltoVisible, useForma, useMarco } from "../lib/marco";
 import { escritorio } from "../lib/plataforma";
 import { useBotonFlotante, usePreferencias } from "../lib/preferencias";
 import { useSesion } from "../lib/sesion";
@@ -154,31 +155,36 @@ function useEquipos(activo: boolean) {
 
 // ---------------------------------------------------------------- PC
 
-function BarraSuperior({ alBuscar, avatar }: { alBuscar: () => void; avatar: string | null }) {
+function BarraSuperior({ alBuscar, avatar, alMenu, baja }: { alBuscar: () => void; avatar: string | null; alMenu?: () => void; baja: boolean }) {
   const { data: me } = useMe();
   const conexion = useEstadoConexion();
   return (
-    <div className="hidden h-12 shrink-0 items-center gap-3 border-b border-borde bg-superficie px-4 md:flex">
+    <div className={cx("safe-top flex shrink-0 items-center gap-3 border-b border-borde bg-superficie px-4", baja ? "h-11" : "h-12")}>
+      {alMenu ? (
+        <button type="button" onClick={alMenu} className="-ml-2 rounded-lg p-2 text-tenue hover:text-texto" aria-label="Abrir menú">
+          <PanelLeftOpen className="h-5 w-5" />
+        </button>
+      ) : null}
       <Link to="/" className="flex items-center">
         <Logo tamano="sm" />
       </Link>
       <div className="ml-auto flex items-center gap-3">
         <button type="button" onClick={alBuscar} className="flex h-8 items-center gap-2 rounded-lg border border-borde px-3 text-xs text-tenue hover:text-texto">
-          <Search className="h-3.5 w-3.5" /> Buscar <span className="text-[10px]">Ctrl+K</span>
+          <Search className="h-3.5 w-3.5" /> Buscar <span className="hidden text-[10px] lg:inline">Ctrl+K</span>
         </button>
         <Punto conectado={conexion === "conectado"} texto />
         <Link to="/ajustes" className="flex items-center gap-2 text-xs text-tenue hover:text-texto">
           {avatar ? <img src={avatar} alt="" className="h-7 w-7 rounded-full object-cover" /> : null}
-          {me?.usuario.displayName}
+          <span className="hidden max-w-[14rem] truncate sm:inline">{me?.usuario.displayName}</span>
         </Link>
       </div>
     </div>
   );
 }
 
-function BarraLateral({ grupos, compacta, alternar }: { grupos: ReturnType<typeof agruparVisibles>; compacta: boolean; alternar: () => void }) {
+function BarraLateral({ grupos, compacta, alternar, riel }: { grupos: ReturnType<typeof agruparVisibles>; compacta: boolean; alternar: () => void; riel: boolean }) {
   return (
-    <nav className={cx("hidden shrink-0 flex-col border-r border-borde bg-superficie md:flex", compacta ? "w-16" : "w-60")}>
+    <nav className={cx("flex shrink-0 flex-col border-r border-borde bg-superficie transition-[width] duration-200", compacta ? "w-[68px]" : "w-60")} aria-label="Menú">
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {grupos.map((g, i) => (
           <div key={g.id} className={cx(i > 0 && "mt-3")}>
@@ -210,9 +216,9 @@ function BarraLateral({ grupos, compacta, alternar }: { grupos: ReturnType<typeo
         type="button"
         onClick={alternar}
         className={cx("flex items-center gap-2 border-t border-borde px-4 py-3 text-xs text-tenue hover:text-texto", compacta && "justify-center px-0")}
-        title={compacta ? "Mostrar nombres" : "Solo íconos"}
+        title={riel ? "Ver menú completo" : compacta ? "Mostrar nombres" : "Solo íconos"}
       >
-        {compacta ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        {riel ? <PanelLeftOpen className="h-4 w-4" /> : compacta ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
         {compacta ? null : "Solo íconos"}
       </button>
     </nav>
@@ -238,7 +244,7 @@ function PanelMovil({
   const recientes = (JSON.parse(localStorage.getItem(CLAVE_RECIENTES) ?? "[]") as ModuleId[]).filter((id) => visibles.has(id));
   if (!abierto) return null;
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/60" onClick={alCerrar} />
       <aside className="safe-top safe-bottom absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col overflow-y-auto border-r border-borde bg-superficie">
         <div className="flex items-center justify-between p-4">
@@ -315,7 +321,7 @@ function BotonMas({ visibles }: { visibles: Set<ModuleId> }) {
   const flotante = useBotonFlotante();
   if (acciones.length === 0 || flotante.oculto) return null;
   return (
-    <div className="safe-bottom fixed bottom-5 right-5 z-30 flex flex-col items-end gap-2 md:hidden" style={flotante.estilo} {...flotante.eventos}>
+    <div className="safe-bottom fixed bottom-5 right-5 z-30 flex flex-col items-end gap-2" style={flotante.estilo} {...flotante.eventos}>
       {abierto
         ? acciones.map((a) => (
             <button
@@ -346,7 +352,7 @@ function BotonAyuda({ modulo }: { modulo: ModuleId }) {
   const ayuda = AYUDA[modulo];
   return (
     <>
-      <div className="mb-2 flex justify-end">
+      <div className="mb-2 flex shrink-0 justify-end">
         <button type="button" onClick={() => setAbierto(true)} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-tenue hover:bg-tarjeta hover:text-texto">
           <CircleHelp className="h-3.5 w-3.5" /> ¿Cómo se usa?
         </button>
@@ -431,45 +437,63 @@ export function Layout() {
   };
 
   const fondo = useFondo(apariencia?.fondo ?? null, apariencia?.fondoPc ?? null, prefs.vidrio.ajuste);
+  const forma = useForma();
+  const acostado = useAcostado();
+  const modoPedido = useMarco((s) => s.modo);
+  useAltoVisible();
+  const modo = acostado && modoPedido === "fijo" ? "normal" : modoPedido;
+  const completa = modo === "completa";
+  const sinScroll = modo !== "normal";
+  const lateralVisible = !completa && forma !== "celular";
+  const flotantesVisibles = !completa && modo !== "pleno";
 
   return (
-    <div className="flex h-full flex-col" style={fondo}>
-      <BarraSuperior alBuscar={() => setBuscar(true)} avatar={apariencia?.avatar ?? null} />
+    <div className="flex flex-col overflow-hidden" style={{ ...fondo, height: "var(--alto-app, 100dvh)" }} data-forma={forma} data-modo={modo}>
+      {completa ? null : forma === "celular" ? (
+        <header className={cx("safe-top flex shrink-0 items-center gap-2 border-b border-borde bg-superficie px-2", acostado ? "h-11" : "h-14")}>
+          <button type="button" onClick={() => setPanel(true)} className="rounded-lg p-2" aria-label="Abrir menú">
+            <Menu className="h-5 w-5" />
+          </button>
+          <h1 className="min-w-0 flex-1 truncate font-titulo text-base font-semibold">{actual ? MODULES[actual.id].label : <Logo tamano="sm" />}</h1>
+          <Punto conectado={conexion === "conectado"} />
+          <button type="button" onClick={() => setBuscar(true)} className="rounded-lg p-2" aria-label="Buscar">
+            <Search className="h-5 w-5" />
+          </button>
+        </header>
+      ) : (
+        <BarraSuperior alBuscar={() => setBuscar(true)} avatar={apariencia?.avatar ?? null} alMenu={forma === "tablet" ? () => setPanel(true) : undefined} baja={acostado} />
+      )}
 
-      <header className="safe-top flex h-14 shrink-0 items-center gap-2 border-b border-borde bg-superficie px-2 md:hidden">
-        <button type="button" onClick={() => setPanel(true)} className="rounded-lg p-2" aria-label="Abrir menú">
-          <Menu className="h-5 w-5" />
-        </button>
-        <h1 className="min-w-0 flex-1 truncate font-titulo text-base font-semibold">
-          {actual ? MODULES[actual.id].label : <Logo tamano="sm" />}
-        </h1>
-        <Punto conectado={conexion === "conectado"} />
-        <button type="button" onClick={() => setBuscar(true)} className="rounded-lg p-2" aria-label="Buscar">
-          <Search className="h-5 w-5" />
-        </button>
-      </header>
-
-      <AvisoActualizacion />
+      {completa ? null : <AvisoActualizacion />}
 
       <div className="flex min-h-0 flex-1">
-        <BarraLateral grupos={grupos} compacta={compacta} alternar={alternarLateral} />
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-7xl p-4 pb-28 md:p-6">
-            {actual ? <BotonAyuda modulo={actual.id} /> : null}
-            <ErrorPantalla key={ubicacion.pathname}>
-              <Suspense fallback={<Cargando />}>
-                <Outlet />
-              </Suspense>
-            </ErrorPantalla>
+        {lateralVisible ? (
+          <BarraLateral grupos={grupos} compacta={forma === "tablet" || compacta} riel={forma === "tablet"} alternar={forma === "tablet" ? () => setPanel(true) : alternarLateral} />
+        ) : null}
+        <main className={cx("min-w-0 flex-1 overflow-x-hidden", sinScroll ? "overflow-y-hidden" : "overflow-y-auto")}>
+          <div
+            className={cx(
+              modo === "normal" && "mx-auto max-w-7xl p-4 pb-32 md:p-6 md:pb-32",
+              modo === "fijo" && "mx-auto flex h-full max-w-7xl flex-col p-3 md:p-5",
+              (modo === "pleno" || completa) && "flex h-full flex-col",
+            )}
+          >
+            {actual && modo !== "pleno" && !completa ? <BotonAyuda modulo={actual.id} /> : null}
+            <div className={cx(sinScroll && "flex min-h-0 flex-1 flex-col")}>
+              <ErrorPantalla key={ubicacion.pathname}>
+                <Suspense fallback={<Cargando />}>
+                  <Outlet />
+                </Suspense>
+              </ErrorPantalla>
+            </div>
           </div>
         </main>
       </div>
 
       <PanelMovil abierto={panel} alCerrar={() => setPanel(false)} grupos={grupos} visibles={visibles} />
-      {/* En el apartado IA los botones flotantes taparían la caja de texto. */}
-      {actual?.id !== "ia" ? <BotonMas visibles={visibles} /> : null}
+      {flotantesVisibles && forma === "celular" && actual?.id !== "ia" ? <BotonMas visibles={visibles} /> : null}
       <Buscador abierto={buscar} alCerrar={() => setBuscar(false)} visibles={visibles} />
-      {visibles.has("ia") && actual?.id !== "ia" ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
+      {flotantesVisibles && visibles.has("ia") && actual?.id !== "ia" ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
       <Tutorial grupos={grupos} />
     </div>
   );

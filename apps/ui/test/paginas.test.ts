@@ -10,4 +10,9 @@ describe("páginas", () => {
     expect(numerosDePagina(1, 20)).toEqual([1, 2, "…", 20]);
     expect(numerosDePagina(20, 20)).toEqual([1, "…", 19, 20]);
   });
+  it("en el celular deja solo la página actual entre puntos", () => {
+    expect(numerosDePagina(6, 20, 0)).toEqual([1, "…", 6, "…", 20]);
+    expect(numerosDePagina(3, 5, 0)).toEqual([1, 2, 3, 4, 5]);
+    expect(numerosDePagina(1, 9, 0)).toEqual([1, "…", 9]);
+  });
 });

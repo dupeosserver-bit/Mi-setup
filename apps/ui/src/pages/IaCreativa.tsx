@@ -2,6 +2,7 @@
  * IA creativa: plantillas de prompts con espacios {así}, quitar el fondo de una
  * foto (en tu equipo, gratis) y resumir o traducir textos, páginas y PDFs.
  */
+import { usePaginado } from "../components/Paginas";
 import { DetectorIa, HacerNatural } from "../components/IaExtras";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, Download, Eraser, FileText, Globe, ImagePlus, Languages, Pencil, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
@@ -57,6 +58,7 @@ function Prompts() {
   const borrar = useMutation({ mutationFn: (id: string) => api(`/api/prompts/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
   const final = usar ? usar.cuerpo.replace(/\{([^{}]{1,40})\}/g, (_m, k: string) => valores[k] || `{${k}}`) : "";
 
+  const pgPr = usePaginado(q.data, 12);
   return (
     <div className="space-y-4">
       {puede ? (
@@ -77,7 +79,7 @@ function Prompts() {
       {q.isLoading ? <Cargando /> : null}
       {q.data?.length === 0 ? <Vacio icono={Wand2} texto="Guarda tus prompts favoritos. Escribe {así} lo que cambia cada vez." /> : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {q.data?.map((p) => (
+        {pgPr.visibles.map((p) => (
           <Tarjeta
             key={p.id}
             titulo={p.titulo}
@@ -116,6 +118,7 @@ function Prompts() {
           </Tarjeta>
         ))}
       </div>
+      {pgPr.paginas}
 
       <Modal abierto={editar !== null} titulo={editar?.id ? "Editar plantilla" : "Nueva plantilla"} alCerrar={() => setEditar(null)}>
         {editar ? (

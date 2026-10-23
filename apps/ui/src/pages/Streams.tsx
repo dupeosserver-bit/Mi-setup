@@ -1,4 +1,5 @@
 /** Streams: título y juego/categoría en Twitch, YouTube y Kick. */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Save, Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -93,6 +94,7 @@ export default function Streams() {
   const cuentas = useCuentas();
   const [pestana, setPestana] = useState<"streams" | "clips">("streams");
   const lista = (cuentas.data ?? []).filter((c) => c.plataforma !== "x" && c.plataforma !== "tiktok");
+  const pgClips = usePaginado(lista, 12);
   return (
     <div className="space-y-4">
       <Encabezado titulo="Streams" descripcion="Cambia el título y el juego de tus transmisiones, y saca clips para TikTok. La IA también puede proponer; tú apruebas." />
@@ -108,13 +110,14 @@ export default function Streams() {
       {pestana === "streams" && cuentas.isLoading ? <Cargando /> : null}
       <ErrorCaja error={cuentas.error} />
       <div className={pestana === "streams" ? "grid grid-cols-1 gap-4 lg:grid-cols-3" : "hidden"}>
-        {lista.map((c) => (
+        {pgClips.visibles.map((c) => (
           <Tarjeta key={c.plataforma} titulo={c.nombre}>
             <EstadoCuenta c={c} />
             {c.cuenta ? <Editor c={c} /> : null}
           </Tarjeta>
         ))}
       </div>
+      {pgClips.paginas}
     </div>
   );
 }

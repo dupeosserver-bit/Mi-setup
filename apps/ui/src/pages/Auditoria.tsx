@@ -2,7 +2,8 @@
 import { MODULES, MODULE_IDS } from "@mi-setup/shared";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Bot, Download, Server, User } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Paginas } from "../components/Paginas";
 import { Boton, Cargando, Encabezado, ErrorCaja, Insignia, Selector, Vacio, avisarError } from "../components/ui";
 import { api, descargar } from "../lib/api";
 import { fmtFechaHora } from "../lib/formato";
@@ -34,13 +35,20 @@ export default function Auditoria() {
     initialPageParam: 0,
     queryFn: ({ pageParam }) => {
       const p = new URLSearchParams(params);
-      p.set("limite", "100");
+      p.set("limite", "25");
       if (pageParam) p.set("antesDe", String(pageParam));
       return api<Fila[]>(`/api/auditoria?${p}`);
     },
-    getNextPageParam: (ultima) => (ultima.length === 100 ? ultima.at(-1)?.id : undefined),
+    getNextPageParam: (ultima) => (ultima.length === 25 ? ultima.at(-1)?.id : undefined),
   });
-  const todas = filas.data?.pages.flat() ?? [];
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => setPagina(1), [params.toString()]);
+  const cargadas = filas.data?.pages.length ?? 0;
+  const todas = filas.data?.pages[pagina - 1] ?? [];
+  const irA = (p: number) => {
+    if (p > cargadas && filas.hasNextPage) void filas.fetchNextPage();
+    setPagina(p);
+  };
 
   return (
     <div className="space-y-4">
@@ -85,7 +93,7 @@ export default function Auditoria() {
       </div>
       {filas.isLoading ? <Cargando /> : null}
       <ErrorCaja error={filas.error} />
-      {!filas.isLoading && todas.length === 0 ? <Vacio texto="No hay actividad con esos filtros." /> : null}
+      {!filas.isLoading && pagina === 1 && todas.length === 0 ? <Vacio texto="No hay actividad con esos filtros." /> : null}
       <div className="divide-y divide-borde overflow-hidden rounded-tarjeta border border-borde bg-superficie">
         {todas.map((r) => {
           const Icono = ICONO[r.actor];
@@ -110,11 +118,8 @@ export default function Auditoria() {
           );
         })}
       </div>
-      {filas.hasNextPage ? (
-        <Boton className="w-full" cargando={filas.isFetchingNextPage} onClick={() => void filas.fetchNextPage()}>
-          Ver más
-        </Boton>
-      ) : null}
+      {filas.isFetchingNextPage ? <Cargando /> : null}
+      <Paginas pagina={pagina} total={cargadas + (filas.hasNextPage ? 1 : 0)} alCambiar={irA} />
     </div>
   );
 }

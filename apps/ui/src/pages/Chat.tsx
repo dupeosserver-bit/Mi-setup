@@ -1,4 +1,5 @@
 /** Chat: entre tus dispositivos, privado con otra cuenta y en grupo. */
+import { useModoPagina } from "../lib/marco";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Bell, Code2, Copy, FileDown, Link2, LogOut, MessagesSquare, Mic, NotebookPen, Paperclip, Plus, Send, Settings2, Square, Trash2, User, Users, X } from "lucide-react";
@@ -244,7 +245,7 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
   });
 
   return (
-    <div className="flex h-[calc(100vh-11rem)] min-h-96 flex-col rounded-tarjeta border border-borde bg-superficie md:h-[calc(100vh-10rem)]">
+    <div className="flex h-full min-h-[22rem] flex-col rounded-tarjeta border border-borde bg-superficie">
       <div className="flex items-center gap-2 border-b border-borde p-3">
         <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className="md:hidden" aria-label="Volver" />
         <h2 className="text-sm font-semibold">{canal.nombre}</h2>
@@ -475,9 +476,10 @@ export default function Chat() {
   const [opciones, setOpciones] = useState(false);
   const { data, isLoading, error } = useQuery({ queryKey: ["chat", "canales"], queryFn: () => api<Canal[]>("/api/chat/canales") });
   const actual = data?.find((c) => c.id === params.get("canal")) ?? (params.get("canal") ? null : data?.[0] ?? null);
+  useModoPagina("fijo");
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <Encabezado
         titulo="Chat"
         descripcion="Mensajes entre tus dispositivos, privados con otra cuenta o en grupo."
@@ -496,8 +498,8 @@ export default function Chat() {
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
-        <div className={cx("min-w-0 space-y-3", params.get("canal") && "hidden md:block")}>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
+        <div className={cx("min-h-0 min-w-0 space-y-3 overflow-y-auto", params.get("canal") && "hidden md:block")}>
           {SECCIONES.map(([tipo, titulo]) => {
             const lista = (data ?? []).filter((c) => c.tipo === tipo);
             if (!lista.length) return null;
@@ -528,7 +530,7 @@ export default function Chat() {
             );
           })}
         </div>
-        <div className={cx("min-w-0", !params.get("canal") && "hidden md:block")}>
+        <div className={cx("flex min-h-0 min-w-0 flex-col", !params.get("canal") && "hidden md:flex")}>
           {actual?.tipo === "grupo" ? (
             <div className="mb-2 flex justify-end">
               <Boton tamano="sm" variante="fantasma" icono={Settings2} onClick={() => setOpciones(true)}>
@@ -536,7 +538,11 @@ export default function Chat() {
               </Boton>
             </div>
           ) : null}
-          {actual ? <Conversacion key={actual.id} canal={actual} alVolver={() => setParams({})} /> : null}
+          {actual ? (
+            <div className="min-h-0 flex-1">
+              <Conversacion key={actual.id} canal={actual} alVolver={() => setParams({})} />
+            </div>
+          ) : null}
         </div>
       </div>
       <Modal abierto={privado} titulo="Mensaje privado: ¿con quién?" alCerrar={() => setPrivado(false)}>
@@ -569,6 +575,6 @@ export default function Chat() {
           }}
         />
       </Modal>
-    </>
+    </div>
   );
 }

@@ -49,7 +49,7 @@ const COLORES_LECTURA = { blanco: "#ffffff", crema: "#fff4d6", celeste: "#cfe8ff
 /** Letras más legibles: refuerza el texto secundario y, si se pide, le pone sombra. */
 function aplicarLectura(p: Preferencias): void {
   const raiz = document.documentElement;
-  const l = p.lectura;
+  const l = p.lectura ?? { contraste: "normal", color: "tema", sombra: false };
   raiz.style.removeProperty("--texto-2");
   const fijo = l.color !== "tema" ? COLORES_LECTURA[l.color] : null;
   const mezcla = l.contraste === "maximo" ? 100 : l.contraste === "alto" ? 60 : 0;
@@ -108,7 +108,11 @@ export function usePreferencias() {
   const hay = useSesion((s) => Boolean(s.refreshToken));
   const consulta = useQuery({
     queryKey: ["preferencias"],
-    queryFn: () => api<Preferencias>("/api/preferencias"),
+    queryFn: async () => {
+      const r = await api<unknown>("/api/preferencias");
+      const v = preferenciasSchema.safeParse(r);
+      return v.success ? v.data : leerLocal();
+    },
     enabled: hay,
     placeholderData: leerLocal,
   });

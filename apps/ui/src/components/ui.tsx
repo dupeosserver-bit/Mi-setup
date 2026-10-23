@@ -110,12 +110,12 @@ export function Tarjeta({
   return (
     <section className={cx("min-w-0 rounded-tarjeta border border-borde bg-superficie p-4", className)}>
       {titulo || acciones ? (
-        <header className="mb-3 flex items-center justify-between gap-3">
+        <header className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <h3 className="flex min-w-0 items-center gap-2 truncate text-sm font-semibold">
             {Icono ? <Icono className="h-4 w-4 text-tenue" /> : null}
             {titulo}
           </h3>
-          {acciones ? <div className="flex shrink-0 items-center gap-2">{acciones}</div> : null}
+          {acciones ? <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{acciones}</div> : null}
         </header>
       ) : null}
       {children}

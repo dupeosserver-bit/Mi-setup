@@ -2,6 +2,7 @@
  * Tu música o tus videos subidos al VPS: lista, subir con avance, reproducir
  * (con "seguir donde te quedaste") y borrar.
  */
+import { usePaginado } from "./Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Music, Pencil, Play, Trash2, Upload, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -94,6 +95,7 @@ export function Biblioteca({ tipo }: { tipo: "musica" | "videos" }) {
   const Icono = tipo === "musica" ? Music : Video;
   const src = (m: ArchivoMedia) => `${API_BASE}${m.url}`;
 
+  const pgBib = usePaginado(lista, 12);
   return (
     <div className="space-y-4">
       {actual ? (
@@ -148,7 +150,7 @@ export function Biblioteca({ tipo }: { tipo: "musica" | "videos" }) {
           />
         ) : null}
         <ul className="divide-y divide-borde">
-          {lista.map((m) => (
+          {pgBib.visibles.map((m) => (
             <li key={m.id} className={cx("flex items-center gap-2 py-2", actual?.id === m.id && "text-acento")}>
               {editando?.id === m.id ? (
                 <form
@@ -197,6 +199,7 @@ export function Biblioteca({ tipo }: { tipo: "musica" | "videos" }) {
             </li>
           ))}
         </ul>
+        {pgBib.paginas}
       </Tarjeta>
     </div>
   );

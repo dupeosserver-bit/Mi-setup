@@ -3,6 +3,7 @@
  * mejores momentos con título y hashtags (o córtalos a mano), saca el video en formato vertical para TikTok y
  * publícalo ahí. Usa solo tus propios streams.
  */
+import { usePaginado } from "./Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Clapperboard, Download, Link2, Radio, Scissors, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -225,6 +226,7 @@ export function ClipsPanel() {
     }
   };
 
+  const pgCl = usePaginado(clips.data, 12);
   if (!puede) return <Vacio icono={Clapperboard} texto="Necesitas permiso de escritura en Streams para crear clips." />;
   const faltan = herramientas.data && (!herramientas.data.ffmpeg || !herramientas.data.ytdlp);
   return (
@@ -411,7 +413,7 @@ export function ClipsPanel() {
         ) : null}
         {clips.data?.length === 0 ? <Vacio icono={Clapperboard} texto="Aquí aparecen los clips que cortes." /> : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {clips.data?.map((c) => (
+          {pgCl.visibles.map((c) => (
             <div key={c.id} className="rounded-xl border border-borde p-2">
               <button type="button" className="block w-full" onClick={() => setVer(c)}>
                 {c.miniatura ? <img src={c.miniatura} alt="" className="aspect-video w-full rounded-lg bg-fondo object-cover" /> : <div className="flex aspect-video items-center justify-center rounded-lg bg-fondo text-tenue">Video</div>}
@@ -440,6 +442,7 @@ export function ClipsPanel() {
             </div>
           ))}
         </div>
+        {pgCl.paginas}
       </Tarjeta>
 
       {tiktokClip ? <PublicarTikTok clip={tiktokClip} alCerrar={() => setTiktokClip(null)} /> : null}

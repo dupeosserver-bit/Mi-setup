@@ -1,4 +1,5 @@
 /** Gestor de contraseñas (cifrado de extremo a extremo). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation } from "@tanstack/react-query";
 import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -493,6 +494,7 @@ function Contenido() {
   }, [data, q, carpeta]);
   const actual = data?.find((i) => i.id === sel) ?? null;
 
+  const pgBov = usePaginado(lista, 12);
   return (
     <>
       <Encabezado
@@ -525,7 +527,7 @@ function Contenido() {
             <Entrada className="pl-9" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           {data && lista.length === 0 ? <Vacio icono={KeyRound} texto={data.length ? "Sin resultados." : "Guarda tu primera contraseña."} /> : null}
-          {lista.map((i) => (
+          {pgBov.visibles.map((i) => (
             <button
               key={i.id}
               type="button"
@@ -540,6 +542,7 @@ function Contenido() {
             </button>
           ))}
         </div>
+        {pgBov.paginas}
         <div className="rounded-tarjeta border border-borde bg-superficie p-4">
           {actual ? <Detalle item={actual} puede={puede} alEditar={() => setEditando(actual)} /> : <Vacio icono={KeyRound} texto="Elige un elemento." />}
         </div>

@@ -2,6 +2,7 @@
  * Sitios y apps: crea páginas y apps web con el editor visual, publícalas en
  * nombre.mexicanland.net o tu dominio, y recibe formularios, pedidos y visitas.
  */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -607,6 +608,7 @@ function Cuentas({ sitio }: { sitio: Sitio }) {
     },
     onError: avisarError,
   });
+  const pgMsjS = usePaginado(q.data, 12);
   return (
     <div className="space-y-4">
       <Tarjeta titulo="Cuentas del área privada" icono={Users}>
@@ -622,7 +624,7 @@ function Cuentas({ sitio }: { sitio: Sitio }) {
           </Boton>
         </div>
         <ul className="mt-3 divide-y divide-borde">
-          {q.data?.map((m) => (
+          {pgMsjS.visibles.map((m) => (
             <li key={m.id} className="flex items-center gap-2 py-2 text-sm">
               <KeyRound className="h-4 w-4 text-tenue" />
               <span className="min-w-0 flex-1 truncate">
@@ -642,6 +644,7 @@ function Cuentas({ sitio }: { sitio: Sitio }) {
             </li>
           ))}
         </ul>
+        {pgMsjS.paginas}
       </Tarjeta>
     </div>
   );
@@ -800,6 +803,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   const ptero = useQuery({ queryKey: ["ptero", "servidores"], queryFn: () => api<{ id: string; nombre: string; direccion?: string }[]>("/api/ptero/servidores"), enabled: verPtero, retry: false });
   const editores = useQuery({ queryKey: ["sitios", sitio.id, "editores"], queryFn: () => api<{ id: string; correo: string; nombre: string }[]>(`/api/sitios/${sitio.id}/editores`) });
   const versiones = useQuery({ queryKey: ["sitios", sitio.id, "versiones"], queryFn: () => api<{ id: string; nota: string; creado: string }[]>(`/api/sitios/${sitio.id}/versiones`) });
+  const pgVer = usePaginado(versiones.data, 12);
   const guardar = useMutation({
     mutationFn: () => api<Sitio>(`/api/sitios/${sitio.id}/ajustes`, { metodo: "PUT", cuerpo: { nombre, slug, dominio: dominio.trim() || null, ajustes: a } }),
     onSuccess: () => {
@@ -1007,7 +1011,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
       <Tarjeta titulo="Historial de publicaciones" icono={History}>
         {!versiones.data?.length ? <p className="text-sm text-tenue">Cada vez que publicas se guarda una copia (las últimas 30).</p> : null}
         <ul className="max-h-60 divide-y divide-borde overflow-auto">
-          {versiones.data?.map((v, i) => (
+          {pgVer.visibles.map((v, i) => (
             <li key={v.id} className="flex items-center gap-2 py-1.5 text-sm">
               <span className="min-w-0 flex-1 truncate">{v.nota || fecha(v.creado)}</span>
               {i === 0 ? (
@@ -1030,6 +1034,7 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
             </li>
           ))}
         </ul>
+        {pgVer.paginas}
       </Tarjeta>
 
       <Tarjeta titulo="Más opciones" icono={Settings2}>
@@ -1304,6 +1309,7 @@ export default function Sitios() {
     onError: avisarError,
   });
 
+  const pgSit = usePaginado(q.data, 12);
   if (elegido) return <Detalle id={elegido} alVolver={() => abrir(null)} />;
   return (
     <div className="space-y-4">
@@ -1339,7 +1345,7 @@ export default function Sitios() {
       {q.isLoading ? <Cargando /> : null}
       {q.data && !q.data.length ? <Vacio icono={Globe} texto="Crea tu primer sitio: la página de la pastelería, la de tu servidor de Minecraft o tu link in bio." /> : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {q.data?.map((s) => (
+        {pgSit.visibles.map((s) => (
           <button key={s.id} type="button" onClick={() => abrir(s.id)} className="rounded-tarjeta border border-borde bg-superficie p-4 text-left transition-colors hover:bg-tarjeta">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-tenue" />
@@ -1351,6 +1357,7 @@ export default function Sitios() {
           </button>
         ))}
       </div>
+      {pgSit.paginas}
       {crear ? (
         <Crear
           alCerrar={() => setCrear(false)}

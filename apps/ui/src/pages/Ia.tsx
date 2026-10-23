@@ -6,6 +6,7 @@ import { Negociar } from "../components/IaExtras";
 import { Cargando, FaltaConfigurar, Pestanas, Vacio } from "../components/ui";
 import { TarjetaPropuesta, usePropuestas, useUsoIa } from "../lib/ia";
 import { localeActual } from "../lib/idioma";
+import { useModoPagina } from "../lib/marco";
 
 function Cola({ soloPendientes }: { soloPendientes: boolean }) {
   const propuestas = usePropuestas();
@@ -28,9 +29,11 @@ export default function Ia() {
   const [pestana, setPestana] = useState<"chat" | "pendientes" | "historial" | "deudas" | "ajustes">("chat");
   const uso = useUsoIa();
   const pendientes = (usePropuestas().data ?? []).filter((p) => p.estado === "pendiente").length;
+  const enChat = pestana === "chat";
+  useModoPagina("fijo", enChat);
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className={enChat ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-3"}>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h1 className="font-titulo text-xl font-semibold">IA asistente</h1>
         <Pestanas
           valor={pestana}
@@ -46,7 +49,11 @@ export default function Ia() {
       </div>
       {uso.data && !uso.data.configurada ? <FaltaConfigurar variable="ANTHROPIC_API_KEY" /> : null}
       {uso.data?.bloqueada ? <p className="text-sm text-peligro">Se alcanzó el tope mensual de la IA: queda bloqueada hasta el próximo mes (o usa una IA gratis del VPS).</p> : null}
-      {pestana === "chat" ? <ChatIa /> : pestana === "deudas" ? <Negociar /> : pestana === "ajustes" ? <AjustesIa /> : <Cola soloPendientes={pestana === "pendientes"} />}
+      {enChat ? (
+        <div className="min-h-0 flex-1">
+          <ChatIa />
+        </div>
+      ) : pestana === "deudas" ? <Negociar /> : pestana === "ajustes" ? <AjustesIa /> : <Cola soloPendientes={pestana === "pendientes"} />}
     </div>
   );
 }

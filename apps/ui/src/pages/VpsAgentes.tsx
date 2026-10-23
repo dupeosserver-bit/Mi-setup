@@ -1,4 +1,5 @@
 /** Agentes de IA en tu VPS: catálogo que se instala con un botón y búsqueda en GitHub (la IA te ayuda a instalar esos). */
+import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BrainCircuit, Download, ExternalLink, Search, Sparkles, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -63,6 +64,7 @@ function Catalogo({ servidor }: { servidor: string }) {
     });
     if (ok) accion.mutate({ agente: a, accion: que });
   };
+  const pgAg = usePaginado(catalogo.data, 12);
   return (
     <>
       <ErrorCaja error={catalogo.error ?? estado.error} />
@@ -73,7 +75,7 @@ function Catalogo({ servidor }: { servidor: string }) {
       ) : null}
       {accion.isPending ? <Cargando texto="Instalando en el servidor (puede tardar unos minutos)…" /> : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {catalogo.data?.map((a) => {
+        {pgAg.visibles.map((a) => {
           const instalado = estado.data?.instalados.includes(a.id);
           return (
             <Tarjeta key={a.id} titulo={a.nombre} icono={BrainCircuit} acciones={instalado ? <Insignia tono="ok">Instalado</Insignia> : <Insignia>{TIPO[a.tipo]}</Insignia>}>
@@ -103,6 +105,7 @@ function Catalogo({ servidor }: { servidor: string }) {
           );
         })}
       </div>
+      {pgAg.paginas}
       <Modal abierto={salida !== null} titulo={salida?.titulo ?? ""} alCerrar={() => setSalida(null)}>
         {salida?.uso ? <p className="mb-2 rounded-xl bg-ok/10 p-2 text-sm">{salida.uso}</p> : null}
         <pre className="max-h-80 overflow-auto rounded-xl bg-black/80 p-3 font-mono text-xs text-white">{salida?.texto || "(sin salida)"}</pre>
