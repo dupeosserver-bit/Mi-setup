@@ -1,35 +1,40 @@
-/**
- * Editor de video (estilo Filmora, ligero): línea de tiempo con clips de video y fotos, cortar y dividir,
- * velocidad, volumen, filtros, giros, fundidos cruzados, textos, música y formato vertical para TikTok.
- * Todo se edita en tu dispositivo (los archivos no se suben) y el video se arma al exportar.
- */
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
+  ChevronLeft,
+  Clapperboard,
   Copy,
   Download,
   FileVideo,
   FlipHorizontal2,
   FlipVertical2,
+  FolderOpen,
   ImagePlus,
   Music2,
   Pause,
   Play,
+  Plus,
   RotateCw,
   Save,
   Scissors,
+  Settings2,
   SkipBack,
+  SlidersHorizontal,
   Trash2,
   Type,
   Upload,
+  type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Boton, Campo, Encabezado, Entrada, Modal, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
-import { api } from "../lib/api";
+import { usePaginado } from "../components/Paginas";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { API_BASE, api } from "../lib/api";
+import { confirmar } from "../lib/confirmar";
+import { queryClient } from "../lib/consultas";
+import { leerForma, useAcostado, useForma, useModoPagina } from "../lib/marco";
 import { guardarBlob } from "../lib/guardar";
 import { fmtBytes } from "../lib/formato";
-
-// ---------------------------------------------------------------- tipos
 
 interface Medio {
   id: string;
@@ -60,13 +65,9 @@ interface Clip {
   voltearH: boolean;
   voltearV: boolean;
   giro: number;
-  /** Segundos que se solapa con el clip anterior (transición). */
   transicion: number;
-  /** Cómo entra el clip durante la transición. */
   tipoTransicion?: TipoTransicion;
-  /** Efecto durante todo el clip. */
   efecto?: Efecto;
-  /** Zonas que se difuminan (marca de agua), en proporción del cuadro (0 a 1). */
   difuminar?: Zona[];
 }
 export type TipoTransicion = "fundido" | "deslizar-izq" | "deslizar-der" | "deslizar-arriba" | "zoom" | "barrido" | "negro" | "blanco";
@@ -97,7 +98,6 @@ export const EFECTOS: Record<Efecto, string> = {
   glitch: "Glitch",
   latido: "Latido (al ritmo)",
 };
-/** Calidades de exportación: alto del video y bits por segundo. */
 export const CALIDADES = {
   "480": { texto: "480p (ligero)", lado: 480, bits: 2_500_000 },
   "720": { texto: "720p HD", lado: 720, bits: 5_000_000 },
@@ -107,11 +107,6 @@ export const CALIDADES = {
 } as const;
 export type Calidad = keyof typeof CALIDADES;
 
-/**
- * Cómo se dibuja el clip que entra: progreso k (0 → 1) de la transición.
- * Devuelve opacidad, desplazamiento (en proporción del cuadro), escala,
- * ancho visible (barrido) y un velo de color encima.
- */
 export function pasoTransicion(tipo: TipoTransicion, k: number): { alfa: number; dx: number; dy: number; escala: number; recorte: number; velo: { color: string; alfa: number } | null } {
   const base = { alfa: 1, dx: 0, dy: 0, escala: 1, recorte: 1, velo: null as { color: string; alfa: number } | null };
   const suave = k * k * (3 - 2 * k);
@@ -172,7 +167,6 @@ const dur = (c: Clip) => Math.max(0.1, (c.salida - c.entrada) / c.velocidad);
 const mmss = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 const filtroCss = (f: Filtros) => `brightness(${f.brillo}) contrast(${f.contraste}) saturate(${f.saturacion}) grayscale(${f.grises}) sepia(${f.sepia})${f.desenfoque ? ` blur(${f.desenfoque}px)` : ""}`;
 
-/** Capas de efecto que van encima del clip (viñeta, VHS, glitch). */
 function efectoEncima(g: CanvasRenderingContext2D, efecto: Efecto, t: number, W: number, H: number) {
   if (efecto === "vineta") {
     const r = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
@@ -190,7 +184,6 @@ function efectoEncima(g: CanvasRenderingContext2D, efecto: Efecto, t: number, W:
     g.fillRect(0, ((t * 120) % (H + 40)) - 40, W, 30);
     g.restore();
   } else if (efecto === "glitch") {
-    // Cada medio segundo, unos cortes horizontales se recorren de lado.
     const fase = Math.floor(t * 8);
     if (fase % 4 === 0) {
       for (let i = 0; i < 6; i++) {
@@ -203,10 +196,6 @@ function efectoEncima(g: CanvasRenderingContext2D, efecto: Efecto, t: number, W:
   }
 }
 
-/**
- * Quita una marca de agua sin dañar mucho el video: la zona se cubre con lo
- * que la rodea (estirado) y se difumina. Solo para videos tuyos o con permiso.
- */
 export function difuminarZona(g: CanvasRenderingContext2D, c: HTMLCanvasElement, z: Zona, W: number, H: number) {
   const x = z.x * W;
   const y = z.y * H;
@@ -217,7 +206,6 @@ export function difuminarZona(g: CanvasRenderingContext2D, c: HTMLCanvasElement,
   g.beginPath();
   g.rect(x, y, w, h);
   g.clip();
-  // 1) se estira el borde alrededor hacia adentro; 2) se difumina.
   g.filter = `blur(${Math.round(Math.max(6, Math.min(w, h) / 6))}px)`;
   g.drawImage(c, Math.max(0, x - m), Math.max(0, y - m), Math.min(W, w + 2 * m), Math.min(H, h + 2 * m), x, y, w, h);
   g.drawImage(c, x, y, w, h, x, y, w, h);
@@ -240,7 +228,6 @@ function medirMedio(archivo: File): Promise<Medio> {
     el.preload = "metadata";
     const listo = () => ok({ ...base, duracion: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 10, ancho: tipo === "video" ? (el as HTMLVideoElement).videoWidth : 0, alto: tipo === "video" ? (el as HTMLVideoElement).videoHeight : 0 });
     el.onloadedmetadata = () => {
-      // Los WebM grabados (OBS, MediaRecorder) no traen la duración: se averigua saltando al final.
       if (el.duration === Infinity) {
         el.onseeked = () => {
           el.onseeked = null;
@@ -257,10 +244,6 @@ function medirMedio(archivo: File): Promise<Medio> {
 
 const CANDIDATOS = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
 
-/**
- * Elige el primer formato que de verdad graba con audio. isTypeSupported a veces dice que sí a MP4 y luego
- * el codificador de audio falla, así que cada formato se prueba con un clip de 0.3 s.
- */
 async function elegirMime(audio: MediaStreamTrack[]): Promise<string> {
   if (typeof MediaRecorder === "undefined") throw new Error("Este navegador no puede grabar video");
   for (const mime of CANDIDATOS) {
@@ -288,13 +271,140 @@ async function elegirMime(audio: MediaStreamTrack[]): Promise<string> {
       await Promise.race([parado, new Promise((r) => setTimeout(r, 1500))]);
       if (!fallo && bytes > 0) return mime;
     } catch {
-      /* se prueba el siguiente formato */
+      continue;
     }
   }
   return "video/webm";
 }
 
-// ---------------------------------------------------------------- editor
+type Herramienta = "archivos" | "editar" | "texto" | "proyecto";
+const HERRAMIENTAS_VIDEO: { id: Herramienta; texto: string; icono: LucideIcon }[] = [
+  { id: "archivos", texto: "Archivos", icono: FolderOpen },
+  { id: "editar", texto: "Editar", icono: SlidersHorizontal },
+  { id: "texto", texto: "Texto", icono: Type },
+  { id: "proyecto", texto: "Proyecto", icono: Settings2 },
+];
+
+const FORMATOS_INICIO: { id: Formato; titulo: string; detalle: string }[] = [
+  { id: "16:9", titulo: "Para YouTube", detalle: "Horizontal 16:9" },
+  { id: "9:16", titulo: "Para TikTok y Reels", detalle: "Vertical 9:16" },
+  { id: "1:1", titulo: "Para Instagram", detalle: "Cuadrado 1:1" },
+  { id: "4:5", titulo: "Retrato", detalle: "4:5" },
+];
+
+interface VideoGuardado {
+  id: string;
+  nombre: string;
+  tamano: number;
+  miniatura: string;
+  actualizado: string;
+  url: string;
+}
+
+function Inicio({ clipsCount, duracion, nombre, alSeguir, alNuevo }: { clipsCount: number; duracion: number; nombre: string; alSeguir: () => void; alNuevo: (f: Formato) => void }) {
+  const q = useQuery({ queryKey: ["estudio", "video"], queryFn: () => api<VideoGuardado[]>("/api/estudio/proyectos?tipo=video") });
+  const [viendo, setViendo] = useState<VideoGuardado | null>(null);
+  const borrar = useMutation({
+    mutationFn: (id: string) => api(`/api/estudio/proyectos/${id}`, { metodo: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["estudio", "video"] }),
+    onError: avisarError,
+  });
+  const pagina = usePaginado(q.data, 6);
+  return (
+    <div className="space-y-5">
+      <Encabezado
+        titulo="Editor de video"
+        descripcion="Cortes, velocidad, filtros, textos, música y formato vertical. Tus archivos se quedan en tu dispositivo."
+        acciones={
+          <Boton variante="primario" icono={Plus} onClick={() => alNuevo("16:9")}>
+            Nuevo proyecto
+          </Boton>
+        }
+      />
+      {clipsCount ? (
+        <button type="button" onClick={alSeguir} className="flex w-full min-w-0 items-center gap-4 rounded-tarjeta border border-[color-mix(in_srgb,var(--acento)_45%,transparent)] bg-[color-mix(in_srgb,var(--acento)_10%,transparent)] p-4 text-left">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-acento text-black">
+            <Play className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <b className="block truncate">{`Seguir editando «${nombre}»`}</b>
+            <small className="text-xs text-tenue">
+              {clipsCount === 1 ? "1 clip" : `${clipsCount} clips`} · {mmss(duracion)}
+            </small>
+          </span>
+        </button>
+      ) : null}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">Empieza con un formato</h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {FORMATOS_INICIO.map((f) => {
+            const [a, b] = FORMATOS[f.id];
+            return (
+              <button key={f.id} type="button" onClick={() => alNuevo(f.id)} className="group flex min-w-0 flex-col items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4 text-center hover:border-acento">
+                <span className="grid h-20 w-full place-items-center">
+                  <span className="block rounded-lg border-2 border-[color-mix(in_srgb,var(--acento)_60%,transparent)] bg-[color-mix(in_srgb,var(--acento)_12%,transparent)] group-hover:border-acento" style={{ height: a >= b ? `${(b / a) * 4.5}rem` : "4.5rem", width: a >= b ? "4.5rem" : `${(a / b) * 4.5}rem` }} />
+                </span>
+                <span className="min-w-0">
+                  <b className="block truncate text-sm">{f.titulo}</b>
+                  <small className="text-xs text-tenue">{f.detalle}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Clapperboard className="h-4 w-4 text-tenue" />
+          Tus videos guardados
+        </h2>
+        <ErrorCaja error={q.error} />
+        {q.isLoading ? <Cargando /> : null}
+        {q.data && !q.data.length ? <Vacio icono={Clapperboard} texto="Cuando exportes un video y toques «Guardar en mi cuenta», aparece aquí." /> : null}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {pagina.visibles.map((v) => (
+            <article key={v.id} className="min-w-0 overflow-hidden rounded-tarjeta border border-borde bg-superficie">
+              <button type="button" onClick={() => setViendo(v)} className="relative block aspect-video w-full bg-black" aria-label={`Ver ${v.nombre}`}>
+                {v.miniatura ? <img src={v.miniatura} alt="" className="h-full w-full object-cover" /> : null}
+                <span className="absolute inset-0 grid place-items-center">
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-black/60 text-white">
+                    <Play className="h-5 w-5" />
+                  </span>
+                </span>
+              </button>
+              <div className="flex items-center gap-2 p-3">
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-sm">{v.nombre}</b>
+                  <small className="text-xs text-tenue">
+                    {fmtBytes(v.tamano)} · {new Date(v.actualizado).toLocaleDateString()}
+                  </small>
+                </span>
+                <a href={`${API_BASE}${v.url}`} download className="grid h-9 w-9 place-items-center rounded-xl text-tenue hover:bg-tarjeta hover:text-texto" aria-label="Descargar">
+                  <Download className="h-4 w-4" />
+                </a>
+                <Boton
+                  tamano="icono"
+                  variante="fantasma"
+                  icono={Trash2}
+                  aria-label="Borrar"
+                  onClick={async () => {
+                    if (await confirmar({ titulo: "Borrar video", mensaje: v.nombre })) borrar.mutate(v.id);
+                  }}
+                />
+              </div>
+            </article>
+          ))}
+        </div>
+        {pagina.paginas}
+      </section>
+      {viendo ? (
+        <Modal abierto titulo={viendo.nombre} alCerrar={() => setViendo(null)}>
+          <video src={`${API_BASE}${viendo.url}`} controls autoPlay playsInline className="max-h-[60vh] w-full rounded-xl bg-black" />
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
 
 export default function EditorVideo() {
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -326,16 +436,22 @@ export default function EditorVideo() {
   const [exportando, setExportando] = useState<number | null>(null);
   const [resultado, setResultado] = useState<{ url: string; blob: Blob; ext: string; miniatura: string } | null>(null);
   const [nombreVideo, setNombreVideo] = useState("Mi video");
+  const [abierto, setAbierto] = useState(false);
+  const anchoGrande = useForma() === "pc";
+  const acostado = useAcostado();
+  const [herramienta, setHerramienta] = useState<Herramienta | null>(() => (leerForma() === "pc" ? "archivos" : null));
+  useModoPagina("completa", abierto);
+  useEffect(() => {
+    if (seleccion) setHerramienta("editar");
+  }, [seleccion]);
   const [guardando, setGuardando] = useState(false);
 
-  // Medidas del lienzo según formato y calidad.
   const [W, H] = useMemo(() => {
     const [a, b] = FORMATOS[formato];
     const lado = CALIDADES[calidad].lado;
     return a >= b ? [Math.round((lado * a) / b / 2) * 2, lado] : [lado, Math.round((lado * b) / a / 2) * 2];
   }, [formato, calidad]);
 
-  // Posición de cada clip en la línea de tiempo (en fila, con solapes por transición).
   const linea = useMemo(() => {
     let fin = 0;
     return clips.map((c, i) => {
@@ -357,7 +473,6 @@ export default function EditorVideo() {
   );
   const medioDe = useCallback((mid: string) => medios.find((m) => m.id === mid), [medios]);
 
-  // ---- audio (mezcla para exportar y para oír la vista previa)
   const contexto = () => {
     if (!audioCtx.current) {
       audioCtx.current = new AudioContext();
@@ -394,7 +509,6 @@ export default function EditorVideo() {
     return i;
   };
 
-  // ---- pintar y sincronizar un instante
   const sincronizar = useCallback(
     (t: number, sonando: boolean) => {
       for (const p of linea) {
@@ -457,7 +571,6 @@ export default function EditorVideo() {
         const sh = rotado ? m.ancho : m.alto;
         if (!sw || !sh) continue;
         const escala = p.clip.ajuste === "cubrir" ? Math.max(W / sw, H / sh) : Math.min(W / sw, H / sh);
-        // Efecto del clip según su avance (0 → 1).
         const avance = Math.min(1, Math.max(0, (t - p.inicio) / Math.max(0.1, p.fin - p.inicio)));
         const efecto = p.clip.efecto ?? "ninguno";
         let zoomEfecto = efecto === "zoom-lento" ? 1 + 0.15 * avance : efecto === "zoom-salida" ? 1.15 - 0.15 * avance : efecto === "latido" ? 1 + 0.03 * Math.max(0, Math.sin(t * Math.PI * 4)) : 1;
@@ -483,7 +596,6 @@ export default function EditorVideo() {
         g.drawImage(fuente as CanvasImageSource, (-m.ancho * escala) / 2, (-m.alto * escala) / 2, m.ancho * escala, m.alto * escala);
         g.restore();
         efectoEncima(g, efecto, t, W, H);
-        // Marca de agua: la zona se rellena con lo de alrededor, difuminado.
         for (const z of p.clip.difuminar ?? []) difuminarZona(g, c, z, W, H);
         if (tr.velo && tr.velo.alfa > 0) {
           g.save();
@@ -530,7 +642,6 @@ export default function EditorVideo() {
     [linea, textos, medios, W, H, fundidos, total],
   );
 
-  /** Espera a que los videos activos lleguen al instante pedido y dibuja (para avanzar a mano). */
   const verInstante = useCallback(
     async (t: number) => {
       sincronizar(t, false);
@@ -555,7 +666,6 @@ export default function EditorVideo() {
     [sincronizar, pintar, linea, medioDe],
   );
 
-  // Al cambiar algo estando en pausa, se vuelve a dibujar.
   useEffect(() => {
     if (!bucle.current.activo) void verInstante(tiempoRef.current);
   }, [verInstante, W, H]);
@@ -567,7 +677,6 @@ export default function EditorVideo() {
     if (!bucle.current.activo) void verInstante(limpio);
   };
 
-  /** Reproduce de `desde` a `hasta` en tiempo real (la vista previa y la exportación usan lo mismo). */
   const reproducir = (desde: number, hasta: number, alAvanzar?: (t: number) => void): Promise<void> =>
     new Promise((fin) => {
       bucle.current = { activo: true, cancelar: false };
@@ -616,7 +725,6 @@ export default function EditorVideo() {
     [],
   );
 
-  // ---- medios
   const agregarArchivos = async (archivos: FileList | File[]) => {
     contexto();
     for (const a of archivos) {
@@ -649,7 +757,6 @@ export default function EditorVideo() {
     URL.revokeObjectURL(m.url);
   };
 
-  // ---- cambios
   const cambiarClip = (cid: string, p: Partial<Clip>) => setClips((l) => l.map((c) => (c.id === cid ? { ...c, ...p } : c)));
   const cambiarAudio = (aid: string, p: Partial<ClipAudio>) => setAudios((l) => l.map((a) => (a.id === aid ? { ...a, ...p } : a)));
   const cambiarTexto = (tid: string, p: Partial<TextoVideo>) => setTextos((l) => l.map((t) => (t.id === tid ? { ...t, ...p } : t)));
@@ -695,7 +802,6 @@ export default function EditorVideo() {
     return () => window.removeEventListener("keydown", alTeclear);
   });
 
-  // ---- arrastrar textos y música en la línea de tiempo
   const arrastrar = (e: React.PointerEvent, inicial: number, poner: (nuevo: number) => void) => {
     const x0 = e.clientX;
     const mover = (ev: PointerEvent) => poner(Math.max(0, inicial + (ev.clientX - x0) / pps));
@@ -707,7 +813,6 @@ export default function EditorVideo() {
     window.addEventListener("pointerup", soltar);
   };
 
-  // ---- exportar
   const exportar = async () => {
     if (!clips.length) return avisarError(new Error("Agrega al menos un video o foto"));
     bucle.current.cancelar = true;
@@ -752,6 +857,7 @@ export default function EditorVideo() {
       datos.append("miniatura", resultado.miniatura);
       datos.append("archivo", resultado.blob, `video.${resultado.ext}`);
       await api("/api/estudio/proyectos", { formulario: datos });
+      void queryClient.invalidateQueries({ queryKey: ["estudio", "video"] });
       avisar("Video guardado en tu cuenta");
     } catch (err) {
       avisarError(err);
@@ -764,7 +870,6 @@ export default function EditorVideo() {
     void guardarBlob(resultado.blob, `${nombreVideo.replace(/[^\w.-]+/g, "_") || "video"}.${resultado.ext}`).catch(avisarError);
   };
 
-  // ---------------------------------------------------------------- pantalla
   const selClip = seleccion?.tipo === "clip" ? clips.find((c) => c.id === seleccion.id) : undefined;
   const selAudio = seleccion?.tipo === "audio" ? audios.find((a) => a.id === seleccion.id) : undefined;
   const selTexto = seleccion?.tipo === "texto" ? textos.find((t) => t.id === seleccion.id) : undefined;
@@ -772,108 +877,327 @@ export default function EditorVideo() {
   const ancho = Math.max(total * pps + 80, 400);
   const colorDe = (i: number) => ["#2563eb", "#7c3aed", "#0d9488", "#c2410c", "#be185d"][i % 5]!;
 
-  return (
-    <div className="space-y-3">
-      <Encabezado titulo="Editor de video" descripcion="Cortes, velocidad, filtros, textos, música y formato vertical. Tus archivos se quedan en tu dispositivo." />
+  if (!abierto) {
+    return (
+      <Inicio
+        clipsCount={clips.length}
+        duracion={total}
+        nombre={nombreVideo}
+        alSeguir={() => setAbierto(true)}
+        alNuevo={(f) => {
+          setFormato(f);
+          setAbierto(true);
+        }}
+      />
+    );
+  }
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Boton variante="primario" icono={Upload} onClick={() => entradaArchivos.current?.click()}>
-          Agregar archivos
-        </Boton>
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-fondo" style={{ height: "var(--alto-app, 100dvh)" }}>
+      <header className="flex items-center gap-2 border-b border-borde px-3 py-2" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
+        <Boton tamano="icono" variante="fantasma" icono={ChevronLeft} aria-label="Volver a mis proyectos" onClick={() => setAbierto(false)} />
+        <Entrada className="h-9 max-w-[14rem] min-w-0" value={nombreVideo} onChange={(e) => setNombreVideo(e.target.value)} maxLength={80} aria-label="Nombre del video" />
+        <span className="hidden text-xs text-tenue md:inline">
+          {formato} · {CALIDADES[calidad].texto} · {fps} fps
+        </span>
+        <span className="flex-1" />
         <input ref={entradaArchivos} type="file" multiple accept="video/*,image/*,audio/*" className="hidden" onChange={(e) => { if (e.target.files) void agregarArchivos(e.target.files); e.target.value = ""; }} />
-        <Selector className="w-auto" value={formato} onChange={(e) => setFormato(e.target.value as Formato)} aria-label="Formato">
-          <option value="16:9">Horizontal 16:9</option>
-          <option value="9:16">Vertical 9:16 (TikTok)</option>
-          <option value="1:1">Cuadrado 1:1</option>
-          <option value="4:5">Retrato 4:5</option>
-        </Selector>
-        <Selector className="w-auto" value={calidad} onChange={(e) => setCalidad(e.target.value as Calidad)} aria-label="Calidad">
-          {(Object.keys(CALIDADES) as Calidad[]).map((c) => (
-            <option key={c} value={c}>
-              {CALIDADES[c].texto}
-            </option>
-          ))}
-        </Selector>
-        <Selector className="w-auto" value={String(fps)} onChange={(e) => setFps(Number(e.target.value) as 24 | 30 | 60)} aria-label="Cuadros por segundo">
-          <option value="24">24 fps (cine)</option>
-          <option value="30">30 fps</option>
-          <option value="60">60 fps (fluido)</option>
-        </Selector>
-        <label className="flex items-center gap-1 text-xs text-tenue">
-          <input type="checkbox" checked={fundidos.entrada} onChange={(e) => setFundidos({ ...fundidos, entrada: e.target.checked })} /> Aparecer
-        </label>
-        <label className="flex items-center gap-1 text-xs text-tenue">
-          <input type="checkbox" checked={fundidos.salida} onChange={(e) => setFundidos({ ...fundidos, salida: e.target.checked })} /> Terminar a negro
-        </label>
-        <Boton className="ml-auto" icono={FileVideo} cargando={exportando !== null} disabled={!clips.length} onClick={() => void exportar()}>
+        <Boton tamano="sm" icono={Upload} onClick={() => entradaArchivos.current?.click()}>
+          <span className="hidden sm:inline">Agregar archivos</span>
+        </Boton>
+        <Boton tamano="sm" variante="primario" icono={FileVideo} cargando={exportando !== null} disabled={!clips.length} onClick={() => void exportar()}>
           {exportando !== null ? `Exportando ${exportando}%` : "Exportar"}
         </Boton>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_1fr_300px]">
-        <Tarjeta titulo={`Archivos (${medios.length})`}>
-          {medios.length === 0 ? <Vacio icono={ImagePlus} texto="Agrega videos, fotos o música." /> : null}
-          <ul className="max-h-[40vh] space-y-1 overflow-auto">
-            {medios.map((m) => (
-              <li key={m.id} className="rounded-lg border border-borde p-1.5 text-xs">
-                <p className="truncate font-medium">{m.nombre}</p>
-                <p className="text-tenue">
-                  {m.tipo === "video" ? "Video" : m.tipo === "audio" ? "Música" : "Foto"} · {mmss(m.duracion)}
-                </p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {m.tipo !== "audio" ? (
-                    <Boton tamano="sm" onClick={() => agregarAlVideo(m)}>
-                      Al video
+      </header>
+      <div className={cx("flex min-h-0 flex-1", acostado ? "flex-row" : "flex-col lg:flex-row")}>
+        <nav className={cx("flex shrink-0 bg-superficie p-1", acostado ? "order-first w-[4.5rem] flex-col gap-1 overflow-y-auto border-r border-borde" : "order-last justify-around border-t border-borde lg:order-first lg:w-[4.5rem] lg:flex-col lg:justify-start lg:gap-1 lg:border-r lg:border-t-0")} aria-label="Herramientas">
+          {HERRAMIENTAS_VIDEO.map(({ id, texto, icono: Icono }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={herramienta === id}
+              onClick={() => {
+                if (id !== "texto") return setHerramienta(herramienta === id && !anchoGrande ? null : id);
+                agregarTexto();
+                setHerramienta("editar");
+              }}
+              className={cx("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium lg:flex-none", herramienta === id ? "text-acento" : "text-tenue hover:text-texto")}
+              style={herramienta === id ? { background: "color-mix(in srgb, var(--acento) 14%, transparent)" } : undefined}
+            >
+              <Icono className="h-5 w-5" />
+              <span className="max-w-full truncate">{texto}</span>
+            </button>
+          ))}
+        </nav>
+        {herramienta ? (
+          <aside className={cx("shrink-0 overflow-y-auto bg-superficie p-3", acostado ? "order-2 w-72 border-r border-borde" : "order-3 max-h-[38%] border-t border-borde lg:order-2 lg:max-h-none lg:w-80 lg:border-r lg:border-t-0")}>
+            {herramienta === "archivos" ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-tenue">{`Archivos (${medios.length})`}</p>
+                {medios.length === 0 ? <Vacio icono={ImagePlus} texto="Agrega videos, fotos o música." /> : null}
+                <ul className="space-y-1">
+                  {medios.map((m) => (
+                    <li key={m.id} className="rounded-lg border border-borde p-1.5 text-xs">
+                      <p className="truncate font-medium">{m.nombre}</p>
+                      <p className="text-tenue">
+                        {m.tipo === "video" ? "Video" : m.tipo === "audio" ? "Música" : "Foto"} · {mmss(m.duracion)}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {m.tipo !== "audio" ? (
+                          <Boton tamano="sm" onClick={() => agregarAlVideo(m)}>
+                            Al video
+                          </Boton>
+                        ) : null}
+                        {m.tipo !== "imagen" ? (
+                          <Boton tamano="sm" variante="fantasma" icono={Music2} onClick={() => agregarMusica(m)}>
+                            {m.tipo === "video" ? "Solo audio" : "Música"}
+                          </Boton>
+                        ) : null}
+                        <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label={`Quitar ${m.nombre}`} onClick={() => quitarMedio(m)} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {herramienta === "editar" ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-tenue">{selClip ? "Clip de video" : selAudio ? "Música" : selTexto ? "Texto" : "Propiedades"}</p>
+                {!seleccion ? <p className="text-xs text-tenue">Toca un bloque de la línea de tiempo para cambiar su corte, velocidad, volumen, filtros o texto.</p> : null}
+                {selClip && mClip ? (
+                  <div className="space-y-3 text-xs">
+                    <p className="truncate font-medium">{mClip.nombre}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Campo etiqueta={`Desde (s): ${selClip.entrada.toFixed(1)}`}>
+                        <input type="range" min={0} max={Math.max(0.2, selClip.salida - 0.1)} step={0.1} value={selClip.entrada} onChange={(e) => cambiarClip(selClip.id, { entrada: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                      <Campo etiqueta={`Hasta (s): ${selClip.salida.toFixed(1)}`}>
+                        <input type="range" min={selClip.entrada + 0.1} max={mClip.tipo === "imagen" ? 60 : mClip.duracion} step={0.1} value={selClip.salida} onChange={(e) => cambiarClip(selClip.id, { salida: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                    </div>
+                    {mClip.tipo === "video" ? (
+                      <>
+                        <Campo etiqueta="Velocidad">
+                          <Selector value={String(selClip.velocidad)} onChange={(e) => cambiarClip(selClip.id, { velocidad: Number(e.target.value) })}>
+                            {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4].map((v) => (
+                              <option key={v} value={v}>
+                                {v}x
+                              </option>
+                            ))}
+                          </Selector>
+                        </Campo>
+                        <Campo etiqueta={`Volumen: ${Math.round(selClip.volumen * 100)}%`}>
+                          <input type="range" min={0} max={2} step={0.05} value={selClip.volumen} onChange={(e) => cambiarClip(selClip.id, { volumen: Number(e.target.value) })} className="w-full accent-acento" />
+                        </Campo>
+                      </>
+                    ) : null}
+                    <Campo etiqueta="Encuadre">
+                      <Selector value={selClip.ajuste} onChange={(e) => cambiarClip(selClip.id, { ajuste: e.target.value as Clip["ajuste"] })}>
+                        <option value="cubrir">Llenar la pantalla (recorta)</option>
+                        <option value="contener">Mostrar completo (bordes negros)</option>
+                      </Selector>
+                    </Campo>
+                    {linea[0]?.clip.id !== selClip.id ? (
+                      <Campo etiqueta="Transición con el clip anterior">
+                        <div className="grid grid-cols-2 gap-1">
+                          <Selector value={String(selClip.transicion)} onChange={(e) => cambiarClip(selClip.id, { transicion: Number(e.target.value) })} aria-label="Duración de la transición">
+                            <option value="0">Corte directo</option>
+                            <option value="0.5">0.5 s</option>
+                            <option value="1">1 s</option>
+                            <option value="2">2 s</option>
+                          </Selector>
+                          <Selector value={selClip.tipoTransicion ?? "fundido"} disabled={!selClip.transicion} onChange={(e) => cambiarClip(selClip.id, { tipoTransicion: e.target.value as TipoTransicion })} aria-label="Tipo de transición">
+                            {Object.entries(TRANSICIONES).map(([v, n]) => (
+                              <option key={v} value={v}>
+                                {n}
+                              </option>
+                            ))}
+                          </Selector>
+                        </div>
+                      </Campo>
+                    ) : null}
+                    <Campo etiqueta="Efecto">
+                      <Selector value={selClip.efecto ?? "ninguno"} onChange={(e) => cambiarClip(selClip.id, { efecto: e.target.value as Efecto })}>
+                        {Object.entries(EFECTOS).map(([v, n]) => (
+                          <option key={v} value={v}>
+                            {n}
+                          </option>
+                        ))}
+                      </Selector>
+                    </Campo>
+                    <div className="rounded-xl border border-borde p-2">
+                      <p className="mb-1 font-medium">Quitar marca de agua</p>
+                      <p className="mb-2 text-tenue">Solo para videos tuyos o con permiso del dueño. Quitar la marca de un video ajeno puede violar sus derechos de autor.</p>
+                      <label className="mb-2 flex items-start gap-2">
+                        <input type="checkbox" className="mt-0.5 accent-acento" checked={permisoMarca} onChange={(e) => setPermisoMarca(e.target.checked)} />
+                        <span>Confirmo que el video es mío o tengo permiso.</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1">
+                        <Boton tamano="sm" variante={zonaModo ? "primario" : "secundario"} disabled={!permisoMarca} onClick={() => setZonaModo(!zonaModo)}>
+                          {zonaModo ? "Dibuja el cuadro en el video…" : "Marcar la zona"}
+                        </Boton>
+                        {(selClip.difuminar ?? []).length ? (
+                          <Boton tamano="sm" variante="fantasma" icono={Trash2} onClick={() => cambiarClip(selClip.id, { difuminar: [] })}>
+                            Quitar zonas ({selClip.difuminar!.length})
+                          </Boton>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium">Filtros</p>
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {PRESETS.map(([n, f]) => (
+                          <Boton key={n} tamano="sm" variante="fantasma" onClick={() => cambiarClip(selClip.id, { filtros: { ...f } })}>
+                            {n}
+                          </Boton>
+                        ))}
+                      </div>
+                      {(
+                        [
+                          ["brillo", "Brillo", 0.3, 2, 0.05],
+                          ["contraste", "Contraste", 0.3, 2, 0.05],
+                          ["saturacion", "Saturación", 0, 3, 0.05],
+                          ["desenfoque", "Desenfoque", 0, 12, 0.5],
+                        ] as const
+                      ).map(([k, n, mn, mx, st]) => (
+                        <Campo key={k} etiqueta={`${n}: ${selClip.filtros[k]}`}>
+                          <input type="range" min={mn} max={mx} step={st} value={selClip.filtros[k]} onChange={(e) => cambiarClip(selClip.id, { filtros: { ...selClip.filtros, [k]: Number(e.target.value) } })} className="w-full accent-acento" />
+                        </Campo>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Boton tamano="icono" variante="fantasma" icono={RotateCw} aria-label="Girar 90°" title="Girar 90°" onClick={() => cambiarClip(selClip.id, { giro: (selClip.giro + 90) % 360 })} />
+                      <Boton tamano="icono" variante={selClip.voltearH ? "primario" : "fantasma"} icono={FlipHorizontal2} aria-label="Voltear horizontal" onClick={() => cambiarClip(selClip.id, { voltearH: !selClip.voltearH })} />
+                      <Boton tamano="icono" variante={selClip.voltearV ? "primario" : "fantasma"} icono={FlipVertical2} aria-label="Voltear vertical" onClick={() => cambiarClip(selClip.id, { voltearV: !selClip.voltearV })} />
+                      <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} aria-label="Mover antes" onClick={() => mover(selClip.id, -1)} />
+                      <Boton tamano="icono" variante="fantasma" icono={ArrowRight} aria-label="Mover después" onClick={() => mover(selClip.id, 1)} />
+                      <Boton tamano="icono" variante="fantasma" icono={Copy} aria-label="Duplicar" onClick={() => duplicar(selClip)} />
+                      <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar clip" onClick={borrarSeleccion} />
+                    </div>
+                  </div>
+                ) : null}
+                {selAudio ? (
+                  <div className="space-y-3 text-xs">
+                    <p className="truncate font-medium">{medioDe(selAudio.medioId)?.nombre}</p>
+                    <Campo etiqueta={`Empieza en (s): ${selAudio.inicio.toFixed(1)}`}>
+                      <input type="range" min={0} max={Math.max(total, 1)} step={0.1} value={selAudio.inicio} onChange={(e) => cambiarAudio(selAudio.id, { inicio: Number(e.target.value) })} className="w-full accent-acento" />
+                    </Campo>
+                    <Campo etiqueta={`Volumen: ${Math.round(selAudio.volumen * 100)}%`}>
+                      <input type="range" min={0} max={2} step={0.05} value={selAudio.volumen} onChange={(e) => cambiarAudio(selAudio.id, { volumen: Number(e.target.value) })} className="w-full accent-acento" />
+                    </Campo>
+                    <Campo etiqueta={`Hasta (s): ${selAudio.salida.toFixed(1)}`}>
+                      <input type="range" min={selAudio.entrada + 0.5} max={medioDe(selAudio.medioId)?.duracion ?? 10} step={0.1} value={selAudio.salida} onChange={(e) => cambiarAudio(selAudio.id, { salida: Number(e.target.value) })} className="w-full accent-acento" />
+                    </Campo>
+                    <Boton tamano="sm" variante="fantasma" icono={Trash2} onClick={borrarSeleccion}>
+                      Quitar música
                     </Boton>
-                  ) : null}
-                  {m.tipo !== "imagen" ? (
-                    <Boton tamano="sm" variante="fantasma" icono={Music2} onClick={() => agregarMusica(m)}>
-                      {m.tipo === "video" ? "Solo audio" : "Música"}
-                    </Boton>
-                  ) : null}
-                  <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label={`Quitar ${m.nombre}`} onClick={() => quitarMedio(m)} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Tarjeta>
-
-        <div className="space-y-2">
-          <div className="flex justify-center rounded-tarjeta border border-borde bg-black p-2">
-            <div className="relative">
-              <canvas
-                ref={lienzo}
-                width={W}
-                height={H}
-                className={cx("max-h-[48vh] max-w-full rounded", zonaModo && "cursor-crosshair touch-none")}
-                style={{ aspectRatio: `${W} / ${H}` }}
-                onPointerDown={(e) => {
-                  if (!zonaModo) return;
-                  const r = e.currentTarget.getBoundingClientRect();
-                  zonaInicio.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                }}
-                onPointerMove={(e) => {
-                  if (!zonaModo || !zonaInicio.current) return;
-                  const r = e.currentTarget.getBoundingClientRect();
-                  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-                  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-                  const a = zonaInicio.current;
-                  setZonaTemporal({ x: Math.min(a.x, x), y: Math.min(a.y, y), w: Math.abs(x - a.x), h: Math.abs(y - a.y) });
-                }}
-                onPointerUp={() => {
-                  if (zonaModo && zonaTemporal && selClip && zonaTemporal.w > 0.01 && zonaTemporal.h > 0.01) {
-                    cambiarClip(selClip.id, { difuminar: [...(selClip.difuminar ?? []), zonaTemporal] });
-                    setZonaModo(false);
-                    avisar("Zona marcada: se difumina en todo este clip");
-                  }
-                  zonaInicio.current = null;
-                  setZonaTemporal(null);
-                }}
-              />
-              {zonaTemporal ? (
-                <span className="pointer-events-none absolute border-2 border-dashed border-acento bg-acento/20" style={{ left: `${zonaTemporal.x * 100}%`, top: `${zonaTemporal.y * 100}%`, width: `${zonaTemporal.w * 100}%`, height: `${zonaTemporal.h * 100}%` }} />
-              ) : null}
+                  </div>
+                ) : null}
+                {selTexto ? (
+                  <div className="space-y-3 text-xs">
+                    <Campo etiqueta="Texto">
+                      <textarea value={selTexto.texto} onChange={(e) => cambiarTexto(selTexto.id, { texto: e.target.value })} rows={2} maxLength={200} className="w-full rounded-xl border border-borde bg-fondo p-2 text-sm" />
+                    </Campo>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Campo etiqueta={`Sale en (s): ${selTexto.inicio.toFixed(1)}`}>
+                        <input type="range" min={0} max={Math.max(total, 1)} step={0.1} value={selTexto.inicio} onChange={(e) => cambiarTexto(selTexto.id, { inicio: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                      <Campo etiqueta={`Dura (s): ${selTexto.duracion.toFixed(1)}`}>
+                        <input type="range" min={0.5} max={30} step={0.1} value={selTexto.duracion} onChange={(e) => cambiarTexto(selTexto.id, { duracion: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                      <Campo etiqueta="Izquierda ↔ derecha">
+                        <input type="range" min={0.05} max={0.95} step={0.01} value={selTexto.x} onChange={(e) => cambiarTexto(selTexto.id, { x: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                      <Campo etiqueta="Arriba ↕ abajo">
+                        <input type="range" min={0.05} max={0.95} step={0.01} value={selTexto.y} onChange={(e) => cambiarTexto(selTexto.id, { y: Number(e.target.value) })} className="w-full accent-acento" />
+                      </Campo>
+                    </div>
+                    <Campo etiqueta={`Tamaño: ${selTexto.tam}`}>
+                      <input type="range" min={2} max={25} step={0.5} value={selTexto.tam} onChange={(e) => cambiarTexto(selTexto.id, { tam: Number(e.target.value) })} className="w-full accent-acento" />
+                    </Campo>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input type="color" value={selTexto.color} onChange={(e) => cambiarTexto(selTexto.id, { color: e.target.value })} className="h-8 w-10 rounded border border-borde bg-transparent" aria-label="Color" />
+                      <Boton tamano="sm" variante={selTexto.negrita ? "primario" : "fantasma"} onClick={() => cambiarTexto(selTexto.id, { negrita: !selTexto.negrita })}>
+                        <b>N</b>
+                      </Boton>
+                      <Boton tamano="sm" variante={selTexto.fondo ? "primario" : "fantasma"} onClick={() => cambiarTexto(selTexto.id, { fondo: !selTexto.fondo })}>
+                        Con fondo
+                      </Boton>
+                      <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar texto" onClick={borrarSeleccion} />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {herramienta === "proyecto" ? (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-tenue">Proyecto</p>
+                <Selector className="w-full" value={formato} onChange={(e) => setFormato(e.target.value as Formato)} aria-label="Formato">
+                  <option value="16:9">Horizontal 16:9</option>
+                  <option value="9:16">Vertical 9:16 (TikTok)</option>
+                  <option value="1:1">Cuadrado 1:1</option>
+                  <option value="4:5">Retrato 4:5</option>
+                </Selector>
+                <Selector className="w-full" value={calidad} onChange={(e) => setCalidad(e.target.value as Calidad)} aria-label="Calidad">
+                  {(Object.keys(CALIDADES) as Calidad[]).map((c) => (
+                    <option key={c} value={c}>
+                      {CALIDADES[c].texto}
+                    </option>
+                  ))}
+                </Selector>
+                <Selector className="w-full" value={String(fps)} onChange={(e) => setFps(Number(e.target.value) as 24 | 30 | 60)} aria-label="Cuadros por segundo">
+                  <option value="24">24 fps (cine)</option>
+                  <option value="30">30 fps</option>
+                  <option value="60">60 fps (fluido)</option>
+                </Selector>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={fundidos.entrada} onChange={(e) => setFundidos({ ...fundidos, entrada: e.target.checked })} /> Aparecer
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={fundidos.salida} onChange={(e) => setFundidos({ ...fundidos, salida: e.target.checked })} /> Terminar a negro
+                </label>
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
+        <main className={cx("flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-2", acostado ? "order-3" : "order-2 lg:order-3")}>
+          <div className="min-h-0 flex-1">
+            <div className="flex h-full min-h-0 items-center justify-center rounded-xl bg-black p-2">
+              <div className="relative flex max-h-full max-w-full">
+                <canvas
+                  ref={lienzo}
+                  width={W}
+                  height={H}
+                  className={cx("max-h-full max-w-full rounded object-contain", zonaModo && "cursor-crosshair touch-none")}
+                  style={{ aspectRatio: `${W} / ${H}` }}
+                  onPointerDown={(e) => {
+                    if (!zonaModo) return;
+                    const r = e.currentTarget.getBoundingClientRect();
+                    zonaInicio.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={(e) => {
+                    if (!zonaModo || !zonaInicio.current) return;
+                    const r = e.currentTarget.getBoundingClientRect();
+                    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+                    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+                    const a = zonaInicio.current;
+                    setZonaTemporal({ x: Math.min(a.x, x), y: Math.min(a.y, y), w: Math.abs(x - a.x), h: Math.abs(y - a.y) });
+                  }}
+                  onPointerUp={() => {
+                    if (zonaModo && zonaTemporal && selClip && zonaTemporal.w > 0.01 && zonaTemporal.h > 0.01) {
+                      cambiarClip(selClip.id, { difuminar: [...(selClip.difuminar ?? []), zonaTemporal] });
+                      setZonaModo(false);
+                      avisar("Zona marcada: se difumina en todo este clip");
+                    }
+                    zonaInicio.current = null;
+                    setZonaTemporal(null);
+                  }}
+                />
+                {zonaTemporal ? (
+                  <span className="pointer-events-none absolute border-2 border-dashed border-acento bg-[color-mix(in_srgb,var(--acento)_20%,transparent)]" style={{ left: `${zonaTemporal.x * 100}%`, top: `${zonaTemporal.y * 100}%`, width: `${zonaTemporal.w * 100}%`, height: `${zonaTemporal.h * 100}%` }} />
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1">
@@ -890,252 +1214,92 @@ export default function EditorVideo() {
               Texto
             </Boton>
           </div>
-        </div>
-
-        <Tarjeta titulo={selClip ? "Clip de video" : selAudio ? "Música" : selTexto ? "Texto" : "Propiedades"}>
-          {!seleccion ? <p className="text-xs text-tenue">Toca un bloque de la línea de tiempo para cambiar su corte, velocidad, volumen, filtros o texto.</p> : null}
-          {selClip && mClip ? (
-            <div className="space-y-3 text-xs">
-              <p className="truncate font-medium">{mClip.nombre}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Campo etiqueta={`Desde (s): ${selClip.entrada.toFixed(1)}`}>
-                  <input type="range" min={0} max={Math.max(0.2, selClip.salida - 0.1)} step={0.1} value={selClip.entrada} onChange={(e) => cambiarClip(selClip.id, { entrada: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
-                <Campo etiqueta={`Hasta (s): ${selClip.salida.toFixed(1)}`}>
-                  <input type="range" min={selClip.entrada + 0.1} max={mClip.tipo === "imagen" ? 60 : mClip.duracion} step={0.1} value={selClip.salida} onChange={(e) => cambiarClip(selClip.id, { salida: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
+          <section className="max-h-[42%] shrink-0 overflow-y-auto rounded-xl border border-borde bg-superficie p-2">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold">Línea de tiempo</p>
+              <label className="flex items-center gap-2 text-xs text-tenue">
+                Zoom
+                <input type="range" min={16} max={160} value={pps} onChange={(e) => setPps(Number(e.target.value))} className="w-24 accent-acento" />
+              </label>
+            </div>
+            <div className="flex min-w-0">
+              <div className="w-16 shrink-0 space-y-1 pr-2 text-[11px] font-medium text-tenue" aria-hidden="true">
+                <div className="h-5" />
+                <div className="flex h-12 items-center gap-1"><FileVideo className="h-3.5 w-3.5" />Video</div>
+                <div className="flex h-8 items-center gap-1"><Type className="h-3.5 w-3.5" />Textos</div>
+                <div className="flex h-8 items-center gap-1"><Music2 className="h-3.5 w-3.5" />Música</div>
               </div>
-              {mClip.tipo === "video" ? (
-                <>
-                  <Campo etiqueta="Velocidad">
-                    <Selector value={String(selClip.velocidad)} onChange={(e) => cambiarClip(selClip.id, { velocidad: Number(e.target.value) })}>
-                      {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4].map((v) => (
-                        <option key={v} value={v}>
-                          {v}x
-                        </option>
-                      ))}
-                    </Selector>
-                  </Campo>
-                  <Campo etiqueta={`Volumen: ${Math.round(selClip.volumen * 100)}%`}>
-                    <input type="range" min={0} max={2} step={0.05} value={selClip.volumen} onChange={(e) => cambiarClip(selClip.id, { volumen: Number(e.target.value) })} className="w-full accent-acento" />
-                  </Campo>
-                </>
-              ) : null}
-              <Campo etiqueta="Encuadre">
-                <Selector value={selClip.ajuste} onChange={(e) => cambiarClip(selClip.id, { ajuste: e.target.value as Clip["ajuste"] })}>
-                  <option value="cubrir">Llenar la pantalla (recorta)</option>
-                  <option value="contener">Mostrar completo (bordes negros)</option>
-                </Selector>
-              </Campo>
-              {linea[0]?.clip.id !== selClip.id ? (
-                <Campo etiqueta="Transición con el clip anterior">
-                  <div className="grid grid-cols-2 gap-1">
-                    <Selector value={String(selClip.transicion)} onChange={(e) => cambiarClip(selClip.id, { transicion: Number(e.target.value) })} aria-label="Duración de la transición">
-                      <option value="0">Corte directo</option>
-                      <option value="0.5">0.5 s</option>
-                      <option value="1">1 s</option>
-                      <option value="2">2 s</option>
-                    </Selector>
-                    <Selector value={selClip.tipoTransicion ?? "fundido"} disabled={!selClip.transicion} onChange={(e) => cambiarClip(selClip.id, { tipoTransicion: e.target.value as TipoTransicion })} aria-label="Tipo de transición">
-                      {Object.entries(TRANSICIONES).map(([v, n]) => (
-                        <option key={v} value={v}>
-                          {n}
-                        </option>
-                      ))}
-                    </Selector>
+              <div className="min-w-0 flex-1">
+              <div className="overflow-x-auto pb-2">
+                <div className="relative space-y-1" style={{ width: ancho }}>
+                  <div
+                    className="relative h-5 cursor-pointer border-b border-borde text-[10px] text-tenue"
+                    onPointerDown={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      irA((e.clientX - r.left) / pps);
+                    }}
+                  >
+                    {Array.from({ length: Math.ceil(total) + 1 }, (_, s) => (
+                      <span key={s} className="absolute top-0 border-l border-borde pl-0.5" style={{ left: s * pps }}>
+                        {s % (pps < 30 ? 5 : 1) === 0 ? `${s}s` : ""}
+                      </span>
+                    ))}
                   </div>
-                </Campo>
-              ) : null}
-              <Campo etiqueta="Efecto">
-                <Selector value={selClip.efecto ?? "ninguno"} onChange={(e) => cambiarClip(selClip.id, { efecto: e.target.value as Efecto })}>
-                  {Object.entries(EFECTOS).map(([v, n]) => (
-                    <option key={v} value={v}>
-                      {n}
-                    </option>
-                  ))}
-                </Selector>
-              </Campo>
-              <div className="rounded-xl border border-borde p-2">
-                <p className="mb-1 font-medium">Quitar marca de agua</p>
-                <p className="mb-2 text-tenue">Solo para videos tuyos o con permiso del dueño. Quitar la marca de un video ajeno puede violar sus derechos de autor.</p>
-                <label className="mb-2 flex items-start gap-2">
-                  <input type="checkbox" className="mt-0.5 accent-acento" checked={permisoMarca} onChange={(e) => setPermisoMarca(e.target.checked)} />
-                  <span>Confirmo que el video es mío o tengo permiso.</span>
-                </label>
-                <div className="flex flex-wrap gap-1">
-                  <Boton tamano="sm" variante={zonaModo ? "primario" : "secundario"} disabled={!permisoMarca} onClick={() => setZonaModo(!zonaModo)}>
-                    {zonaModo ? "Dibuja el cuadro en el video…" : "Marcar la zona"}
-                  </Boton>
-                  {(selClip.difuminar ?? []).length ? (
-                    <Boton tamano="sm" variante="fantasma" icono={Trash2} onClick={() => cambiarClip(selClip.id, { difuminar: [] })}>
-                      Quitar zonas ({selClip.difuminar!.length})
-                    </Boton>
-                  ) : null}
+                  <div className="relative h-12 rounded-lg bg-fondo" onPointerDown={(e) => { if (e.target === e.currentTarget) setSeleccion(null); }}>
+                    {linea.map((p, i) => (
+                      <button
+                        key={p.clip.id}
+                        type="button"
+                        onClick={() => { setSeleccion({ tipo: "clip", id: p.clip.id }); irA(p.inicio + 0.01); }}
+                        className={cx("absolute top-1 h-10 overflow-hidden rounded-md border px-1.5 text-left text-[11px] text-white", seleccion?.id === p.clip.id ? "border-white" : "border-transparent")}
+                        style={{ left: p.inicio * pps, width: Math.max(8, (p.fin - p.inicio) * pps), background: colorDe(i) }}
+                        title={medioDe(p.clip.medioId)?.nombre}
+                      >
+                        <span className="block truncate">{medioDe(p.clip.medioId)?.nombre}</span>
+                        <span className="block truncate opacity-70">{p.clip.velocidad !== 1 ? `${p.clip.velocidad}x · ` : ""}{mmss(p.fin - p.inicio)}</span>
+                      </button>
+                    ))}
+                    {!clips.length ? <p className="p-3 text-xs text-tenue">Video: agrega archivos y se acomodan aquí en orden.</p> : null}
+                  </div>
+                  <div className="relative h-8 rounded-lg bg-fondo">
+                    {textos.map((t) => (
+                      <div
+                        key={t.id}
+                        role="button"
+                        tabIndex={0}
+                        onPointerDown={(e) => { setSeleccion({ tipo: "texto", id: t.id }); arrastrar(e, t.inicio, (n) => cambiarTexto(t.id, { inicio: n })); }}
+                        className={cx("absolute top-1 h-6 cursor-grab truncate rounded-md border bg-amber-600 px-1.5 text-[11px] leading-6 text-white", seleccion?.id === t.id ? "border-white" : "border-transparent")}
+                        style={{ left: t.inicio * pps, width: Math.max(10, t.duracion * pps) }}
+                      >
+                        {t.texto}
+                      </div>
+                    ))}
+                    {!textos.length ? <p className="p-1.5 text-[11px] text-tenue">Textos</p> : null}
+                  </div>
+                  <div className="relative h-8 rounded-lg bg-fondo">
+                    {audios.map((a) => (
+                      <div
+                        key={a.id}
+                        role="button"
+                        tabIndex={0}
+                        onPointerDown={(e) => { setSeleccion({ tipo: "audio", id: a.id }); arrastrar(e, a.inicio, (n) => cambiarAudio(a.id, { inicio: n })); }}
+                        className={cx("absolute top-1 h-6 cursor-grab truncate rounded-md border bg-emerald-700 px-1.5 text-[11px] leading-6 text-white", seleccion?.id === a.id ? "border-white" : "border-transparent")}
+                        style={{ left: a.inicio * pps, width: Math.max(10, (a.salida - a.entrada) * pps) }}
+                      >
+                        ♪ {medioDe(a.medioId)?.nombre}
+                      </div>
+                    ))}
+                    {!audios.length ? <p className="p-1.5 text-[11px] text-tenue">Música</p> : null}
+                  </div>
+                  <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-500" style={{ left: tiempo * pps }} />
                 </div>
               </div>
-              <div>
-                <p className="mb-1 font-medium">Filtros</p>
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {PRESETS.map(([n, f]) => (
-                    <Boton key={n} tamano="sm" variante="fantasma" onClick={() => cambiarClip(selClip.id, { filtros: { ...f } })}>
-                      {n}
-                    </Boton>
-                  ))}
-                </div>
-                {(
-                  [
-                    ["brillo", "Brillo", 0.3, 2, 0.05],
-                    ["contraste", "Contraste", 0.3, 2, 0.05],
-                    ["saturacion", "Saturación", 0, 3, 0.05],
-                    ["desenfoque", "Desenfoque", 0, 12, 0.5],
-                  ] as const
-                ).map(([k, n, mn, mx, st]) => (
-                  <Campo key={k} etiqueta={`${n}: ${selClip.filtros[k]}`}>
-                    <input type="range" min={mn} max={mx} step={st} value={selClip.filtros[k]} onChange={(e) => cambiarClip(selClip.id, { filtros: { ...selClip.filtros, [k]: Number(e.target.value) } })} className="w-full accent-acento" />
-                  </Campo>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                <Boton tamano="icono" variante="fantasma" icono={RotateCw} aria-label="Girar 90°" title="Girar 90°" onClick={() => cambiarClip(selClip.id, { giro: (selClip.giro + 90) % 360 })} />
-                <Boton tamano="icono" variante={selClip.voltearH ? "primario" : "fantasma"} icono={FlipHorizontal2} aria-label="Voltear horizontal" onClick={() => cambiarClip(selClip.id, { voltearH: !selClip.voltearH })} />
-                <Boton tamano="icono" variante={selClip.voltearV ? "primario" : "fantasma"} icono={FlipVertical2} aria-label="Voltear vertical" onClick={() => cambiarClip(selClip.id, { voltearV: !selClip.voltearV })} />
-                <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} aria-label="Mover antes" onClick={() => mover(selClip.id, -1)} />
-                <Boton tamano="icono" variante="fantasma" icono={ArrowRight} aria-label="Mover después" onClick={() => mover(selClip.id, 1)} />
-                <Boton tamano="icono" variante="fantasma" icono={Copy} aria-label="Duplicar" onClick={() => duplicar(selClip)} />
-                <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar clip" onClick={borrarSeleccion} />
               </div>
             </div>
-          ) : null}
-          {selAudio ? (
-            <div className="space-y-3 text-xs">
-              <p className="truncate font-medium">{medioDe(selAudio.medioId)?.nombre}</p>
-              <Campo etiqueta={`Empieza en (s): ${selAudio.inicio.toFixed(1)}`}>
-                <input type="range" min={0} max={Math.max(total, 1)} step={0.1} value={selAudio.inicio} onChange={(e) => cambiarAudio(selAudio.id, { inicio: Number(e.target.value) })} className="w-full accent-acento" />
-              </Campo>
-              <Campo etiqueta={`Volumen: ${Math.round(selAudio.volumen * 100)}%`}>
-                <input type="range" min={0} max={2} step={0.05} value={selAudio.volumen} onChange={(e) => cambiarAudio(selAudio.id, { volumen: Number(e.target.value) })} className="w-full accent-acento" />
-              </Campo>
-              <Campo etiqueta={`Hasta (s): ${selAudio.salida.toFixed(1)}`}>
-                <input type="range" min={selAudio.entrada + 0.5} max={medioDe(selAudio.medioId)?.duracion ?? 10} step={0.1} value={selAudio.salida} onChange={(e) => cambiarAudio(selAudio.id, { salida: Number(e.target.value) })} className="w-full accent-acento" />
-              </Campo>
-              <Boton tamano="sm" variante="fantasma" icono={Trash2} onClick={borrarSeleccion}>
-                Quitar música
-              </Boton>
-            </div>
-          ) : null}
-          {selTexto ? (
-            <div className="space-y-3 text-xs">
-              <Campo etiqueta="Texto">
-                <textarea value={selTexto.texto} onChange={(e) => cambiarTexto(selTexto.id, { texto: e.target.value })} rows={2} maxLength={200} className="w-full rounded-xl border border-borde bg-fondo p-2 text-sm" />
-              </Campo>
-              <div className="grid grid-cols-2 gap-2">
-                <Campo etiqueta={`Sale en (s): ${selTexto.inicio.toFixed(1)}`}>
-                  <input type="range" min={0} max={Math.max(total, 1)} step={0.1} value={selTexto.inicio} onChange={(e) => cambiarTexto(selTexto.id, { inicio: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
-                <Campo etiqueta={`Dura (s): ${selTexto.duracion.toFixed(1)}`}>
-                  <input type="range" min={0.5} max={30} step={0.1} value={selTexto.duracion} onChange={(e) => cambiarTexto(selTexto.id, { duracion: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
-                <Campo etiqueta="Izquierda ↔ derecha">
-                  <input type="range" min={0.05} max={0.95} step={0.01} value={selTexto.x} onChange={(e) => cambiarTexto(selTexto.id, { x: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
-                <Campo etiqueta="Arriba ↕ abajo">
-                  <input type="range" min={0.05} max={0.95} step={0.01} value={selTexto.y} onChange={(e) => cambiarTexto(selTexto.id, { y: Number(e.target.value) })} className="w-full accent-acento" />
-                </Campo>
-              </div>
-              <Campo etiqueta={`Tamaño: ${selTexto.tam}`}>
-                <input type="range" min={2} max={25} step={0.5} value={selTexto.tam} onChange={(e) => cambiarTexto(selTexto.id, { tam: Number(e.target.value) })} className="w-full accent-acento" />
-              </Campo>
-              <div className="flex flex-wrap items-center gap-2">
-                <input type="color" value={selTexto.color} onChange={(e) => cambiarTexto(selTexto.id, { color: e.target.value })} className="h-8 w-10 rounded border border-borde bg-transparent" aria-label="Color" />
-                <Boton tamano="sm" variante={selTexto.negrita ? "primario" : "fantasma"} onClick={() => cambiarTexto(selTexto.id, { negrita: !selTexto.negrita })}>
-                  <b>N</b>
-                </Boton>
-                <Boton tamano="sm" variante={selTexto.fondo ? "primario" : "fantasma"} onClick={() => cambiarTexto(selTexto.id, { fondo: !selTexto.fondo })}>
-                  Con fondo
-                </Boton>
-                <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Quitar texto" onClick={borrarSeleccion} />
-              </div>
-            </div>
-          ) : null}
-        </Tarjeta>
+            <p className="hidden text-[11px] text-tenue lg:block">Espacio reproduce/pausa · S divide en la línea roja · Supr quita lo elegido. Arrastra textos y música para cambiar cuándo salen.</p>
+          </section>
+        </main>
       </div>
-
-      <Tarjeta
-        titulo="Línea de tiempo"
-        acciones={
-          <label className="flex items-center gap-2 text-xs text-tenue">
-            Zoom
-            <input type="range" min={16} max={160} value={pps} onChange={(e) => setPps(Number(e.target.value))} className="w-24 accent-acento" />
-          </label>
-        }
-      >
-        <div className="overflow-x-auto pb-2">
-          <div className="relative space-y-1" style={{ width: ancho }}>
-            <div
-              className="relative h-5 cursor-pointer border-b border-borde text-[10px] text-tenue"
-              onPointerDown={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                irA((e.clientX - r.left) / pps);
-              }}
-            >
-              {Array.from({ length: Math.ceil(total) + 1 }, (_, s) => (
-                <span key={s} className="absolute top-0 border-l border-borde pl-0.5" style={{ left: s * pps }}>
-                  {s % (pps < 30 ? 5 : 1) === 0 ? `${s}s` : ""}
-                </span>
-              ))}
-            </div>
-            <div className="relative h-12 rounded-lg bg-fondo" onPointerDown={(e) => { if (e.target === e.currentTarget) setSeleccion(null); }}>
-              {linea.map((p, i) => (
-                <button
-                  key={p.clip.id}
-                  type="button"
-                  onClick={() => { setSeleccion({ tipo: "clip", id: p.clip.id }); irA(p.inicio + 0.01); }}
-                  className={cx("absolute top-1 h-10 overflow-hidden rounded-md border px-1.5 text-left text-[11px] text-white", seleccion?.id === p.clip.id ? "border-white" : "border-transparent")}
-                  style={{ left: p.inicio * pps, width: Math.max(8, (p.fin - p.inicio) * pps), background: colorDe(i) }}
-                  title={medioDe(p.clip.medioId)?.nombre}
-                >
-                  <span className="block truncate">{medioDe(p.clip.medioId)?.nombre}</span>
-                  <span className="block truncate opacity-70">{p.clip.velocidad !== 1 ? `${p.clip.velocidad}x · ` : ""}{mmss(p.fin - p.inicio)}</span>
-                </button>
-              ))}
-              {!clips.length ? <p className="p-3 text-xs text-tenue">Video: agrega archivos y se acomodan aquí en orden.</p> : null}
-            </div>
-            <div className="relative h-8 rounded-lg bg-fondo">
-              {textos.map((t) => (
-                <div
-                  key={t.id}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={(e) => { setSeleccion({ tipo: "texto", id: t.id }); arrastrar(e, t.inicio, (n) => cambiarTexto(t.id, { inicio: n })); }}
-                  className={cx("absolute top-1 h-6 cursor-grab truncate rounded-md border bg-amber-600 px-1.5 text-[11px] leading-6 text-white", seleccion?.id === t.id ? "border-white" : "border-transparent")}
-                  style={{ left: t.inicio * pps, width: Math.max(10, t.duracion * pps) }}
-                >
-                  {t.texto}
-                </div>
-              ))}
-              {!textos.length ? <p className="p-1.5 text-[11px] text-tenue">Textos</p> : null}
-            </div>
-            <div className="relative h-8 rounded-lg bg-fondo">
-              {audios.map((a) => (
-                <div
-                  key={a.id}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={(e) => { setSeleccion({ tipo: "audio", id: a.id }); arrastrar(e, a.inicio, (n) => cambiarAudio(a.id, { inicio: n })); }}
-                  className={cx("absolute top-1 h-6 cursor-grab truncate rounded-md border bg-emerald-700 px-1.5 text-[11px] leading-6 text-white", seleccion?.id === a.id ? "border-white" : "border-transparent")}
-                  style={{ left: a.inicio * pps, width: Math.max(10, (a.salida - a.entrada) * pps) }}
-                >
-                  ♪ {medioDe(a.medioId)?.nombre}
-                </div>
-              ))}
-              {!audios.length ? <p className="p-1.5 text-[11px] text-tenue">Música</p> : null}
-            </div>
-            <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-red-500" style={{ left: tiempo * pps }} />
-          </div>
-        </div>
-        <p className="text-[11px] text-tenue">Espacio reproduce/pausa · S divide en la línea roja · Supr quita lo elegido. Arrastra textos y música para cambiar cuándo salen.</p>
-      </Tarjeta>
-
       {resultado ? (
         <Modal abierto titulo="Tu video está listo" alCerrar={() => { URL.revokeObjectURL(resultado.url); setResultado(null); }}>
           <div className="space-y-3">

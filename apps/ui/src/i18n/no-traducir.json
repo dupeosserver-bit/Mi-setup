@@ -191,5 +191,6 @@
  "Quiero instalar {0} para que me ayude con… Qué puede hacer: - Qué NO puede hacer: - Entrar a bancos, correos ni redes sociales. - Abrir puertos a internet.",
  "Quiero instalar el agente {0} ({1}) en mi servidor «{2}». Revisa su README, dime qué hace, cuánta memoria pide y si es seguro, y propón los comandos (de preferencia con Docker, escuchando solo en 127.0.0.1) para que yo los apruebe.",
  "Quiero un agente en mi servidor «{0}». Propón cómo instalarlo y los comandos (de preferencia con Docker, escuchando solo en 127.0.0.1) para que yo los apruebe.",
- "{0} Estas son mis instrucciones para el agente: {1}"
+ "{0} Estas son mis instrucciones para el agente: {1}",
+ "Mbps"
 ]
