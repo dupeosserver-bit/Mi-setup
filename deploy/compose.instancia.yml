@@ -1,0 +1,19 @@
+# Otra instalación de Mi Setup en el mismo VPS (pública, pruebas…).
+# Se usa encima de docker-compose.yml y solo enciende su base y su core:
+#   docker compose -p mi-setup-<nombre> --env-file /opt/mi-setup-<nombre>/.env \
+#     -f docker-compose.yml -f deploy/compose.instancia.yml up -d --build misetup-db core
+# Caddy, ntfy, Ollama y ClamAV son los de la instalación principal (/opt/mi-setup):
+# core llega a ellos por la red «misetup-compartida», que crea la principal.
+# Lo arma deploy/crear-instancia.sh; no hace falta escribirlo a mano.
+
+services:
+  core:
+    networks:
+      - datos
+      - web
+      - compartida
+
+networks:
+  compartida:
+    name: misetup-compartida
+    external: true

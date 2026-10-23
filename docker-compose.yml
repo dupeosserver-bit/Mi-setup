@@ -2,6 +2,11 @@
 # El script del VPS ejecuta:
 #   docker compose --env-file /opt/mi-setup/.env up -d --build --remove-orphans
 # Solo Caddy publica puertos (80/443). Postgres, core y ntfy viven en redes internas.
+#
+# Varias instalaciones en el mismo VPS (personal, pública, pruebas): esta es la
+# principal (Caddy, ntfy, Ollama y ClamAV). Las demás solo encienden su base y su
+# core con deploy/compose.instancia.yml y llegan a lo compartido por la red
+# «misetup-compartida». Ver deploy/crear-instancia.sh.
 
 name: mi-setup
 
@@ -17,7 +22,7 @@ services:
   misetup-db:
     <<: *registros
     image: postgres:16-alpine
-    container_name: misetup-db
+    container_name: ${MISETUP_PREFIJO:-misetup}-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-misetup}
@@ -40,7 +45,7 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         EDICION: ${EDICION:-personal}
-    container_name: misetup-core
+    container_name: ${MISETUP_PREFIJO:-misetup}-core
     restart: unless-stopped
     depends_on:
       misetup-db:
@@ -64,7 +69,7 @@ services:
       SERVER_ENC_KEY: ${SERVER_ENC_KEY:?Falta configurar SERVER_ENC_KEY}
       MAIL_INBOUND_SECRET: ${MAIL_INBOUND_SECRET:-}
       NTFY_TOPIC: ${NTFY_TOPIC:-}
-      NTFY_URL: http://ntfy
+      NTFY_URL: ${NTFY_URL_INTERNA:-http://ntfy}
       BACKUP_DIR: /data/respaldos
       DESCARGAS_DIR: /data/descargas
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -117,7 +122,7 @@ services:
   ntfy:
     <<: *registros
     image: binwiederhier/ntfy:v2.11.0
-    container_name: misetup-ntfy
+    container_name: ${MISETUP_PREFIJO:-misetup}-ntfy
     restart: unless-stopped
     command: serve
     environment:
@@ -133,6 +138,7 @@ services:
       - misetup_ntfy:/var/cache/ntfy
     networks:
       - web
+      - compartida
 
   # IA gratuita local (Llama con Ollama). Opcional: se enciende con
   # COMPOSE_PROFILES=ia-local y OLLAMA_URL=http://misetup-ollama:11434 en el .env.
@@ -141,7 +147,7 @@ services:
   ollama:
     <<: *registros
     image: ollama/ollama:0.6.8
-    container_name: misetup-ollama
+    container_name: ${MISETUP_PREFIJO:-misetup}-ollama
     restart: unless-stopped
     profiles: ["ia-local"]
     environment:
@@ -151,6 +157,7 @@ services:
       - misetup_ollama:/root/.ollama
     networks:
       - web
+      - compartida
 
   # Antivirus ClamAV: revisa cada .zip (y cada repositorio de GitHub) que sube la
   # comunidad del sitio oficial antes de que lo apruebes. Usa ~1 GB de RAM, por eso
@@ -159,18 +166,19 @@ services:
   clamav:
     <<: *registros
     image: clamav/clamav:1.4
-    container_name: misetup-clamav
+    container_name: ${MISETUP_PREFIJO:-misetup}-clamav
     restart: unless-stopped
     profiles: ["comunidad"]
     volumes:
       - misetup_clamav:/var/lib/clamav
     networks:
       - web
+      - compartida
 
   caddy:
     <<: *registros
     image: caddy:2-alpine
-    container_name: misetup-caddy
+    container_name: ${MISETUP_PREFIJO:-misetup}-caddy
     restart: unless-stopped
     depends_on:
       - core
@@ -185,6 +193,9 @@ services:
     environment:
       APP_HOST: ${APP_HOST:-setup.mexicanland.net}
       NTFY_HOST: ${NTFY_HOST:-ntfy.mexicanland.net}
+      # Por nombre de contenedor: en la red compartida hay varios «core».
+      CORE_DESTINO: ${MISETUP_PREFIJO:-misetup}-core:3000
+      NTFY_DESTINO: ${MISETUP_PREFIJO:-misetup}-ntfy:80
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Sitios extra (p. ej. panel de Pterodactyl): archivos *.caddy fuera de la app.
@@ -193,12 +204,16 @@ services:
       - misetup_caddy_config:/config
     networks:
       - web
+      - compartida
 
 networks:
   # Red sin salida a internet: solo core y la base de datos.
   datos:
     internal: true
   web: {}
+  # Caddy, ntfy, Ollama y ClamAV de esta instalación, para las demás del mismo VPS.
+  compartida:
+    name: misetup-compartida
 
 volumes:
   misetup_pgdata:
