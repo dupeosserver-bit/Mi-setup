@@ -1,28 +1,16 @@
-/**
- * Bloc de notas tipo Notion: las mismas notas se escriben como texto o se ven
- * como página (títulos, listas, casillas que se marcan, tablas), con subpáginas,
- * ícono, plantillas y un tablero de tareas. Guardado automático y sincronizado.
- */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  ArrowRight,
-  KanbanSquare,
-  NotebookPen,
-  Pin,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckSquare, Files, KanbanSquare, LayoutTemplate, NotebookPen, Pin, Plus, Search, SquarePen, Table, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Vacio, avisarError, cx } from "../components/ui";
+import { EditorNota, type Nota } from "../components/EditorNota";
+import { usePaginado } from "../components/Paginas";
+import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
-import { EditorNota, type Nota } from "../components/EditorNota";
-import { fondoNota } from "../lib/markdownNotas";
+import { haceCuanto } from "../lib/formato";
 import { localeActual } from "../lib/idioma";
-
+import { useModoPagina } from "../lib/marco";
+import { fondoNota } from "../lib/markdownNotas";
 
 const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: string }[] = [
   { nombre: "En blanco", icono: "📝", titulo: "Nueva página", contenido: "" },
@@ -38,8 +26,6 @@ const PLANTILLAS: { nombre: string; icono: string; titulo: string; contenido: st
   { nombre: "Reunión", icono: "🗓️", titulo: "Reunión", contenido: "**Fecha:** \n**Con:** \n\n## Temas\n- \n\n## Acuerdos\n- [ ] \n" },
   { nombre: "Tabla", icono: "📊", titulo: "Tabla", contenido: "| Nombre | Estado | Notas |\n| --- | --- | --- |\n|  |  |  |\n" },
 ];
-
-// ---------------------------------------------------------------- tablero
 
 interface Tarea {
   id: string;
@@ -76,7 +62,6 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
     onSuccess: refrescar,
     onError: avisarError,
   });
-  // Tocar una tarea abre sus opciones (antes solo respondían las flechas pequeñas).
   const [abierta, setAbierta] = useState<Tarea | null>(null);
   const [titulo, setTitulo] = useState("");
   const [arrastrando, setArrastrando] = useState<string | null>(null);
@@ -105,7 +90,7 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
           return (
             <div
               key={col.id}
-              className={cx("min-w-0 rounded-tarjeta border bg-superficie p-3", arrastrando ? "border-dashed border-acento/60" : "border-borde")}
+              className={cx("min-w-0 rounded-tarjeta border bg-superficie p-3", arrastrando ? "border-dashed border-acento" : "border-borde")}
               onDragOver={(e) => puedeEditar && e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -224,26 +209,71 @@ function Tablero({ puedeEditar }: { puedeEditar: boolean }) {
   );
 }
 
-// ---------------------------------------------------------------- lista y página
-
-/** Lista en árbol: cada página con sus subpáginas debajo. */
-function arbol(notas: Nota[]): { nota: Nota; nivel: number }[] {
-  const ids = new Set(notas.map((n) => n.id));
-  const salida: { nota: Nota; nivel: number }[] = [];
-  const agregar = (padre: string | null, nivel: number) => {
-    for (const n of notas.filter((x) => (padre === null ? !x.padre || !ids.has(x.padre) : x.padre === padre))) {
-      salida.push({ nota: n, nivel });
-      if (nivel < 6) agregar(n.id, nivel + 1);
-    }
-  };
-  agregar(null, 0);
-  return salida;
+function Previa({ contenido }: { contenido: string }) {
+  const lineas = contenido
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !/^\|?\s*-{3,}/.test(l))
+    .slice(0, 7);
+  if (!lineas.length) return <p className="text-xs italic text-tenue">Vacía</p>;
+  return (
+    <div className="space-y-1 text-[13px] leading-snug text-tenue">
+      {lineas.map((l, i) => {
+        const tarea = /^[-*] \[( |x|X)\]\s*(.*)$/.exec(l);
+        if (tarea) {
+          const hecha = tarea[1] !== " ";
+          return (
+            <p key={i} className="flex items-start gap-1.5">
+              <span className={cx("mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded border", hecha ? "border-acento bg-acento" : "border-tenue")} />
+              <span className={cx("min-w-0 break-words", hecha && "line-through opacity-70")}>{tarea[2] || "…"}</span>
+            </p>
+          );
+        }
+        const texto = l.replace(/^#+\s*/, "").replace(/^[-*>]\s*/, "• ").replace(/[*_|`]/g, "");
+        return (
+          <p key={i} className={cx("break-words", /^#/.test(l) && "font-semibold text-texto")}>
+            {texto}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
+
+function TarjetaNota({ nota, hijas, alAbrir }: { nota: Nota; hijas: number; alAbrir: () => void }) {
+  const fondo = fondoNota(nota.color);
+  return (
+    <button
+      type="button"
+      onClick={alAbrir}
+      className="mb-3 block w-full break-inside-avoid rounded-2xl border border-borde p-3.5 text-left transition-transform hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--texto)_22%,transparent)]"
+      style={{ background: fondo ?? "var(--superficie)" }}
+    >
+      <b className="mb-1.5 flex items-start gap-1.5 text-sm">
+        <span className="shrink-0">{nota.icono ?? "📝"}</span>
+        <span className="min-w-0 break-words">{nota.titulo || "Sin título"}</span>
+        {nota.fijada ? <Pin className="ml-auto h-3.5 w-3.5 shrink-0 text-tenue" /> : null}
+      </b>
+      <Previa contenido={nota.contenido} />
+      <small className="mt-2.5 flex items-center gap-2 text-[11px] text-tenue">
+        {haceCuanto(nota.actualizada)}
+        {hijas ? (
+          <span className="inline-flex items-center gap-1">
+            <Files className="h-3 w-3" />
+            {hijas}
+          </span>
+        ) : null}
+      </small>
+    </button>
+  );
+}
+
+const MURO = "columns-2 gap-3 sm:columns-3 xl:columns-4 2xl:columns-5";
 
 export default function Notas() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
-  const [vista, setVista] = useState<"paginas" | "tablero">("paginas");
+  const [vista, setVista] = useState<"notas" | "tablero">("notas");
   const [plantillas, setPlantillas] = useState(false);
   const puedeEditar = usePuede("notas", "escritura");
   const { data, isLoading, error } = useQuery({
@@ -252,7 +282,18 @@ export default function Notas() {
   });
   const seleccion = params.get("id");
   const actual = data?.find((n) => n.id === seleccion) ?? null;
-  const filas = useMemo(() => (q ? (data ?? []).map((nota) => ({ nota, nivel: 0 })) : arbol(data ?? [])), [data, q]);
+  useModoPagina("completa", Boolean(actual));
+
+  const ids = useMemo(() => new Set((data ?? []).map((n) => n.id)), [data]);
+  const hijasDe = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of data ?? []) if (n.padre) m.set(n.padre, (m.get(n.padre) ?? 0) + 1);
+    return m;
+  }, [data]);
+  const principales = useMemo(() => (data ?? []).filter((n) => q || !n.padre || !ids.has(n.padre)), [data, q, ids]);
+  const fijadas = principales.filter((n) => n.fijada);
+  const otras = useMemo(() => principales.filter((n) => !n.fijada), [principales]);
+  const { visibles, paginas } = usePaginado(otras, 20);
 
   const crear = useMutation({
     mutationFn: (pl: (typeof PLANTILLAS)[number]) => api<Nota>("/api/notas", { cuerpo: { titulo: pl.titulo, contenido: pl.contenido, icono: pl.icono } }),
@@ -268,68 +309,91 @@ export default function Notas() {
     if (params.get("nueva") && puedeEditar && !crear.isPending) crear.mutate(PLANTILLAS[0]!);
   }, [params, puedeEditar]);
 
+  if (actual) return <EditorNota key={actual.id} nota={actual} notas={data ?? []} puedeEditar={puedeEditar} pantalla alVolver={() => setParams({})} alAbrir={(id) => setParams({ id })} />;
+
+  const rapido = (nombre: string) => crear.mutate(PLANTILLAS.find((p) => p.nombre === nombre) ?? PLANTILLAS[0]!);
+
   return (
     <>
       <Encabezado
         titulo="Bloc de notas"
-        descripcion="Notas y páginas tipo Notion, con tareas y tablero."
+        descripcion="Tus notas y páginas, con tareas y tablero."
         acciones={
-          puedeEditar ? (
-            <Boton variante="primario" icono={Plus} onClick={() => setPlantillas(true)} cargando={crear.isPending}>
-              Nueva
-            </Boton>
-          ) : null
-        }
-      />
-      <Pestanas
-        valor={vista}
-        alCambiar={setVista}
-        opciones={[
-          { id: "paginas", texto: "Páginas" },
-          { id: "tablero", texto: "Tablero de tareas" },
-        ]}
-      />
-      <ErrorCaja error={error} />
-      {vista === "tablero" ? (
-        <div className="mt-4">
-          <Tablero puedeEditar={puedeEditar} />
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[300px_1fr]">
-          <div className={cx("min-w-0 space-y-1", actual && "hidden md:block")}>
-            <div className="relative mb-2">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
-              <Entrada className="pl-9" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            {isLoading ? <Cargando /> : null}
-            {data?.length === 0 ? <Vacio icono={NotebookPen} texto={q ? "Sin resultados." : "Todavía no hay notas."} /> : null}
-            {filas.map(({ nota: n, nivel }) => (
+          <div className="flex gap-1 rounded-xl bg-superficie p-1">
+            {(
+              [
+                ["notas", "Notas", NotebookPen],
+                ["tablero", "Tablero", KanbanSquare],
+              ] as const
+            ).map(([id, texto, Icono]) => (
               <button
-                key={n.id}
+                key={id}
                 type="button"
-                onClick={() => setParams({ id: n.id })}
-                style={{ marginLeft: nivel * 14, width: `calc(100% - ${nivel * 14}px)`, backgroundColor: fondoNota(n.color) }}
-                className={cx("block rounded-xl border p-2.5 text-left", n.id === seleccion ? "border-acento/60 bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}
+                onClick={() => setVista(id)}
+                className={cx("flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm", vista === id ? "bg-[color-mix(in_srgb,var(--acento)_16%,transparent)] text-acento" : "text-tenue hover:text-texto")}
               >
-                <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                  <span>{n.icono ?? "📝"}</span>
-                  {n.fijada ? <Pin className="h-3 w-3 shrink-0 text-tenue" /> : null}
-                  <span className="truncate">{n.titulo || "Sin título"}</span>
-                </p>
-                {nivel === 0 ? <p className="mt-1 line-clamp-1 text-xs text-tenue">{n.contenido.replace(/[#*>\-[\]|]/g, "").trim() || "Vacía"}</p> : null}
+                <Icono className="h-4 w-4" />
+                {texto}
               </button>
             ))}
           </div>
-          <div className={cx("min-w-0", !actual && "hidden md:block")}>
-            {actual ? (
-              <EditorNota nota={actual} notas={data ?? []} puedeEditar={puedeEditar} alVolver={() => setParams({})} alAbrir={(id) => setParams({ id })} />
+        }
+      />
+      <ErrorCaja error={error} />
+      {vista === "tablero" ? (
+        <Tablero puedeEditar={puedeEditar} />
+      ) : (
+        <>
+          <div className="mx-auto mb-4 flex max-w-2xl items-center gap-1 rounded-2xl border border-borde bg-superficie p-1.5 shadow-lg">
+            {puedeEditar ? (
+              <button type="button" disabled={crear.isPending} onClick={() => rapido("En blanco")} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-tenue hover:text-texto">
+                <SquarePen className="h-4 w-4 shrink-0" />
+                <span className="truncate">Escribe una nota…</span>
+              </button>
             ) : (
-              <Vacio icono={NotebookPen} texto="Elige una página o crea una nueva." />
+              <span className="flex-1" />
             )}
+            {puedeEditar ? (
+              <>
+                <Boton tamano="icono" variante="fantasma" icono={CheckSquare} aria-label="Lista de tareas" title="Lista de tareas" onClick={() => rapido("Lista de tareas")} />
+                <Boton tamano="icono" variante="fantasma" icono={Table} aria-label="Tabla" title="Tabla" onClick={() => rapido("Tabla")} />
+                <Boton tamano="icono" variante="fantasma" icono={LayoutTemplate} aria-label="Plantillas" title="Plantillas" onClick={() => setPlantillas(true)} />
+              </>
+            ) : null}
           </div>
-        </div>
+          <div className="relative mx-auto mb-5 max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
+            <Entrada className="pl-9" placeholder="Buscar en tus notas" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          {isLoading ? <Cargando /> : null}
+          {data?.length === 0 ? <Vacio icono={NotebookPen} texto={q ? "Sin resultados." : "Todavía no hay notas."} /> : null}
+          {fijadas.length ? (
+            <section className="mb-4">
+              <h2 className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-tenue">
+                <Pin className="h-3.5 w-3.5" />
+                Fijadas
+              </h2>
+              <div className={MURO}>
+                {fijadas.map((n) => (
+                  <TarjetaNota key={n.id} nota={n} hijas={hijasDe.get(n.id) ?? 0} alAbrir={() => setParams({ id: n.id })} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {otras.length ? (
+            <section>
+              {fijadas.length ? <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-tenue">Otras notas</h2> : null}
+              <div className={MURO}>
+                {visibles.map((n) => (
+                  <TarjetaNota key={n.id} nota={n} hijas={hijasDe.get(n.id) ?? 0} alAbrir={() => setParams({ id: n.id })} />
+                ))}
+              </div>
+              {paginas}
+            </section>
+          ) : null}
+        </>
       )}
-      <Modal abierto={plantillas} titulo="Nueva página" alCerrar={() => setPlantillas(false)}>
+      <Modal abierto={plantillas} titulo="Nueva nota" alCerrar={() => setPlantillas(false)}>
         <div className="grid grid-cols-2 gap-2">
           {PLANTILLAS.map((pl) => (
             <button
@@ -345,7 +409,7 @@ export default function Notas() {
           ))}
         </div>
         <p className="mt-3 flex items-center gap-1 text-xs text-tenue">
-          <KanbanSquare className="h-3 w-3" /> Para tareas sueltas usa la pestaña «Tablero de tareas».
+          <KanbanSquare className="h-3 w-3" /> Para tareas sueltas usa «Tablero».
         </p>
       </Modal>
     </>

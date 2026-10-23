@@ -320,7 +320,7 @@ function CompartirNota({ nota, titulo, contenido, adjuntos, alCerrar }: { nota: 
   );
 }
 
-export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { nota: Nota; notas: Nota[]; puedeEditar: boolean; alVolver: () => void; alAbrir: (id: string) => void }) {
+export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir, pantalla = false }: { nota: Nota; notas: Nota[]; puedeEditar: boolean; alVolver: () => void; alAbrir: (id: string) => void; pantalla?: boolean }) {
   const [titulo, setTitulo] = useState(nota.titulo);
   const [contenido, setContenido] = useState(nota.contenido);
   const [modo, setModo] = useState<Modo>(nota.contenido ? "pagina" : "editar");
@@ -565,7 +565,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
   const escribiendo = modo === "editar" || modo === "vivo";
   const pagina = (
     <div
-      className="pagina-notion min-h-[40vh] min-w-0 flex-1 overflow-x-auto px-4 py-3"
+      className={cx("pagina-notion min-h-[40vh] min-w-0 flex-1 overflow-x-auto", pantalla ? "px-5 py-4 text-base sm:px-8" : "px-4 py-3")}
       // HTML limpiado con DOMPurify (sin scripts ni eventos).
       dangerouslySetInnerHTML={{ __html: html || "<p>Página vacía. Toca «Escribir» para empezar.</p>" }}
       onClick={alTocarPagina}
@@ -573,9 +573,9 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-col rounded-tarjeta border border-borde bg-superficie" style={{ backgroundColor: fondoNota(nota.color) }}>
-      <div className="flex flex-wrap items-center gap-1 border-b border-borde p-2">
-        <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className="md:hidden" aria-label="Volver" />
+    <div className={cx("flex min-w-0 flex-col", pantalla ? "min-h-0 flex-1 bg-fondo" : "h-full rounded-tarjeta border border-borde bg-superficie")} style={{ backgroundColor: fondoNota(nota.color) }}>
+      <div className={cx("flex flex-wrap items-center gap-1 border-b border-borde p-2", pantalla && "shrink-0 pt-[max(0.5rem,env(safe-area-inset-top))]")}>
+        <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className={pantalla ? undefined : "md:hidden"} aria-label="Volver" />
         <span className="min-w-0 flex-1 truncate text-xs text-tenue">
           {subiendo ? "Subiendo archivo…" : estado === "guardado" ? `Guardado · ${haceCuanto(nota.actualizada)}` : estado === "guardando" ? "Guardando…" : "Sin guardar"}
         </span>
@@ -617,6 +617,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
         ) : null}
       </div>
 
+      <div className={cx(pantalla && "min-h-0 flex-1 overflow-y-auto pb-28")}>
       {colores ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-borde px-4 py-2">
           <button type="button" onClick={() => cambiarColor(null)} className={cx("rounded-full border px-2 py-0.5 text-xs", !nota.color ? "border-acento" : "border-borde")}>
@@ -641,7 +642,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 px-4 pt-3">
+      <div className={cx("flex items-center gap-2 pt-3", pantalla ? "px-5 sm:px-8" : "px-4")}>
         <button type="button" disabled={!puedeEditar} onClick={() => setIconos((v) => !v)} className="text-2xl" aria-label="Cambiar ícono">
           {nota.icono ?? "📝"}
         </button>
@@ -653,7 +654,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
             setTitulo(e.target.value);
             guardar({ titulo: e.target.value });
           }}
-          className="min-w-0 flex-1 bg-transparent font-titulo text-xl font-semibold outline-none placeholder:text-tenue"
+          className={cx("min-w-0 flex-1 bg-transparent font-titulo font-semibold outline-none placeholder:text-tenue", pantalla ? "text-2xl sm:text-3xl" : "text-xl")}
         />
       </div>
       {iconos ? (
@@ -668,7 +669,14 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
 
       {escribiendo && puedeEditar ? (
         <>
-          <div className="flex gap-1 overflow-x-auto px-3 pt-2">
+          <div
+            className={cx(
+              "flex gap-1 overflow-x-auto",
+              pantalla
+                ? "fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 mx-auto w-max max-w-[calc(100%-1.5rem)] rounded-2xl border border-borde bg-[color-mix(in_srgb,var(--superficie)_94%,transparent)] p-1.5 shadow-2xl backdrop-blur"
+                : "px-3 pt-2",
+            )}
+          >
             {herramientas.map((h) => (
               <Boton key={h.texto} tamano="icono" variante="fantasma" icono={h.icono} aria-label={h.texto} title={h.texto} onClick={h.accion} />
             ))}
@@ -730,7 +738,7 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
               onPaste={pegar}
               onDrop={soltar}
               onDragOver={(e) => e.preventDefault()}
-              className={cx("flex-1 resize-none bg-transparent", modo === "vivo" ? "min-h-[30vh]" : "min-h-[40vh]", "px-4 py-3 text-sm leading-relaxed outline-none placeholder:text-tenue")}
+              className={cx("flex-1 resize-none bg-transparent", modo === "vivo" ? "min-h-[30vh]" : "min-h-[40vh]", pantalla ? "px-5 py-4 text-base leading-relaxed sm:px-8 sm:text-[17px]" : "px-4 py-3 text-sm leading-relaxed", "outline-none placeholder:text-tenue")}
             />
             {modo === "vivo" ? <div className="min-h-[30vh] overflow-auto border-t border-borde md:border-l md:border-t-0">{pagina}</div> : null}
           </div>
@@ -802,6 +810,8 @@ export function EditorNota({ nota, notas, puedeEditar, alVolver, alAbrir }: { no
           </div>
         </div>
       ) : null}
+
+      </div>
 
       {compartiendo ? <CompartirNota nota={nota} titulo={titulo} contenido={contenido} adjuntos={adjuntos.data ?? []} alCerrar={() => setCompartiendo(false)} /> : null}
       {dibujando ? (
