@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
   echo "Uso: $0 <version> <paquete.tar>"
-  echo "Ejemplo: $0 0.11.4b /root/mi-setup-0.11.4b.tar"
+  echo "Ejemplo: $0 0.11.4b /home/ubuntu/mi-setup.tar.gz"
   echo "Guarda todo en /opt/mi-setup/versiones/<version>/ (cámbialo con MISETUP_BASE)."
   exit 1
 fi
@@ -45,7 +45,12 @@ fi
 git -C "$APP" rev-parse HEAD > "$DESTINO/respaldo-$FECHA/commit-anterior.txt" 2>/dev/null || true
 
 echo "4/5 Poniendo los archivos nuevos en $APP"
-tar -xf "$PAQUETE" -C "$APP"
+NUEVA="$BASE/nueva"
+rm -rf "$NUEVA"
+mkdir -p "$NUEVA"
+tar -xf "$PAQUETE" -C "$NUEVA"
+rsync -a --delete --exclude .git "$NUEVA"/ "$APP"/
+rm -rf "$NUEVA"
 
 echo "5/5 Encendiendo la versión nueva"
 cd "$APP"
