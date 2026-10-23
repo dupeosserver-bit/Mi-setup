@@ -1,18 +1,16 @@
-/**
- * Cuentas y permisos (solo maestra): alta de cuentas, permisos por módulo,
- * roles tipo Discord (nombre, color y permisos), desactivar y restablecer
- * contraseña. Los permisos de una cuenta = los suyos + los de sus roles.
- */
 import { usePaginado } from "../components/Paginas";
 import { MODULES, MODULE_IDS, moduloEnEdicion, PERMISSION_LEVELS, type ModuleId, type PermissionLevel } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Crown, KeyRound, LogOut, Pencil, Plus, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
+import { ArrowLeft, Crown, KeyRound, Lock, LogOut, Pencil, Plus, Search, Trash2, UserCog, Users } from "lucide-react";
 import { useState } from "react";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient } from "../lib/consultas";
 import { fmtFecha } from "../lib/formato";
+import { useForma, useModoPagina } from "../lib/marco";
+import { CATEGORIAS } from "../modulos";
+import { Iniciales } from "../components/boveda/comun";
 
 type Permisos = Partial<Record<ModuleId, PermissionLevel>>;
 
@@ -55,19 +53,39 @@ export function InsigniaRol({ nombre, color }: { nombre: string; color: string }
 }
 
 function EditorPermisos({ valor, alCambiar }: { valor: Permisos; alCambiar: (p: Permisos) => void }) {
+  const grupos = CATEGORIAS.map((c) => ({ ...c, modulos: OTORGABLES.filter((m) => MODULES[m].category === c.id) })).filter((g) => g.modulos.length);
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {OTORGABLES.map((m) => (
-        <label key={m} className="flex items-center justify-between gap-2 rounded-xl bg-tarjeta px-3 py-2 text-sm">
-          <span className="truncate">{MODULES[m].label}</span>
-          <Selector className="h-8 w-36" value={valor[m] ?? "ninguno"} onChange={(e) => alCambiar({ ...valor, [m]: e.target.value as PermissionLevel })}>
-            {PERMISSION_LEVELS.map((n) => (
-              <option key={n} value={n}>
-                {NIVEL[n]}
-              </option>
-            ))}
-          </Selector>
-        </label>
+    <div className="space-y-4">
+      {grupos.map((g) => (
+        <section key={g.id} className="space-y-2">
+          <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-tenue">
+            <g.icono className="h-3.5 w-3.5" />
+            {g.titulo}
+          </h4>
+          {g.modulos.map((m) => {
+            const actual = valor[m] ?? "ninguno";
+            return (
+              <div key={m} className="flex flex-col gap-2 rounded-xl border border-borde bg-fondo px-3 py-2 sm:flex-row sm:items-center">
+                <span className="min-w-0 flex-1 truncate text-sm">{MODULES[m].label}</span>
+                <div className="grid grid-cols-4 gap-1 rounded-lg bg-tarjeta p-1 sm:w-[22rem]" role="radiogroup" aria-label={MODULES[m].label}>
+                  {PERMISSION_LEVELS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      role="radio"
+                      aria-checked={actual === n}
+                      onClick={() => alCambiar({ ...valor, [m]: n })}
+                      className={cx("h-7 truncate rounded-md px-1 text-xs font-medium", actual === n ? "text-texto" : "text-tenue hover:text-texto")}
+                      style={actual === n ? { background: n === "ninguno" ? "var(--superficie)" : "color-mix(in srgb, var(--acento) 22%, var(--superficie))" } : undefined}
+                    >
+                      {NIVEL[n]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
       ))}
     </div>
   );
@@ -332,64 +350,146 @@ function Detalle({ c }: { c: Cuenta }) {
   );
 }
 
+function TarjetaPersona({ c, roles, elegida, alElegir }: { c: Cuenta; roles: Map<string, Rol>; elegida: boolean; alElegir: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={alElegir}
+      className={cx("flex w-full items-center gap-3 rounded-xl border p-3 text-left", elegida ? "border-acento bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}
+    >
+      <span className="relative">
+        <Iniciales texto={c.nombre} tam={40} />
+        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-superficie" style={{ background: c.activo ? "var(--ok)" : "var(--error)" }} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <b className="truncate text-sm">{c.nombre}</b>
+          {c.rol === "maestra" ? <Crown className="h-3.5 w-3.5 shrink-0 text-aviso" /> : null}
+        </span>
+        <span className="block truncate text-xs text-tenue">{c.email}</span>
+        <span className="mt-1 flex flex-wrap gap-1">
+          {c.roles.slice(0, 3).map((id) => {
+            const r = roles.get(id);
+            return r ? <InsigniaRol key={id} nombre={r.nombre} color={r.color} /> : null;
+          })}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function FichaCuenta({ c, roles, alVolver }: { c: Cuenta; roles: Map<string, Rol>; alVolver?: () => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        {alVolver ? <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} aria-label="Volver" /> : null}
+        <Iniciales texto={c.nombre} tam={48} />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-semibold">{c.nombre}</h2>
+          <p className="truncate text-xs text-tenue">{c.email}</p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {c.rol === "maestra" ? <Insignia tono="ok">Maestra</Insignia> : null}
+          {!c.activo ? <Insignia tono="peligro">Desactivada</Insignia> : null}
+          {c.dosPasos ? <Insignia>2FA</Insignia> : null}
+        </div>
+      </div>
+      <p className="text-xs text-tenue">
+        Creada {fmtFecha(c.creada)} · {c.sesiones} sesión(es) activa(s)
+        {c.rol === "maestra" ? " · acceso total" : ""}
+        {c.roles.length ? ` · ${c.roles.map((id) => roles.get(id)?.nombre).filter(Boolean).join(", ")}` : ""}
+      </p>
+      <Detalle key={c.id} c={c} />
+    </div>
+  );
+}
+
+function FichaCompleta(props: { c: Cuenta; roles: Map<string, Rol>; alVolver: () => void }) {
+  useModoPagina("completa");
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-fondo p-4">
+      <div className="mx-auto w-full max-w-3xl">
+        <FichaCuenta {...props} />
+      </div>
+    </div>
+  );
+}
+
 function ListaCuentas() {
   const lista = useQuery({ queryKey: ["cuentas"], queryFn: () => api<Cuenta[]>("/api/cuentas") });
-  const pgCu = usePaginado(lista.data, 10);
   const roles = useRoles();
-  const [abierta, setAbierta] = useState<string | null>(null);
+  const forma = useForma();
+  const [q, setQ] = useState("");
+  const [elegida, setElegida] = useState<string | null>(null);
   const [nueva, setNueva] = useState(false);
+  const filtradas = (lista.data ?? []).filter((c) => !q || `${c.nombre} ${c.email}`.toLowerCase().includes(q.toLowerCase()));
+  const pgCu = usePaginado(filtradas, 10);
   const rolPorId = new Map((roles.data ?? []).map((r) => [r.id, r]));
+  const ancho = forma === "pc";
+  const actual = lista.data?.find((c) => c.id === elegida) ?? (ancho ? lista.data?.[0] : undefined);
+
+  if (!ancho && actual) return <FichaCompleta c={actual} roles={rolPorId} alVolver={() => setElegida(null)} />;
+
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <Boton variante="primario" icono={Plus} onClick={() => setNueva(true)}>
-          Nueva cuenta
-        </Boton>
-      </div>
-      {lista.isLoading ? <Cargando /> : null}
-      <ErrorCaja error={lista.error} />
-      {pgCu.visibles.map((c) => (
-        <Tarjeta
-          key={c.id}
-          icono={c.rol === "maestra" ? ShieldCheck : UserCog}
-          titulo={
-            <span>
-              {c.nombre} <span className="font-normal text-tenue">· {c.email}</span>
-            </span>
-          }
-          acciones={
-            <>
-              {c.rol === "maestra" ? <Insignia tono="ok">Maestra</Insignia> : null}
-              {!c.activo ? <Insignia tono="peligro">Desactivada</Insignia> : null}
-              {c.dosPasos ? <Insignia>2FA</Insignia> : null}
-              <Boton tamano="sm" variante="fantasma" onClick={() => setAbierta(abierta === c.id ? null : c.id)}>
-                {abierta === c.id ? "Cerrar" : "Editar"}
-              </Boton>
-            </>
-          }
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            {c.roles.map((id) => {
-              const r = rolPorId.get(id);
-              return r ? <InsigniaRol key={id} nombre={r.nombre} color={r.color} /> : null;
-            })}
-            <span className="text-xs text-tenue">
-              Creada {fmtFecha(c.creada)} · {c.sesiones} sesión(es) activa(s)
-              {c.rol === "maestra" ? " · acceso total" : ""}
-            </span>
+    <div className={cx("grid grid-cols-1 gap-4", ancho && "grid-cols-[minmax(0,360px)_minmax(0,1fr)]")}>
+      <section className="min-w-0 space-y-2">
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
+            <Entrada className="pl-9" placeholder="Buscar persona" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {abierta === c.id ? (
-            <div className="mt-4">
-              <Detalle c={c} />
-            </div>
-          ) : null}
-        </Tarjeta>
-      ))}
-      {pgCu.paginas}
+          <Boton variante="primario" icono={Plus} onClick={() => setNueva(true)}>
+            Nueva
+          </Boton>
+        </div>
+        {lista.isLoading ? <Cargando /> : null}
+        <ErrorCaja error={lista.error} />
+        {lista.data && !filtradas.length ? <Vacio icono={Users} texto="Sin resultados." /> : null}
+        {pgCu.visibles.map((c) => (
+          <TarjetaPersona key={c.id} c={c} roles={rolPorId} elegida={actual?.id === c.id} alElegir={() => setElegida(c.id)} />
+        ))}
+        {pgCu.paginas}
+      </section>
+      {ancho ? (
+        <section className="min-w-0 self-start rounded-tarjeta border border-borde bg-superficie p-4">
+          {actual ? <FichaCuenta c={actual} roles={rolPorId} /> : <Vacio icono={UserCog} texto="Elige una persona." />}
+        </section>
+      ) : null}
       <Modal abierto={nueva} titulo="Nueva cuenta" alCerrar={() => setNueva(false)} ancho="max-w-2xl">
         <Nueva alCerrar={() => setNueva(false)} />
       </Modal>
     </div>
+  );
+}
+
+const CANDADOS: { titulo: string; texto: string }[] = [
+  { titulo: "Panel (Pterodactyl y Negocio y cobros)", texto: "Solo tú y los roles que elijas." },
+  { titulo: "Redes y streams", texto: "Solo tú y quien tenga el rol Invitado." },
+  { titulo: "Host local", texto: "Solo tú. No se puede dar a nadie." },
+  { titulo: "VPS, bóveda, registro y cuentas", texto: "Solo tú. No se pueden dar a nadie." },
+];
+
+function Candados() {
+  return (
+    <section className="rounded-tarjeta border border-borde bg-superficie p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+        <Lock className="h-4 w-4 text-tenue" />
+        Candados
+      </h3>
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {CANDADOS.map((x) => (
+          <div key={x.titulo} className="flex items-start gap-3 rounded-xl border border-borde bg-fondo p-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-aviso" style={{ background: "color-mix(in srgb, var(--aviso) 14%, transparent)" }}>
+              <Lock className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <b className="block text-sm">{x.titulo}</b>
+              <small className="text-xs text-tenue">{x.texto}</small>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -461,8 +561,9 @@ function ListaRoles() {
   });
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-tenue">Como en Discord: crea roles con color y permisos y asígnalos a las cuentas. Si alguien tiene varios roles, se suman sus permisos.</p>
+      <Candados />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 text-sm text-tenue">Como en Discord: crea roles con color y permisos y asígnalos a las cuentas. Si alguien tiene varios roles, se suman sus permisos.</p>
         <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>
           Nuevo rol
         </Boton>
@@ -510,7 +611,7 @@ export default function Cuentas() {
     <div className="space-y-4">
       <Encabezado
         titulo="Cuentas y permisos"
-        descripcion="Las cuentas no se borran: se desactivan. Bóveda, VPS, control remoto y demás apartados solo-maestra no se pueden otorgar."
+        descripcion="Quién entra a tu Mi Setup y qué puede hacer. Los apartados con candado no se pueden dar a nadie."
       />
       <Pestanas
         valor={pestana}

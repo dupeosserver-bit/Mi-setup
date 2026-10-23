@@ -1,13 +1,9 @@
-/**
- * Ciberseguridad: revisar tu sitio, saber si una contraseña se filtró (sin
- * enviarla), lecciones cortas y un cuaderno de laboratorio en tus notas.
- */
-import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, CheckCircle2, Eye, EyeOff, FlaskConical, Globe, KeyRound, MoveRight, XCircle } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CorreosGoogle, SeMudo } from "../components/CiberExtra";
-import { Boton, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisarError, cx } from "../components/ui";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { AlertTriangle, ArrowRight, BookOpen, Check, CheckCircle2, Eye, EyeOff, FlaskConical, Globe, KeyRound, Mail, MonitorSmartphone, NotebookPen, Plus, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { CorreosGoogle } from "../components/CiberExtra";
+import { Boton, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { usePuede } from "../lib/consultas";
 import { localeActual } from "../lib/idioma";
@@ -46,15 +42,35 @@ export async function vecesFiltrada(contrasena: string, consultar: (prefijo: str
   return 0;
 }
 
-function RevisarSitio() {
+const suave = (variable: string, pct = 14) => `color-mix(in srgb, var(${variable}) ${pct}%, transparent)`;
+
+function Cuadro({ icono: Icono, titulo, texto, color = "--acento", className, children }: { icono: LucideIcon; titulo: string; texto: string; color?: string; className?: string; children?: ReactNode }) {
+  return (
+    <section className={cx("flex min-w-0 flex-col gap-3 rounded-tarjeta border border-borde bg-superficie p-4", className)}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: suave(color, 16), color: `var(${color})` }}>
+          <Icono className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <b className="block text-sm">{titulo}</b>
+          <small className="text-xs text-tenue">{texto}</small>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function RevisarSitio({ className }: { className?: string }) {
   const [sitio, setSitio] = useState("");
   const revisar = useMutation({
     mutationFn: () => api<{ sitio: string; calificacion: number; revisiones: Revision[] }>("/api/ciberseguridad/sitio", { cuerpo: { sitio } }),
     onError: avisarError,
   });
   const r = revisar.data;
+  const color = r ? (r.calificacion >= 80 ? "--ok" : r.calificacion >= 50 ? "--aviso" : "--error") : "--acento";
   return (
-    <Tarjeta titulo="Revisar un sitio" icono={Globe}>
+    <Cuadro icono={Globe} titulo="Revisar un sitio" texto="HTTPS, cabeceras de seguridad y protección del correo (SPF/DMARC)." className={className}>
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -62,19 +78,21 @@ function RevisarSitio() {
           if (sitio.trim()) revisar.mutate();
         }}
       >
-        <Entrada value={sitio} onChange={(e) => setSitio(e.target.value)} placeholder="mexicanland.net" />
+        <Entrada value={sitio} onChange={(e) => setSitio(e.target.value)} placeholder="tusitio.com" />
         <Boton type="submit" variante="primario" cargando={revisar.isPending}>
           Revisar
         </Boton>
       </form>
-      <p className="mt-2 text-xs text-tenue">Certificado HTTPS, cabeceras de seguridad y protección del correo (SPF/DMARC). Revisa solo sitios tuyos o públicos.</p>
       <ErrorCaja error={revisar.error} />
       {r ? (
-        <div className="mt-3 space-y-2">
-          <p className="text-sm">
-            <span className={cx("text-xl font-bold", r.calificacion >= 80 ? "text-ok" : r.calificacion >= 50 ? "text-aviso" : "text-peligro")}>{r.calificacion}</span>
-            <span className="text-tenue"> / 100 · {r.sitio}</span>
-          </p>
+        <div className="grid min-h-0 gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="flex flex-col items-center justify-center gap-1 rounded-2xl px-6 py-4" style={{ background: suave(color, 12) }}>
+            <b className="text-4xl font-bold tabular-nums" style={{ color: `var(${color})` }}>
+              {r.calificacion}
+            </b>
+            <small className="text-xs text-tenue">de 100</small>
+            <small className="max-w-[10rem] truncate text-xs text-tenue">{r.sitio}</small>
+          </div>
           <ul className="divide-y divide-borde">
             {r.revisiones.map((x) => {
               const Icono = ICONO[x.estado];
@@ -90,12 +108,14 @@ function RevisarSitio() {
             })}
           </ul>
         </div>
-      ) : null}
-    </Tarjeta>
+      ) : (
+        <p className="text-xs text-tenue">Revisa solo sitios tuyos o públicos.</p>
+      )}
+    </Cuadro>
   );
 }
 
-function ContrasenaFiltrada() {
+function ContrasenaFiltrada({ className }: { className?: string }) {
   const [clave, setClave] = useState("");
   const [ver, setVer] = useState(false);
   const [resultado, setResultado] = useState<number | null>(null);
@@ -111,8 +131,9 @@ function ContrasenaFiltrada() {
       setCargando(false);
     }
   };
+  const filtrada = resultado !== null && resultado > 0;
   return (
-    <Tarjeta titulo="¿Mi contraseña se filtró?" icono={KeyRound}>
+    <Cuadro icono={KeyRound} titulo="¿Mi contraseña se filtró?" texto="Tu contraseña no sale de tu equipo." className={className}>
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -121,14 +142,7 @@ function ContrasenaFiltrada() {
         }}
       >
         <div className="relative min-w-0 flex-1">
-          <Entrada
-            type={ver ? "text" : "password"}
-            autoComplete="off"
-            value={clave}
-            onChange={(e) => setClave(e.target.value)}
-            placeholder="Escribe una contraseña"
-            className="pr-10"
-          />
+          <Entrada type={ver ? "text" : "password"} autoComplete="off" value={clave} onChange={(e) => setClave(e.target.value)} placeholder="Escribe una contraseña" className="pr-10" />
           <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-tenue" aria-label={ver ? "Ocultar" : "Mostrar"} onClick={() => setVer((v) => !v)}>
             {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
@@ -138,16 +152,15 @@ function ContrasenaFiltrada() {
         </Boton>
       </form>
       {resultado !== null ? (
-        resultado > 0 ? (
-          <p className="mt-3 rounded-xl bg-peligro/10 p-3 text-sm text-peligro">
-            Apareció {resultado.toLocaleString(localeActual())} veces en filtraciones. No la uses: cámbiala donde la tengas.
-          </p>
-        ) : (
-          <p className="mt-3 rounded-xl bg-ok/10 p-3 text-sm text-ok">No aparece en filtraciones conocidas. Aun así, usa una distinta en cada sitio.</p>
-        )
+        <p className="flex items-start gap-2 rounded-xl p-3 text-sm" style={{ background: suave(filtrada ? "--error" : "--ok", 12), color: `var(${filtrada ? "--error" : "--ok"})` }}>
+          {filtrada ? <XCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
+          {filtrada
+            ? `Apareció ${resultado.toLocaleString(localeActual())} veces en filtraciones. No la uses: cámbiala donde la tengas.`
+            : "No aparece en filtraciones conocidas. Aun así, usa una distinta en cada sitio."}
+        </p>
       ) : null}
-      <p className="mt-2 text-xs text-tenue">Tu contraseña no sale de tu equipo: solo se envían los primeros 5 caracteres de su huella (SHA-1) a Have I Been Pwned.</p>
-    </Tarjeta>
+      <p className="text-xs text-tenue">Solo se envían los primeros 5 caracteres de su huella (SHA-1) a Have I Been Pwned.</p>
+    </Cuadro>
   );
 }
 
@@ -183,66 +196,135 @@ const LECCIONES: { titulo: string; texto: string }[] = [
   },
 ];
 
+const CLAVE_LEIDAS = "mi-setup.ciber.leidas";
+
+function leidasGuardadas(): number[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_LEIDAS) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is number => typeof x === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+function Lecciones({ className }: { className?: string }) {
+  const [abierta, setAbierta] = useState<number | null>(null);
+  const [leidas, setLeidas] = useState<number[]>(leidasGuardadas);
+  const abrir = (i: number) => {
+    setAbierta(i);
+    if (leidas.includes(i)) return;
+    const nuevas = [...leidas, i];
+    setLeidas(nuevas);
+    try {
+      localStorage.setItem(CLAVE_LEIDAS, JSON.stringify(nuevas));
+    } catch {
+      return;
+    }
+  };
+  const actual = abierta === null ? null : LECCIONES[abierta];
+  return (
+    <Cuadro icono={BookOpen} titulo="Lecciones rápidas" texto={`${LECCIONES.length} lecciones cortas · ${leidas.length} leídas`} color="--aviso" className={className}>
+      <div className="flex flex-wrap gap-2">
+        {LECCIONES.map((l, i) => (
+          <button
+            key={l.titulo}
+            type="button"
+            onClick={() => abrir(i)}
+            className={cx("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs", leidas.includes(i) ? "border-transparent text-ok" : "border-borde text-tenue hover:text-texto")}
+            style={leidas.includes(i) ? { background: suave("--ok", 12) } : undefined}
+          >
+            {leidas.includes(i) ? <Check className="h-3.5 w-3.5" /> : null}
+            {l.titulo}
+          </button>
+        ))}
+      </div>
+      <Modal abierto={actual !== null} titulo={actual?.titulo ?? ""} alCerrar={() => setAbierta(null)}>
+        <p className="text-sm leading-relaxed text-tenue">{actual?.texto}</p>
+      </Modal>
+    </Cuadro>
+  );
+}
+
+function CorreosCuadro({ alVer, className }: { alVer: () => void; className?: string }) {
+  const cuentas = useQuery({
+    queryKey: ["correo-google", "cuentas"],
+    queryFn: () => api<{ configurado: boolean; limite?: number; cuentas: { id: string; email: string }[] }>("/api/google/correo/cuentas"),
+  });
+  const lista = cuentas.data?.cuentas ?? [];
+  const limite = cuentas.data?.limite ?? 10;
+  return (
+    <Cuadro icono={Mail} titulo="Correos de Google" texto={`${lista.length} de ${limite} cuentas · revisa correos peligrosos`} color="--error" className={className}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {lista.slice(0, 6).map((c) => (
+          <span key={c.id} title={c.email} className="grid h-8 w-8 place-items-center rounded-full text-xs font-semibold" style={{ background: suave("--acento", 18) }}>
+            {c.email[0]?.toUpperCase()}
+          </span>
+        ))}
+        {lista.length < limite ? (
+          <span className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-borde text-tenue">
+            <Plus className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </div>
+      <Boton tamano="sm" className="mt-auto self-start" onClick={alVer}>
+        Ver correos
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Boton>
+    </Cuadro>
+  );
+}
+
 export default function Ciberseguridad() {
   const navegar = useNavigate();
   const puedeVps = usePuede("vps_seguridad", "lectura");
-  const [abierta, setAbierta] = useState<number | null>(0);
   const [pestana, setPestana] = useState<"general" | "correos">("general");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Ciberseguridad" descripcion="Tus correos, tus contraseñas y tus sitios: revisa y protégete." />
+      <Encabezado titulo="Ciberseguridad" descripcion="Elige una herramienta y revisa en un momento." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
         opciones={[
-          { id: "general", texto: "Sitios y contraseñas" },
+          { id: "general", texto: "Herramientas" },
           { id: "correos", texto: "Correos de Google" },
         ]}
       />
       {pestana === "correos" ? <CorreosGoogle /> : null}
       {pestana === "general" ? (
         <>
-          <Tarjeta titulo="Revisar todas mis contraseñas" icono={KeyRound}>
-            <p className="text-sm text-tenue">
-              Busca en tu gestor las contraseñas filtradas, repetidas o débiles, y los sitios que tuvieron filtraciones con tu correo. Te ayuda a cambiarlas con una nueva y segura.
-            </p>
-            <Boton className="mt-3" variante="primario" icono={KeyRound} onClick={() => navegar("/seguridad/boveda?pestana=revisar")}>
-              Revisar mis contraseñas
-            </Boton>
-          </Tarjeta>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <RevisarSitio />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <RevisarSitio className="md:col-span-2 xl:row-span-2" />
             <ContrasenaFiltrada />
+            <Cuadro icono={ShieldCheck} titulo="Mis contraseñas" texto="Busca las filtradas, repetidas o débiles en tu gestor y te ayuda a cambiarlas." color="--ok">
+              <Boton tamano="sm" className="mt-auto self-start" variante="primario" onClick={() => navegar("/seguridad/boveda?pestana=revisar")}>
+                Revisar ahora
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Boton>
+            </Cuadro>
+            <CorreosCuadro alVer={() => setPestana("correos")} />
+            <Lecciones className="md:col-span-2 xl:col-span-1" />
+            <Cuadro icono={FlaskConical} titulo="Cuaderno de laboratorio" texto="Apunta tus prácticas (comandos, banderas de CTF, lo que aprendiste) en una página de tus notas." color="--texto-2">
+              <Boton tamano="sm" className="mt-auto self-start" icono={NotebookPen} onClick={() => navegar("/notas")}>
+                Abrir mis notas
+              </Boton>
+            </Cuadro>
           </div>
-          <Tarjeta titulo="Lecciones rápidas" icono={BookOpen}>
-            <ul className="divide-y divide-borde">
-              {LECCIONES.map((l, i) => (
-                <li key={l.titulo}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between py-3 text-left text-sm font-medium"
-                    onClick={() => setAbierta(abierta === i ? null : i)}
-                  >
-                    {l.titulo}
-                    <span className="text-tenue">{abierta === i ? "−" : "+"}</span>
-                  </button>
-                  {abierta === i ? <p className="pb-3 text-sm text-tenue">{l.texto}</p> : null}
-                </li>
-              ))}
-            </ul>
-          </Tarjeta>
-          <Tarjeta titulo="Se cambió de lugar" icono={MoveRight}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <SeMudo texto="Dónde tienes la sesión abierta · ahora está en Equipos" ruta="/equipos" />
-              {puedeVps ? <SeMudo texto="Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor" ruta="/vps/seguridad" /> : null}
-            </div>
-          </Tarjeta>
-          <Tarjeta titulo="Cuaderno de laboratorio" icono={FlaskConical}>
-            <p className="text-sm text-tenue">Apunta tus prácticas (comandos, banderas de CTF, lo que aprendiste) en una página de tus notas, con casillas y tablero de tareas.</p>
-            <Boton className="mt-3" icono={FlaskConical} onClick={() => navegar("/notas")}>
-              Abrir mis notas
-            </Boton>
-          </Tarjeta>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/equipos" className="inline-flex max-w-full items-center gap-2 rounded-full border border-borde px-3 py-1.5 text-xs text-tenue hover:text-texto">
+              <MonitorSmartphone className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0">
+                Dónde tienes la sesión abierta → <b className="text-texto">ahora está en Equipos</b>
+              </span>
+            </Link>
+            {puedeVps ? (
+              <Link to="/vps/seguridad" className="inline-flex max-w-full items-center gap-2 rounded-full border border-borde px-3 py-1.5 text-xs text-tenue hover:text-texto">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0">
+                  Entradas recientes y alertas → <b className="text-texto">ahora está en VPS → Seguridad del servidor</b>
+                </span>
+              </Link>
+            ) : null}
+          </div>
         </>
       ) : null}
     </div>

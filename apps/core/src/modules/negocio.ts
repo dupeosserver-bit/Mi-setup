@@ -2,7 +2,7 @@
  * Negocio: clientes y cobros (con recordatorio automático), gastos e ingresos
  * (resumen para gráficas) y notas/mejoras del negocio.
  */
-import { and, asc, desc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { businessNotes, charges, clients, transactions } from "../db/schema.js";
@@ -164,6 +164,39 @@ export function negocioRoutes(deps: ModuleDeps) {
       const ahora = deps.now();
       const filas = await db.select({ c: charges, cliente: clients.name }).from(charges).innerJoin(clients, eq(clients.id, charges.clientId)).orderBy(asc(charges.nextDue));
       return filas.map((f) => cobroDto(f.c, f.cliente, ahora));
+    });
+    app.get("/api/cobros/resumen", L("clientes"), async (request) => {
+      const { meses, moneda } = z
+        .object({ meses: z.coerce.number().int().min(1).max(24).default(6), moneda: z.string().length(3).toUpperCase().default("MXN") })
+        .parse(request.query);
+      const ahora = deps.now();
+      const inicio = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth() - (meses - 1), 1));
+      const pagos = await db
+        .select({ monto: transactions.amount, fecha: transactions.date })
+        .from(transactions)
+        .where(and(gte(transactions.date, inicio), eq(transactions.currency, moneda), eq(transactions.kind, "ingreso"), isNotNull(transactions.chargeId)));
+      const porMes = Array.from({ length: meses }, (_, i) => ({ mes: new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth() + i, 1)).toISOString().slice(0, 7), cobrado: 0 }));
+      const indice = new Map(porMes.map((m, i) => [m.mes, i]));
+      for (const p of pagos) {
+        const i = indice.get(p.fecha.toISOString().slice(0, 7));
+        if (i !== undefined) porMes[i]!.cobrado += Number(p.monto);
+      }
+      const limite = new Date(ahora.getTime() + 10 * 24 * 60 * 60 * 1000);
+      const lista = await db.select().from(charges).where(eq(charges.currency, moneda));
+      const activos = lista.filter((c) => c.status === "activo");
+      const vencidos = activos.filter((c) => c.nextDue < ahora);
+      const pronto = activos.filter((c) => c.nextDue >= ahora && c.nextDue <= limite);
+      const suma = (l: typeof lista) => l.reduce((s, c) => s + Number(c.amount), 0);
+      return {
+        moneda,
+        porMes,
+        cobradoMes: porMes.at(-1)?.cobrado ?? 0,
+        cobradoMesAnterior: porMes.at(-2)?.cobrado ?? 0,
+        porCobrar: { total: suma(pronto), cobros: pronto.length },
+        vencido: { total: suma(vencidos), clientes: new Set(vencidos.map((c) => c.clientId)).size },
+        clientesActivos: new Set(activos.map((c) => c.clientId)).size,
+        pausados: lista.filter((c) => c.status === "pausado").length,
+      };
     });
     app.post("/api/cobros", E("clientes"), async (request) => {
       const d = cobroSchema.parse(request.body);
