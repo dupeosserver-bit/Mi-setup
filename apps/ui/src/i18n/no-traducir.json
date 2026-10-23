@@ -182,5 +182,7 @@
  "try { System.out.println(\"{0}{1}:\" + String.valueOf({2})); } catch (Throwable t) { System.out.println(\"{3}{4}!\" + t); }",
  "public class Main { public static void main(String[] args) { {0} } } {1}",
  "`<input name=\"nombre\">`",
- "`display: grid;`"
+ "`display: grid;`",
+ "Supr",
+ "Ctrl+Z deshacer · Ctrl+D duplicar · Supr borrar · X cambiar colores"
 ]
