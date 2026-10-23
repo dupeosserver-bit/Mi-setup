@@ -174,10 +174,20 @@ export function chatRoutes(deps: ModuleDeps) {
             .innerJoin(users, eq(users.id, chatMembers.userId))
             .where(inArray(chatMembers.channelId, ids))
         : [];
+      const ultimos = ids.length
+        ? await db
+            .selectDistinctOn([chatMessages.channelId], { canal: chatMessages.channelId, tipo: chatMessages.kind, texto: chatMessages.body, meta: chatMessages.meta, fecha: chatMessages.createdAt })
+            .from(chatMessages)
+            .where(inArray(chatMessages.channelId, ids))
+            .orderBy(chatMessages.channelId, desc(chatMessages.createdAt))
+        : [];
       return canales.map((c) => {
         const de = miembros.filter((m) => m.canal === c.id).map((m) => ({ id: m.id, nombre: m.nombre }));
         const otro = de.find((m) => m.id !== user.id);
-        return { ...c, nombre: c.tipo === "privado" ? (otro?.nombre ?? c.nombre) : c.nombre, miembros: de };
+        const u = ultimos.find((m) => m.canal === c.id);
+        const nombreArchivo = (u?.meta as { nombre?: string } | undefined)?.nombre;
+        const ultimo = u ? { tipo: u.tipo, texto: (u.texto || nombreArchivo || "").slice(0, 140), fecha: u.fecha.toISOString() } : null;
+        return { ...c, nombre: c.tipo === "privado" ? (otro?.nombre ?? c.nombre) : c.nombre, miembros: de, ultimo };
       });
     });
 

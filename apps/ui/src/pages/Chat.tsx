@@ -1,10 +1,9 @@
-/** Chat: entre tus dispositivos, privado con otra cuenta y en grupo. */
-import { useModoPagina } from "../lib/marco";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bell, Code2, Copy, FileDown, Link2, LogOut, MessagesSquare, Mic, NotebookPen, Paperclip, Plus, Send, Settings2, Square, Trash2, User, Users, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowLeft, Bell, CalendarDays, Code2, Copy, FileDown, Laptop, Link2, LogOut, Maximize2, MessageCircle, MessagesSquare, Mic, NotebookPen, Paperclip, Plus, Search, Send, Settings2, Square, Trash2, User, Users, X, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { usePaginado } from "../components/Paginas";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api, urlServidor } from "../lib/api";
 import { guardarEnDispositivo } from "../lib/compartir";
@@ -12,14 +11,16 @@ import { extensionDe, fmtDuracion, grabarAudio, type Grabacion } from "../lib/gr
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { dispositivoActual } from "../lib/dispositivo";
 import { aInputLocal, fmtBytes, fmtFechaHora } from "../lib/formato";
+import { useForma, useModoPagina } from "../lib/marco";
 import { abrirExterno } from "../lib/plataforma";
 import { useTema } from "../lib/tiempo-real";
 
 interface Canal {
   id: string;
   nombre: string;
-  tipo: string;
+  tipo: "personal" | "privado" | "grupo";
   miembros?: { id: string; nombre: string }[];
+  ultimo?: { tipo: string; texto: string; fecha: string } | null;
 }
 
 interface Mensaje {
@@ -35,7 +36,6 @@ interface Mensaje {
   fecha: string;
 }
 
-/** Contenido de cada mensaje según su tipo. */
 function ContenidoMensaje({ m }: { m: Mensaje }) {
   const url = m.archivoUrl ? urlServidor(m.archivoUrl) : null;
   if (m.tipo === "foto" && url) {
@@ -103,7 +103,6 @@ function ContenidoMensaje({ m }: { m: Mensaje }) {
   return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
 }
 
-
 function NuevoCanal({ alTerminar }: { alTerminar: (id: string) => void }) {
   const { data: me } = useMe();
   const usuarios = useQuery({ queryKey: ["chat", "usuarios"], queryFn: () => api<{ id: string; nombre: string }[]>("/api/chat/usuarios") });
@@ -153,7 +152,50 @@ function NuevoCanal({ alTerminar }: { alTerminar: (id: string) => void }) {
   );
 }
 
-function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void }) {
+function Avatar({ canal, tamano = 42 }: { canal: Canal; tamano?: number }) {
+  const Icono = canal.tipo === "personal" ? Laptop : canal.tipo === "privado" ? User : Users;
+  const color = canal.tipo === "personal" ? "#3a7bd5" : canal.tipo === "privado" ? "#2e9e6b" : "#8b5cf6";
+  const inicial = canal.tipo === "personal" ? null : canal.nombre.trim().charAt(0).toUpperCase();
+  return (
+    <span className="grid shrink-0 place-items-center rounded-full font-semibold text-white" style={{ width: tamano, height: tamano, background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 55%, #000))` }}>
+      {inicial || <Icono className="h-[45%] w-[45%]" />}
+    </span>
+  );
+}
+
+function hora(fecha: string): string {
+  const d = new Date(fecha);
+  const hoy = new Date();
+  if (d.toDateString() === hoy.toDateString()) return d.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+}
+
+const PREVIA: Record<string, string> = { foto: "📷 Foto", voz: "🎤 Nota de voz", archivo: "📎 ", codigo: "💻 Código", recordatorio: "🔔 ", nota: "📝 " };
+
+function previa(c: Canal): string {
+  if (!c.ultimo) return c.tipo === "personal" ? "Manda algo a tus otros equipos" : "Sin mensajes todavía";
+  const pre = PREVIA[c.ultimo.tipo];
+  if (c.ultimo.tipo === "foto" || c.ultimo.tipo === "voz" || c.ultimo.tipo === "codigo") return pre ?? c.ultimo.texto;
+  return `${pre ?? ""}${c.ultimo.texto}`;
+}
+
+function Chip({ icono: Icono, texto, activo, onClick }: { icono: LucideIcon; texto: string; activo?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
+        activo ? "border-acento bg-[color-mix(in_srgb,var(--acento)_16%,transparent)] text-acento" : "border-borde bg-tarjeta text-tenue hover:text-texto",
+      )}
+    >
+      <Icono className="h-3.5 w-3.5" />
+      {texto}
+    </button>
+  );
+}
+
+function Conversacion({ canal, alVolver, completa, alExpandir, alOpciones }: { canal: Canal; alVolver: () => void; completa: boolean; alExpandir: () => void; alOpciones: () => void }) {
   const { data: me } = useMe();
   const puedeEscribir = usePuede("chat", "escritura");
   const [texto, setTexto] = useState("");
@@ -172,11 +214,16 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
     queryFn: () => api<Mensaje[]>(`/api/chat/canales/${canal.id}/mensajes`),
   });
 
+  const refrescarLista = () => void queryClient.invalidateQueries({ queryKey: ["chat", "canales"] });
   useTema<{ mensaje?: Mensaje; borrado?: string }>(temas.chat(canal.id), ({ mensaje, borrado }) => {
+    refrescarLista();
     if (borrado) return queryClient.setQueryData<Mensaje[]>(clave, (prev) => prev?.filter((m) => m.id !== borrado));
     if (mensaje) queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((m) => m.id === mensaje.id) ? prev : [...(prev ?? []), mensaje]));
   });
-  const agregar = (m: Mensaje) => queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
+  const agregar = (m: Mensaje) => {
+    queryClient.setQueryData<Mensaje[]>(clave, (prev) => (prev?.some((x) => x.id === m.id) ? prev : [...(prev ?? []), m]));
+    refrescarLista();
+  };
 
   useEffect(() => {
     if (!grabando) return;
@@ -216,12 +263,14 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
 
   const borrarMensaje = useMutation({
     mutationFn: (id: string) => api(`/api/chat/mensajes/${id}`, { metodo: "DELETE" }),
-    onSuccess: (_r, id) => queryClient.setQueryData<Mensaje[]>(clave, (prev) => prev?.filter((m) => m.id !== id)),
+    onSuccess: (_r, id) => {
+      queryClient.setQueryData<Mensaje[]>(clave, (prev) => prev?.filter((m) => m.id !== id));
+      refrescarLista();
+    },
     onError: avisarError,
   });
 
   useEffect(() => {
-    // Sin devolver nada: en Chrome reciente scrollIntoView devuelve una promesa.
     fin.current?.scrollIntoView({ block: "end" });
   }, [data?.length]);
 
@@ -244,13 +293,21 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
     onError: avisarError,
   });
 
+  const subtitulo = canal.tipo === "personal" ? "Tus equipos" : canal.tipo === "privado" ? "Mensaje privado" : `${canal.miembros?.length ?? 0} miembros`;
+
   return (
-    <div className="flex h-full min-h-[22rem] flex-col rounded-tarjeta border border-borde bg-superficie">
-      <div className="flex items-center gap-2 border-b border-borde p-3">
-        <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className="md:hidden" aria-label="Volver" />
-        <h2 className="text-sm font-semibold">{canal.nombre}</h2>
+    <div className={cx("flex min-h-0 min-w-0 flex-1 flex-col bg-superficie", !completa && "rounded-2xl border border-borde")}>
+      <div className={cx("flex shrink-0 items-center gap-2.5 border-b border-borde px-3 py-2.5", completa && "pt-[max(0.625rem,env(safe-area-inset-top))]")}>
+        <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} className={completa ? undefined : "lg:hidden"} aria-label="Volver" />
+        <Avatar canal={canal} tamano={38} />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold">{canal.nombre}</h2>
+          <p className="truncate text-xs text-tenue">{subtitulo}</p>
+        </div>
+        {canal.tipo === "grupo" ? <Boton tamano="icono" variante="fantasma" icono={Settings2} onClick={alOpciones} aria-label="Opciones del grupo" title="Opciones del grupo" /> : null}
+        {!completa ? <Boton tamano="icono" variante="fantasma" icono={Maximize2} onClick={alExpandir} className="hidden lg:inline-flex" aria-label="Abrir completo" title="Abrir completo" /> : null}
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-4 sm:px-5">
         {isLoading ? <Cargando /> : null}
         <ErrorCaja error={error} />
         {data?.length === 0 ? <Vacio icono={MessagesSquare} texto="Envía un mensaje, un enlace o un recordatorio a tus otros dispositivos." /> : null}
@@ -258,8 +315,13 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
           const mio = m.usuarioId === me?.usuario.id;
           return (
             <div key={m.id} className={cx("flex", mio ? "justify-end" : "justify-start")}>
-              <div className={cx("group relative min-w-0 max-w-[85%] rounded-2xl px-3 py-2 text-sm", mio ? "bg-acento text-black" : "bg-tarjeta")}>
-                {!mio && m.autor ? <p className="mb-0.5 text-[11px] font-semibold opacity-70">{m.autor}</p> : null}
+              <div
+                className={cx(
+                  "group relative min-w-0 max-w-[85%] rounded-2xl px-3.5 py-2 text-sm sm:max-w-[70%]",
+                  mio ? "rounded-br-md bg-acento text-black" : "rounded-bl-md bg-tarjeta",
+                )}
+              >
+                {!mio && m.autor ? <p className="mb-0.5 text-[11px] font-semibold text-acento">{m.autor}</p> : null}
                 <ContenidoMensaje m={m} />
                 {mio && puedeEscribir ? (
                   <button
@@ -285,12 +347,31 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
       </div>
       {puedeEscribir ? (
         <form
-          className="space-y-2 border-t border-borde p-3"
+          className="shrink-0 space-y-2 border-t border-borde p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             if (texto.trim()) enviar.mutate();
           }}
         >
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+            <Chip icono={Paperclip} texto="Foto o archivo" onClick={() => entradaArchivo.current?.click()} />
+            <Chip icono={Code2} texto="Código" activo={codigo} onClick={() => setCodigo((v) => !v)} />
+            <Chip icono={Bell} texto="Recordatorio" activo={recordar} onClick={() => setRecordar((v) => !v)} />
+            <Chip icono={grabando ? Square : Mic} texto={grabando ? "Enviar voz" : "Nota de voz"} activo={Boolean(grabando)} onClick={() => void voz()} />
+          </div>
+          <input
+            ref={entradaArchivo}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const lista = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              void (async () => {
+                for (const f of lista) await subirArchivo(f, f.name);
+              })();
+            }}
+          />
           {grabando ? (
             <div className="flex items-center gap-2 rounded-xl bg-fondo px-3 py-2 text-sm">
               <span className="h-2 w-2 animate-pulse rounded-full bg-peligro" />
@@ -308,36 +389,14 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
               <Entrada value={lenguaje} onChange={(e) => setLenguaje(e.target.value)} placeholder="Lenguaje (js, python…)" className="h-8 max-w-48" maxLength={30} />
             </div>
           ) : null}
-          {recordar ? (
-            <div className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-tenue" />
+          {recordar && !codigo ? (
+            <div className="flex items-center gap-2 rounded-xl bg-[color-mix(in_srgb,var(--acento)_10%,transparent)] px-3 py-1.5 text-xs">
+              <CalendarDays className="h-4 w-4 text-acento" />
+              <span>Recordar a todos:</span>
               <Entrada type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className="h-8 max-w-60" />
             </div>
           ) : null}
-          <div className="flex gap-2">
-            <Boton
-              tamano="icono"
-              variante={recordar ? "primario" : "secundario"}
-              icono={Bell}
-              onClick={() => setRecordar((v) => !v)}
-              aria-label="Enviar como recordatorio"
-              title="Enviar como recordatorio"
-            />
-            <Boton tamano="icono" variante={codigo ? "primario" : "secundario"} icono={Code2} onClick={() => setCodigo((v) => !v)} aria-label="Mandar código" title="Mandar código" />
-            <Boton tamano="icono" variante="secundario" icono={Paperclip} onClick={() => entradaArchivo.current?.click()} aria-label="Foto o archivo" title="Foto o archivo" />
-            <input
-              ref={entradaArchivo}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const lista = Array.from(e.target.files ?? []);
-                e.target.value = "";
-                void (async () => {
-                  for (const f of lista) await subirArchivo(f, f.name);
-                })();
-              }}
-            />
+          <div className="flex items-end gap-2">
             {codigo ? (
               <textarea
                 value={texto}
@@ -348,13 +407,9 @@ function Conversacion({ canal, alVolver }: { canal: Canal; alVolver: () => void 
                 className="min-w-0 flex-1 rounded-xl border border-borde bg-fondo px-3 py-2 font-mono text-xs outline-none"
               />
             ) : (
-              <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Mensaje o enlace…" maxLength={4000} />
+              <Entrada value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Escribe un mensaje o pega un enlace…" maxLength={4000} />
             )}
-            {texto.trim() || codigo ? (
-              <Boton type="submit" variante="primario" tamano="icono" icono={Send} cargando={enviar.isPending} aria-label="Enviar" />
-            ) : (
-              <Boton tamano="icono" variante={grabando ? "peligro" : "primario"} icono={grabando ? Square : Mic} onClick={() => void voz()} aria-label={grabando ? "Enviar nota de voz" : "Grabar nota de voz"} />
-            )}
+            <Boton type="submit" variante="primario" tamano="icono" icono={Send} cargando={enviar.isPending} disabled={!texto.trim()} aria-label="Enviar" />
           </div>
         </form>
       ) : null}
@@ -462,89 +517,51 @@ function OpcionesGrupo({ canal, alSalir }: { canal: Canal; alSalir: () => void }
   );
 }
 
-const SECCIONES: [string, string][] = [
-  ["personal", "Mis dispositivos"],
-  ["privado", "Privados"],
-  ["grupo", "Grupos"],
+const SECCIONES: { tipo: Canal["tipo"]; titulo: string; corto: string; icono: LucideIcon }[] = [
+  { tipo: "personal", titulo: "Mis dispositivos", corto: "Equipos", icono: Laptop },
+  { tipo: "privado", titulo: "Privados", corto: "Privados", icono: MessageCircle },
+  { tipo: "grupo", titulo: "Grupos", corto: "Grupos", icono: Users },
 ];
 
 export default function Chat() {
   const [params, setParams] = useSearchParams();
+  const forma = useForma();
   const puedeEscribir = usePuede("chat", "escritura");
   const [nuevo, setNuevo] = useState(false);
   const [privado, setPrivado] = useState(false);
   const [opciones, setOpciones] = useState(false);
+  const [menuNuevo, setMenuNuevo] = useState(false);
+  const [buscar, setBuscar] = useState("");
   const { data, isLoading, error } = useQuery({ queryKey: ["chat", "canales"], queryFn: () => api<Canal[]>("/api/chat/canales") });
-  const actual = data?.find((c) => c.id === params.get("canal")) ?? (params.get("canal") ? null : data?.[0] ?? null);
-  useModoPagina("fijo");
+  const idCanal = params.get("canal");
+  const ancho = forma === "pc";
+  const actual = data?.find((c) => c.id === idCanal) ?? (idCanal || !ancho ? null : (data?.[0] ?? null));
+  const [tipo, setTipo] = useState<Canal["tipo"]>("personal");
+  const tipoVisible = actual?.tipo ?? tipo;
+  const completa = Boolean(actual) && (params.get("completa") === "1" || (!ancho && Boolean(idCanal)));
+  useModoPagina(completa ? "completa" : "fijo");
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Encabezado
-        titulo="Chat"
-        descripcion="Mensajes entre tus dispositivos, privados con otra cuenta o en grupo."
-        acciones={
-          puedeEscribir ? (
-            <>
-              <Boton icono={User} onClick={() => setPrivado(true)}>
-                Privado
-              </Boton>
-              <Boton icono={Plus} onClick={() => setNuevo(true)}>
-                Grupo
-              </Boton>
-            </>
-          ) : null
-        }
-      />
-      <ErrorCaja error={error} />
-      {isLoading ? <Cargando /> : null}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
-        <div className={cx("min-h-0 min-w-0 space-y-3 overflow-y-auto", params.get("canal") && "hidden md:block")}>
-          {SECCIONES.map(([tipo, titulo]) => {
-            const lista = (data ?? []).filter((c) => c.tipo === tipo);
-            if (!lista.length) return null;
-            return (
-              <div key={tipo} className="space-y-1">
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-tenue">{titulo}</p>
-                {lista.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setParams({ canal: c.id })}
-                    className={cx(
-                      "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm",
-                      actual?.id === c.id ? "bg-tarjeta" : "hover:bg-tarjeta",
-                    )}
-                  >
-                    {c.tipo === "personal" ? (
-                      <MessagesSquare className="h-4 w-4 shrink-0 text-tenue" />
-                    ) : c.tipo === "privado" ? (
-                      <User className="h-4 w-4 shrink-0 text-tenue" />
-                    ) : (
-                      <Users className="h-4 w-4 shrink-0 text-tenue" />
-                    )}
-                    <span className="truncate">{c.nombre}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-        <div className={cx("flex min-h-0 min-w-0 flex-col", !params.get("canal") && "hidden md:flex")}>
-          {actual?.tipo === "grupo" ? (
-            <div className="mb-2 flex justify-end">
-              <Boton tamano="sm" variante="fantasma" icono={Settings2} onClick={() => setOpciones(true)}>
-                Opciones del grupo
-              </Boton>
-            </div>
-          ) : null}
-          {actual ? (
-            <div className="min-h-0 flex-1">
-              <Conversacion key={actual.id} canal={actual} alVolver={() => setParams({})} />
-            </div>
-          ) : null}
-        </div>
-      </div>
+  const cuentas = useMemo(() => Object.fromEntries(SECCIONES.map((s) => [s.tipo, (data ?? []).filter((c) => c.tipo === s.tipo).length])) as Record<string, number>, [data]);
+  const lista = useMemo(
+    () =>
+      (data ?? [])
+        .filter((c) => c.tipo === tipoVisible && (!buscar || c.nombre.toLowerCase().includes(buscar.toLowerCase())))
+        .sort((a, b) => (b.ultimo?.fecha ?? "").localeCompare(a.ultimo?.fecha ?? "")),
+    [data, tipoVisible, buscar],
+  );
+  const { visibles, paginas } = usePaginado(lista, 10);
+  const recientes = useMemo(() => [...(data ?? [])].sort((a, b) => (b.ultimo?.fecha ?? "").localeCompare(a.ultimo?.fecha ?? "")).slice(0, 9), [data]);
+  const seccion = SECCIONES.find((s) => s.tipo === tipoVisible) ?? SECCIONES[0]!;
+
+  const abrir = (c: Canal, expandir = false) => setParams(expandir ? { canal: c.id, completa: "1" } : { canal: c.id });
+  const elegirTipo = (t: Canal["tipo"]) => {
+    setTipo(t);
+    setBuscar("");
+    if (actual && actual.tipo !== t) setParams({});
+  };
+
+  const modales = (
+    <>
       <Modal abierto={privado} titulo="Mensaje privado: ¿con quién?" alCerrar={() => setPrivado(false)}>
         {privado ? (
           <NuevoPrivado
@@ -575,6 +592,148 @@ export default function Chat() {
           }}
         />
       </Modal>
+      <Modal abierto={menuNuevo} titulo="Nuevo chat" alCerrar={() => setMenuNuevo(false)}>
+        <div className="grid gap-2">
+          <Boton
+            variante="secundario"
+            icono={User}
+            onClick={() => {
+              setMenuNuevo(false);
+              setPrivado(true);
+            }}
+          >
+            Mensaje privado
+          </Boton>
+          <Boton
+            variante="secundario"
+            icono={Users}
+            onClick={() => {
+              setMenuNuevo(false);
+              setNuevo(true);
+            }}
+          >
+            Nuevo grupo
+          </Boton>
+        </div>
+      </Modal>
+    </>
+  );
+
+  if (completa && actual) {
+    return (
+      <div className="flex min-h-0 flex-1">
+        {forma !== "celular" ? (
+          <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2.5 overflow-y-auto border-r border-borde bg-fondo py-3" aria-label="Chats recientes">
+            {recientes.map((c) => (
+              <button key={c.id} type="button" onClick={() => abrir(c, ancho)} title={c.nombre} className={cx("rounded-full p-0.5 ring-2", c.id === actual.id ? "ring-acento" : "ring-transparent hover:ring-borde")}>
+                <Avatar canal={c} tamano={42} />
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <Conversacion key={actual.id} canal={actual} completa alVolver={() => setParams(ancho ? { canal: actual.id } : {})} alExpandir={() => undefined} alOpciones={() => setOpciones(true)} />
+        {modales}
+      </div>
+    );
+  }
+
+  const riel = (
+    <nav className="flex shrink-0 gap-1.5 lg:w-[92px] lg:flex-col" aria-label="Tipos de chat">
+      {SECCIONES.map((s) => (
+        <button
+          key={s.tipo}
+          type="button"
+          onClick={() => elegirTipo(s.tipo)}
+          className={cx(
+            "relative flex flex-1 items-center justify-center gap-2 rounded-2xl px-2 py-2.5 text-xs font-semibold lg:flex-none lg:flex-col lg:gap-1.5 lg:py-3.5",
+            tipoVisible === s.tipo ? "bg-[color-mix(in_srgb,var(--acento)_16%,transparent)] text-acento" : "bg-superficie text-tenue hover:text-texto",
+          )}
+        >
+          <s.icono className="h-5 w-5" />
+          {s.corto}
+          {cuentas[s.tipo] ? <span className="rounded-full bg-tarjeta px-1.5 text-[10px] text-tenue lg:absolute lg:right-2 lg:top-2">{cuentas[s.tipo]}</span> : null}
+        </button>
+      ))}
+      {puedeEscribir ? (
+        <button type="button" onClick={() => setMenuNuevo(true)} className="hidden items-center justify-center gap-1.5 rounded-2xl border border-dashed border-borde py-3.5 text-xs font-semibold text-tenue hover:text-texto lg:mt-auto lg:flex lg:flex-col">
+          <Plus className="h-5 w-5" />
+          Nuevo
+        </button>
+      ) : null}
+    </nav>
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Encabezado
+        titulo="Chat"
+        descripcion="Mensajes entre tus dispositivos, privados con otra cuenta o en grupo."
+        acciones={
+          puedeEscribir ? (
+            <>
+              <Boton icono={User} onClick={() => setPrivado(true)}>
+                Privado
+              </Boton>
+              <Boton icono={Plus} onClick={() => setNuevo(true)}>
+                Grupo
+              </Boton>
+            </>
+          ) : null
+        }
+      />
+      <ErrorCaja error={error} />
+      {isLoading ? <Cargando /> : null}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        {riel}
+        <section className={cx("flex min-h-0 min-w-0 flex-col rounded-2xl border border-borde bg-superficie p-3 lg:w-[320px] lg:shrink-0", actual && "hidden lg:flex", !actual && "flex-1 lg:flex-none")}>
+          <h3 className="mb-2 px-1 text-sm font-semibold">{seccion.titulo}</h3>
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
+            <Entrada className="pl-9" placeholder={`Buscar en ${seccion.titulo.toLowerCase()}…`} value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {visibles.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => abrir(c)}
+                className={cx("flex w-full items-start gap-3 rounded-xl px-2 py-2.5 text-left", actual?.id === c.id ? "bg-tarjeta" : "hover:bg-tarjeta")}
+              >
+                <Avatar canal={c} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <b className="min-w-0 flex-1 truncate text-sm">{c.nombre}</b>
+                    {c.ultimo ? <small className="shrink-0 text-[11px] text-tenue">{hora(c.ultimo.fecha)}</small> : null}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-tenue">{previa(c)}</span>
+                </span>
+              </button>
+            ))}
+            {!lista.length && !isLoading ? (
+              <Vacio
+                icono={seccion.icono}
+                texto={buscar ? "Sin resultados." : tipoVisible === "privado" ? "Aún no tienes chats privados." : tipoVisible === "grupo" ? "Aún no estás en ningún grupo." : "Sin chats."}
+                accion={
+                  puedeEscribir && !buscar && tipoVisible !== "personal" ? (
+                    <Boton tamano="sm" variante="primario" icono={Plus} onClick={() => (tipoVisible === "privado" ? setPrivado(true) : setNuevo(true))}>
+                      {tipoVisible === "privado" ? "Mensaje privado" : "Nuevo grupo"}
+                    </Boton>
+                  ) : undefined
+                }
+              />
+            ) : null}
+          </div>
+          {paginas}
+        </section>
+        {actual ? (
+          <Conversacion key={actual.id} canal={actual} completa={false} alVolver={() => setParams({})} alExpandir={() => abrir(actual, true)} alOpciones={() => setOpciones(true)} />
+        ) : (
+          <div className="hidden min-h-0 flex-1 place-items-center rounded-2xl border border-dashed border-borde lg:grid">
+            <Vacio icono={MessagesSquare} texto="Elige un chat para empezar." />
+          </div>
+        )}
+      </div>
+      {modales}
     </div>
   );
 }
