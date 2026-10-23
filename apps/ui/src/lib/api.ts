@@ -10,8 +10,10 @@ import { useSesion } from "./sesion";
 const CLAVE_SERVIDOR = "mi-setup.servidor";
 /** Servidor con el que se compiló la app (vacío en la versión web: usa el mismo sitio). */
 export const SERVIDOR_PREDETERMINADO = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+/** Versión web de la página oficial (misetup.…/app): no trae servidor, la persona escribe el suyo. */
+export const WEB_OFICIAL = import.meta.env.VITE_WEB === "1";
 /** Las apps de PC y celular pueden conectarse a otro servidor de Mi Setup (p. ej. el de un familiar). */
-export const PUEDE_CAMBIAR_SERVIDOR = Boolean(SERVIDOR_PREDETERMINADO);
+export const PUEDE_CAMBIAR_SERVIDOR = Boolean(SERVIDOR_PREDETERMINADO) || WEB_OFICIAL;
 
 function servidorGuardado(): string | null {
   try {
@@ -22,6 +24,19 @@ function servidorGuardado(): string | null {
 }
 
 export const API_BASE = ((PUEDE_CAMBIAR_SERVIDOR && servidorGuardado()) || SERVIDOR_PREDETERMINADO).replace(/\/$/, "");
+/** En la versión web todavía no se escribe la dirección del servidor. */
+export const FALTA_SERVIDOR = WEB_OFICIAL && !API_BASE;
+
+/** "setup.tudominio.com" o "https://setup.tudominio.com/" → "https://setup.tudominio.com" (null si no sirve). */
+export function origenServidor(texto: string): string | null {
+  const limpio = texto.trim();
+  try {
+    const u = new URL(/^[a-z]+:\/\//i.test(limpio) ? limpio : `https://${limpio}`);
+    return u.protocol === "https:" && u.hostname.includes(".") ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Dominio de los sitios: el del servidor sin su primera parte (setup.midominio.com → midominio.com). */
 export function dominioDeSitios(): string {

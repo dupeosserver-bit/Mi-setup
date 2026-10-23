@@ -4936,5 +4936,18 @@
 "≈ {0} USD · la IA puede redactar y tú apruebas": "≈ {0} USD · l'IA peut rédiger et tu approuves",
 "Publicados": "Publiés",
 "Seguridad más clara": "Sécurité plus claire",
-"Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Vos sessions sont maintenant dans Appareils et les connexions au serveur dans VPS. Vous pouvez lier jusqu'à 10 comptes Google."
+"Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Vos sessions sont maintenant dans Appareils et les connexions au serveur dans VPS. Vous pouvez lier jusqu'à 10 comptes Google.",
+"Servidores en mi PC (host local)": "Serveurs sur mon PC (hôte local)",
+"La terminal de PowerShell de tu PC": "Le terminal PowerShell de votre PC",
+"Autocompletar contraseñas": "Saisie automatique des mots de passe",
+"Entrar con huella": "Connexion par empreinte",
+"Qué no funciona en el navegador": "Ce qui ne marche pas dans le navigateur",
+"Para eso descarga la app de Windows o de Android en la página oficial.": "Pour cela, téléchargez l'app Windows ou Android sur la page officielle.",
+"Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com": "Saisissez l'adresse de votre Mi Setup, ex. setup.votredomaine.com",
+"Usa Mi Setup en el navegador": "Utilisez Mi Setup dans le navigateur",
+"Sin descargar nada. Escribe la dirección de tu Mi Setup y entra con tu cuenta.": "Rien à télécharger. Saisissez l'adresse de votre Mi Setup et connectez-vous avec votre compte.",
+"Dirección de tu Mi Setup": "Adresse de votre Mi Setup",
+"En el celular: menú del navegador → «Agregar a inicio» y se abre como app.": "Sur le téléphone : menu du navigateur → « Ajouter à l'écran d'accueil » et elle s'ouvre comme une app.",
+"¿Todavía no tienes Mi Setup?": "Vous n'avez pas encore Mi Setup ?",
+"Instálalo en tu VPS": "Installez-le sur votre VPS"
 }

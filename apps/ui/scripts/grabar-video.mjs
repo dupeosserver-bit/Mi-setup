@@ -10,6 +10,7 @@
  * Guarda apps/core/sitio-oficial/video/recorrido.webm y recorrido.png (la imagen
  * que se ve mientras carga el video).
  */
+/* global document, history, dispatchEvent, PopStateEvent, setTimeout -- lo de evaluate() corre en el navegador */
 import { mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";

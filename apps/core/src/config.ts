@@ -98,6 +98,14 @@ export const envBase = z.object({
     UI_DIR: optionalString,
     /** Demo pública compilada (apps/ui con --mode demo); se sirve en /demo/. */
     DEMO_DIR: optionalString,
+    /** Versión web de la página oficial (apps/ui con --mode web); se sirve en misetup.DOMINIO/app/. */
+    WEB_DIR: optionalString,
+    /**
+     * Página desde la que la gente usa Mi Setup en el navegador sin descargar nada
+     * (misetup.mexicanland.net/app). Se permite por CORS en cualquier instalación;
+     * vacío = no se permite.
+     */
+    APP_WEB_ORIGEN: z.string().default("https://misetup.mexicanland.net"),
     /** Carpeta de imágenes subidas. En Docker: /data/uploads (volumen). */
     UPLOADS_DIR: optionalString,
     /** Solo desarrollo: "1" usa Postgres embebido en .data/pglite (sin Docker). */
@@ -137,6 +145,7 @@ export interface Config {
   /** Carpeta de la UI compilada (null = no se sirve UI). */
   readonly uiDir: string | null;
   readonly demoDir: string | null;
+  readonly webDir: string | null;
   readonly uploadsDir: string;
 }
 
@@ -158,6 +167,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
 
   // La app de Android (Capacitor) carga la UI desde https://localhost.
   const corsOrigins = [`https://${env.APP_HOST}`, "https://localhost", "capacitor://localhost"];
+  if (/^https:\/\/[a-z0-9.-]+$/.test(env.APP_WEB_ORIGEN)) corsOrigins.push(env.APP_WEB_ORIGEN);
   if (!isProduction) corsOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
 
   const ntfyUrl = env.NTFY_URL ?? `https://${env.NTFY_HOST}`;
@@ -170,5 +180,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
 
   const demoDir = env.DEMO_DIR ?? (isProduction ? null : fileURLToPath(new URL("../../ui/dist-demo", import.meta.url)));
 
-  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl, uiDir, demoDir, uploadsDir };
+  const webDir = env.WEB_DIR ?? (isProduction ? null : fileURLToPath(new URL("../../ui/dist-web", import.meta.url)));
+
+  return { env, isProduction, databaseUrl: url.toString(), corsOrigins, ntfyUrl, uiDir, demoDir, webDir, uploadsDir };
 }

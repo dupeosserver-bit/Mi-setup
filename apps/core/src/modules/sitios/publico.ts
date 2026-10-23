@@ -16,7 +16,15 @@ import type { ModuleDeps } from "../common.js";
 import { carpetaDescargas, listarDescargas, tipoDescarga } from "../descargas.js";
 import { carpetaArchivos } from "../herramientas.js";
 import { CSP_DEMO } from "../../static-ui.js";
+import { SLUG_OFICIAL } from "./oficial.js";
 import { VERSION } from "../../version.js";
+
+/**
+ * Versión web de la página oficial (misetup.…/app): habla con el Mi Setup que la
+ * persona escriba, así que puede conectarse a cualquier servidor https.
+ */
+export const CSP_APP_WEB =
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' blob: https:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 /** Videos que se ven dentro de la página (no se descargan). */
 export const VIDEO_EN_LINEA = /^video\/(mp4|webm)$/;
@@ -355,27 +363,45 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
         .send(createReadStream(join(carpetaDescargas(deps), nombre)));
     });
 
-    // ---------------------------------------------------------- demo de Mi Setup (sitio oficial), sin datos reales
+    // ------------------------------------- demo y versión web de Mi Setup (sitio oficial), apps ya compiladas
     const TIPOS: Record<string, string> = { ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8", ".webmanifest": "application/manifest+json" };
-    const demo = async (request: FastifyRequest, reply: FastifyReply) => {
-      const s = await sitioDe(request);
-      const raiz = deps.config.demoDir;
-      if (!((s.settings ?? {}) as AjustesSitio).demo || !raiz || !existsSync(join(raiz, "index.html"))) throw new HttpError(404, "No encontrado");
+    /** Un archivo de la app compilada en `raiz`; lo que no existe es la propia app (index.html). */
+    const servirApp = async (request: FastifyRequest, reply: FastifyReply, raiz: string, csp: string) => {
       const resto = decodeURIComponent(((request.params as { "*"?: string })["*"] ?? "").split("?")[0] ?? "");
       const pedido = resolve(raiz, resto);
       const info = pedido.startsWith(resolve(raiz) + sep) ? await stat(pedido).catch(() => null) : null;
       const archivo = info?.isFile() ? pedido : join(raiz, "index.html");
       const tipo = TIPOS[extname(archivo)] ?? "application/octet-stream";
-      reply.removeHeader("x-frame-options");
       return reply
-        .header("content-security-policy", CSP_DEMO.replace("frame-ancestors 'self' https:", "frame-ancestors 'self'"))
-        .header("cache-control", archivo.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable")
+        .header("content-security-policy", csp)
+        .header("cache-control", archivo.endsWith("index.html") || archivo.endsWith(".webmanifest") ? "no-cache" : "public, max-age=31536000, immutable")
         .header("x-content-type-options", "nosniff")
         .type(tipo)
         .send(createReadStream(archivo));
     };
+    const hayApp = (raiz: string | null): raiz is string => Boolean(raiz && existsSync(join(raiz, "index.html")));
+
+    const demo = async (request: FastifyRequest, reply: FastifyReply) => {
+      const s = await sitioDe(request);
+      const raiz = deps.config.demoDir;
+      if (!((s.settings ?? {}) as AjustesSitio).demo || !hayApp(raiz)) throw new HttpError(404, "No encontrado");
+      reply.removeHeader("x-frame-options");
+      return servirApp(request, reply, raiz, CSP_DEMO.replace("frame-ancestors 'self' https:", "frame-ancestors 'self'"));
+    };
     app.get("/__sitio/demo", publico, (request, reply) => reply.redirect("/demo/"));
     app.get("/__sitio/demo/*", publico, demo);
+
+    // Versión web (/app): solo en la página oficial; en los demás sitios /app es una página más.
+    const appWeb = async (request: FastifyRequest, reply: FastifyReply) => {
+      const s = await sitioDe(request).catch(() => null);
+      const raiz = deps.config.webDir;
+      const resto = (request.params as { "*"?: string })["*"];
+      if (s?.slug !== SLUG_OFICIAL || !hayApp(raiz)) return paginaDelSitio(request, reply, rutaDe(resto === undefined ? "app" : `app/${resto}`));
+      if (resto === undefined) return reply.redirect("/app/");
+      return servirApp(request, reply, raiz, CSP_APP_WEB);
+    };
+    app.get("/__sitio/app", publico, appWeb);
+    app.get("/__sitio/app/*", publico, appWeb);
 
     app.get("/__sitio/_ms/bloque/:tipo", publico, async (request) => {
       const s = await sitioDe(request);
@@ -411,34 +437,40 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
     });
 
     // Páginas: "/" y "/otra-pagina". Las privadas piden entrar con una cuenta del sitio.
-    app.get("/__sitio/*", publico, async (request, reply) => {
-      const host = limpiarHost(request.headers.host);
-      let s: FilaSitio;
-      try {
-        s = await sitioDe(request);
-      } catch {
-        return enviarHtml(reply, paginaSimple("Sitio no disponible", `<h1>🚧</h1><p>Este sitio todavía no está publicado.</p>`), 404);
-      }
-      const aviso = paginaEstado(s);
-      if (aviso) {
-        if (aviso.codigo === 503) reply.header("retry-after", "3600");
-        return enviarHtml(reply, aviso.html, aviso.codigo);
-      }
-      const ruta = ("/" + ((request.params as { "*": string })["*"] ?? "")).replace(/\/+$/, "").split("?")[0] || "/";
-      const paginas = (s.published as { paginas?: PaginaPublicada[] }).paginas ?? [];
-      const pagina = paginas.find((p) => p.ruta === ruta);
-      if (!pagina) return enviarHtml(reply, paginaSimple("No encontrado", `<h1>404</h1><p>Esa página no existe.</p><p><a style="color:#9cf" href="/">Ir al inicio</a></p>`), 404);
-      if (pagina.privada && !leerMiembro(secreto(), s.id, leerCookie(request, "ms_sesion"), Date.now())) {
-        return enviarHtml(
-          reply,
-          paginaSimple(
-            "Entrar",
-            `<h2>Área privada</h2><p>Entra con tu cuenta de ${esc(s.name)}.</p><form data-ms-login data-ms-destino="${esc(ruta)}"><input name="correo" type="email" placeholder="Correo" required><input name="clave" type="password" placeholder="Contraseña" required><button>Entrar</button></form>`,
-          ),
-          401,
-        );
-      }
-      return enviarHtml(reply, armarPagina(s, pagina, `https://${host}`));
-    });
+    app.get("/__sitio/*", publico, (request, reply) => paginaDelSitio(request, reply, rutaDe((request.params as { "*": string })["*"] ?? "")));
   };
+
+  /** "otra-pagina/" o "otra-pagina?x=1" → "/otra-pagina" ("" → "/"). */
+  function rutaDe(resto: string): string {
+    return ("/" + resto).replace(/\/+$/, "").split("?")[0] || "/";
+  }
+
+  async function paginaDelSitio(request: FastifyRequest, reply: FastifyReply, ruta: string) {
+    const host = limpiarHost(request.headers.host);
+    let s: FilaSitio;
+    try {
+      s = await sitioDe(request);
+    } catch {
+      return enviarHtml(reply, paginaSimple("Sitio no disponible", `<h1>🚧</h1><p>Este sitio todavía no está publicado.</p>`), 404);
+    }
+    const aviso = paginaEstado(s);
+    if (aviso) {
+      if (aviso.codigo === 503) reply.header("retry-after", "3600");
+      return enviarHtml(reply, aviso.html, aviso.codigo);
+    }
+    const paginas = (s.published as { paginas?: PaginaPublicada[] }).paginas ?? [];
+    const pagina = paginas.find((p) => p.ruta === ruta);
+    if (!pagina) return enviarHtml(reply, paginaSimple("No encontrado", `<h1>404</h1><p>Esa página no existe.</p><p><a style="color:#9cf" href="/">Ir al inicio</a></p>`), 404);
+    if (pagina.privada && !leerMiembro(secreto(), s.id, leerCookie(request, "ms_sesion"), Date.now())) {
+      return enviarHtml(
+        reply,
+        paginaSimple(
+          "Entrar",
+          `<h2>Área privada</h2><p>Entra con tu cuenta de ${esc(s.name)}.</p><form data-ms-login data-ms-destino="${esc(ruta)}"><input name="correo" type="email" placeholder="Correo" required><input name="clave" type="password" placeholder="Contraseña" required><button>Entrar</button></form>`,
+        ),
+        401,
+      );
+    }
+    return enviarHtml(reply, armarPagina(s, pagina, `https://${host}`));
+  }
 }

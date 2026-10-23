@@ -23,3 +23,4 @@ docs/sitio-web/preview-completo.html
 !apps/ui/.env.movil-publica
 !apps/ui/.env.demo
 dist-demo/
+dist-web/

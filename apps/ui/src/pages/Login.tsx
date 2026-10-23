@@ -1,10 +1,10 @@
 import { IDIOMAS_APP, type IdiomaApp, type LoginResponse } from "@mi-setup/shared";
-import { LogIn, Server } from "lucide-react";
+import { ArrowRight, LogIn, Server } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo, useAparienciaPublica } from "../components/Logo";
 import { Boton, Campo, Entrada, ErrorCaja, Selector } from "../components/ui";
-import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, api, cambiarServidor, servidoresRecordados } from "../lib/api";
+import { API_BASE, FALTA_SERVIDOR, PUEDE_CAMBIAR_SERVIDOR, SERVIDOR_PREDETERMINADO, WEB_OFICIAL, api, cambiarServidor, origenServidor, servidoresRecordados } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { idiomaGuardado, ponerIdioma } from "../lib/idioma";
 import { nombrePorDefecto } from "../lib/plataforma";
@@ -16,15 +16,11 @@ function Servidor() {
   const [url, setUrl] = useState(API_BASE);
   const [error, setError] = useState<string | null>(null);
   const guardar = () => {
-    try {
-      const u = new URL(url.trim());
-      if (u.protocol !== "https:") throw new Error();
-      cambiarServidor(u.origin);
-    } catch {
-      setError("Escribe la dirección completa con https://, p. ej. https://setup.tudominio.com");
-    }
+    const origen = origenServidor(url);
+    if (origen) cambiarServidor(origen);
+    else setError("Escribe la dirección completa con https://, p. ej. https://setup.tudominio.com");
   };
-  const otros = servidoresRecordados().filter((s) => !s.actual);
+  const otros = servidoresRecordados().filter((s) => !s.actual && s.url);
   if (!editando) {
     return (
       <div className="space-y-1">
@@ -40,7 +36,7 @@ function Servidor() {
       ) : null}
       <p className="flex items-center justify-center gap-1 text-center text-xs text-tenue">
         <Server className="h-3.5 w-3.5" />
-        <span className="truncate">{new URL(API_BASE).host}</span>
+        <span className="truncate">{API_BASE ? new URL(API_BASE).host : ""}</span>
         <button type="button" className="underline hover:text-texto" onClick={() => setEditando(true)}>
           Cambiar servidor
         </button>
@@ -58,7 +54,7 @@ function Servidor() {
         <Boton tamano="sm" variante="primario" onClick={guardar}>
           Usar este servidor
         </Boton>
-        {API_BASE !== SERVIDOR_PREDETERMINADO ? (
+        {SERVIDOR_PREDETERMINADO && API_BASE !== SERVIDOR_PREDETERMINADO ? (
           <Boton tamano="sm" variante="fantasma" onClick={() => cambiarServidor(null)}>
             Volver al predeterminado
           </Boton>
@@ -71,7 +67,78 @@ function Servidor() {
   );
 }
 
+/** Lo que solo existe en las apps de PC y celular. */
+const SOLO_EN_APPS = ["Servidores en mi PC (host local)", "La terminal de PowerShell de tu PC", "Autocompletar contraseñas", "Entrar con huella"];
+
+function SoloEnApps() {
+  return (
+    <details className="rounded-xl border border-borde px-3 py-2 text-xs text-tenue">
+      <summary className="cursor-pointer">Qué no funciona en el navegador</summary>
+      <ul className="mt-2 list-disc space-y-1 pl-4">
+        {SOLO_EN_APPS.map((t) => (
+          <li key={t}>{t}</li>
+        ))}
+      </ul>
+      <p className="mt-2">Para eso descarga la app de Windows o de Android en la página oficial.</p>
+    </details>
+  );
+}
+
+/** Versión web de la página oficial: primero se escribe la dirección del Mi Setup de la persona. */
+function PrimerServidor() {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const recordados = servidoresRecordados().filter((s) => s.url);
+  const seguir = (e: FormEvent) => {
+    e.preventDefault();
+    const origen = origenServidor(url);
+    if (origen) cambiarServidor(origen);
+    else setError("Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com");
+  };
+  return (
+    <div className="flex min-h-full items-center justify-center p-4">
+      <form onSubmit={seguir} className="w-full max-w-sm space-y-4 rounded-tarjeta border border-borde bg-superficie p-6">
+        <div className="flex flex-col items-center gap-2 pb-1 text-center">
+          <Logo tamano="lg" />
+          <h1 className="text-lg font-semibold">Usa Mi Setup en el navegador</h1>
+          <p className="text-sm text-tenue">Sin descargar nada. Escribe la dirección de tu Mi Setup y entra con tu cuenta.</p>
+        </div>
+        <Campo etiqueta="Dirección de tu Mi Setup">
+          <Entrada value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" autoComplete="url" placeholder="setup.tudominio.com" required autoFocus />
+        </Campo>
+        {error ? <p className="text-xs text-peligro">{error}</p> : null}
+        <Boton type="submit" variante="primario" className="w-full" icono={ArrowRight}>
+          Continuar
+        </Boton>
+        {recordados.length ? (
+          <div className="flex flex-wrap justify-center gap-1">
+            {recordados.map((s) => (
+              <button key={s.url} type="button" onClick={() => cambiarServidor(s.url)} className="rounded-full border border-borde px-2 py-0.5 text-[11px] text-tenue hover:text-texto">
+                {new URL(s.url).host}
+                {s.nombre ? ` · ${s.nombre}` : ""}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <p className="text-center text-xs text-tenue">En el celular: menú del navegador → «Agregar a inicio» y se abre como app.</p>
+        <SoloEnApps />
+        <p className="text-center text-xs text-tenue">
+          ¿Todavía no tienes Mi Setup?{" "}
+          <a href="/instalar" className="underline hover:text-texto">
+            Instálalo en tu VPS
+          </a>
+        </p>
+      </form>
+    </div>
+  );
+}
+
 export default function Login() {
+  if (FALTA_SERVIDOR) return <PrimerServidor />;
+  return <Entrar />;
+}
+
+function Entrar() {
   const navegar = useNavigate();
   const guardar = useSesion((s) => s.guardar);
   const { data: apariencia } = useAparienciaPublica();
@@ -135,6 +202,7 @@ export default function Login() {
           Entrar
         </Boton>
         {PUEDE_CAMBIAR_SERVIDOR ? <Servidor /> : null}
+        {WEB_OFICIAL ? <SoloEnApps /> : null}
         <Idioma />
       </form>
     </div>

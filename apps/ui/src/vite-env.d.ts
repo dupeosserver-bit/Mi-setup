@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_EDICION?: string;
   /** "1" compila la demo pública (sin servidor, datos de ejemplo). */
   readonly VITE_DEMO?: string;
+  /** "1" en la versión web de la página oficial (/app): se elige el servidor al entrar. */
+  readonly VITE_WEB?: string;
 }
 
 interface ImportMeta {

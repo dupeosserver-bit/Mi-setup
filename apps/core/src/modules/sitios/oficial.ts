@@ -157,7 +157,7 @@ export function armarSitioOficial(img: (nombre: string) => string | null, wiki: 
     inicio: `${img("recorrido") ? `<div class="heroe-texto">` : `<div class="heroe"><div>`}<span class="etiqueta">Código abierto · MIT · v${esc(version)}</span>
 <h1>Tu servidor, tus apps y tu día <span>en un solo lugar</span></h1>
 <p class="sub">Mi Setup se instala en tu propio VPS y lo usas desde la PC, el celular o el navegador: terminal, archivos, sitios web, finanzas, notas e IA. Tus datos se quedan contigo.</p>
-<div class="fila" style="margin-top:24px"><a class="boton primario" href="/descargas">⬇ Descargar gratis</a><a class="boton" href="/demo-en-vivo">Probar la demo</a></div></div>
+<div class="fila" style="margin-top:24px"><a class="boton primario" href="/descargas">⬇ Descargar gratis</a><a class="boton" href="/app/">🌐 Usar en el navegador</a><a class="boton" href="/demo-en-vivo">Probar la demo</a></div></div>
 ${img("recorrido") ? recorrido() : `<div>${foto("inicio", "Inicio de Mi Setup en la PC")}</div></div>`}
 <div class="rejilla" style="margin-top:70px">
 ${tarjeta("🔒", "Privado de verdad", "Corre en tu VPS. Contraseñas cifradas, 2FA, huella y avisos de inicio de sesión.")}
@@ -198,6 +198,7 @@ ${tarjeta("📈", "Novedades", "Noticias, cripto, inversiones y tipo de cambio."
 <div data-ms-descargas>Cargando descargas…</div>
 <div class="rejilla" style="margin-top:28px">
 <div class="tarjeta"><div class="icono">🖥️</div><h3>Servidor</h3><p>Código fuente con Docker para Ubuntu 22.04 o 24.04.</p><p style="margin-top:12px"><a class="boton" href="/instalar">Cómo instalar</a></p></div>
+<div class="tarjeta"><div class="icono">🌐</div><h3>En el navegador</h3><p>Sin descargar nada: escribe la dirección de tu Mi Setup y entra. En el celular, «Agregar a inicio» la deja como app. No trae Servidores en mi PC, la terminal de PowerShell, autocompletar ni huella.</p><p style="margin-top:12px"><a class="boton" href="/app/">Usar en el navegador</a></p></div>
 <div class="tarjeta"><div class="icono">🐙</div><h3>GitHub</h3><p>Todo el código, abierto y con licencia MIT.</p><p style="margin-top:12px"><a class="boton" href="${GITHUB}" target="_blank" rel="noopener">Abrir GitHub</a></p></div>
 </div>`,
 

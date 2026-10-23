@@ -4936,5 +4936,18 @@
 "≈ {0} USD · la IA puede redactar y tú apruebas": "≈ {0} USD · AI can draft and you approve",
 "Publicados": "Posted",
 "Seguridad más clara": "Clearer security",
-"Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Your sessions are now in Devices and server sign-ins are in VPS. You can link up to 10 Google accounts."
+"Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Your sessions are now in Devices and server sign-ins are in VPS. You can link up to 10 Google accounts.",
+"Servidores en mi PC (host local)": "Servers on my PC (local host)",
+"La terminal de PowerShell de tu PC": "Your PC's PowerShell terminal",
+"Autocompletar contraseñas": "Password autofill",
+"Entrar con huella": "Sign in with fingerprint",
+"Qué no funciona en el navegador": "What doesn't work in the browser",
+"Para eso descarga la app de Windows o de Android en la página oficial.": "For that, download the Windows or Android app from the official site.",
+"Escribe la dirección de tu Mi Setup, p. ej. setup.tudominio.com": "Type the address of your Mi Setup, e.g. setup.yourdomain.com",
+"Usa Mi Setup en el navegador": "Use Mi Setup in the browser",
+"Sin descargar nada. Escribe la dirección de tu Mi Setup y entra con tu cuenta.": "Nothing to download. Type the address of your Mi Setup and sign in with your account.",
+"Dirección de tu Mi Setup": "Your Mi Setup address",
+"En el celular: menú del navegador → «Agregar a inicio» y se abre como app.": "On your phone: browser menu → “Add to Home screen” and it opens like an app.",
+"¿Todavía no tienes Mi Setup?": "Don't have Mi Setup yet?",
+"Instálalo en tu VPS": "Install it on your VPS"
 }
