@@ -561,15 +561,15 @@ export function novedadesRoutes(deps: ModuleDeps) {
       );
     });
 
-    /** Clima a detalle: hora por hora (48 h), ayer para comparar, salida y puesta del sol, UV. */
+    /** Clima a detalle: hora por hora de ayer y los próximos 10 días (para ver cualquier día), sol y UV. */
     app.get("/api/novedades/clima/detalle", leer, async (request) => {
       const { lat, lon } = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) }).parse(request.query);
       return conCache(`clima-detalle:${lat.toFixed(2)}:${lon.toFixed(2)}`, 10 * 60_000, () =>
         pedirJson<unknown>(
           "Open-Meteo",
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&past_days=1&forecast_days=3` +
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&past_days=1&forecast_days=10` +
             "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day,uv_index,pressure_msl,visibility" +
-            "&hourly=temperature_2m,precipitation_probability,weather_code,is_day,apparent_temperature,wind_speed_10m" +
+            "&hourly=temperature_2m,precipitation_probability,weather_code,is_day,apparent_temperature,wind_speed_10m,relative_humidity_2m" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max",
         ),
       );

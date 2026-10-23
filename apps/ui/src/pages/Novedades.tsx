@@ -105,31 +105,39 @@ interface ClimaDetalle {
     precipitation_probability: number[];
     weather_code: number[];
     is_day: number[];
+    apparent_temperature?: number[];
+    wind_speed_10m?: number[];
+    relative_humidity_2m?: number[];
   };
   daily: {
     time: string[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
+    weather_code?: number[];
     sunrise: string[];
     sunset: string[];
     uv_index_max: number[];
   };
 }
 
-/** Hora por hora (como el clima de Samsung): las próximas 24 h con su línea de temperatura y la lluvia. */
-function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
-  const q = useQuery({
+const useClimaDetalle = (lat: number, lon: number, activo = true) =>
+  useQuery({
     queryKey: ["novedades", "clima-detalle", lat, lon],
     queryFn: () => api<ClimaDetalle>(`/api/novedades/clima/detalle?lat=${lat}&lon=${lon}`),
     refetchInterval: 15 * 60_000,
+    enabled: activo,
   });
+
+/** Hora por hora (como el clima de Samsung): las próximas 24 h, o las de `dia` si eliges otro día. */
+function HoraPorHora({ lat, lon, dia }: { lat: number; lon: number; dia: string | null }) {
+  const q = useClimaDetalle(lat, lon);
   const d = q.data;
   if (!d) return q.isLoading ? <Cargando /> : <ErrorCaja error={q.error} />;
   // «Ahora» en la hora del lugar (no la de tu teléfono).
   const ahora = new Date(Date.now() + d.utc_offset_seconds * 1000).toISOString().slice(0, 13);
   const inicio = Math.max(
     0,
-    d.hourly.time.findIndex((t) => t.slice(0, 13) >= ahora),
+    d.hourly.time.findIndex((t) => (dia ? t.slice(0, 10) === dia : t.slice(0, 13) >= ahora)),
   );
   const horas = d.hourly.time.slice(inicio, inicio + 24).map((t, i) => ({
     hora: t,
@@ -138,7 +146,7 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
     codigo: d.hourly.weather_code[inicio + i] ?? 0,
     dia: d.hourly.is_day[inicio + i] === 1,
   }));
-  const hoy = ahora.slice(0, 10);
+  const hoy = dia ?? ahora.slice(0, 10);
   const iHoy = d.daily.time.indexOf(hoy);
   const ayer = iHoy > 0 ? iHoy - 1 : -1;
   const manana = iHoy >= 0 ? iHoy + 1 : -1;
@@ -164,7 +172,7 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
   };
   return (
     <>
-      <Tarjeta titulo="Hora por hora">
+      <Tarjeta titulo={dia ? `Hora por hora · ${new Date(`${dia}T12:00:00`).toLocaleDateString(localeActual(), { weekday: "long", day: "numeric" })}` : "Hora por hora"}>
         <div className="overflow-x-auto pb-2">
           <div className="relative" style={{ width: horas.length * ancho }}>
             <div className="flex">
@@ -196,13 +204,13 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
         </div>
       </Tarjeta>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {comparar ? (
+        {comparar && !dia ? (
           <div className="col-span-2 rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Temperatura de mañana</p>
             <p className="font-medium">{comparar}</p>
           </div>
         ) : null}
-        {ayer >= 0 ? (
+        {ayer >= 0 && !dia ? (
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Ayer</p>
             <p className="font-medium">
@@ -220,17 +228,15 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
         ) : null}
         <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
           <p className="text-xs text-tenue">Índice UV</p>
-          <p className="font-medium">
-            {Math.round(d.current.uv_index ?? 0)} (máx. {Math.round(d.daily.uv_index_max[iHoy] ?? 0)})
-          </p>
+          <p className="font-medium">{dia ? `máx. ${Math.round(d.daily.uv_index_max[iHoy] ?? 0)}` : `${Math.round(d.current.uv_index ?? 0)} (máx. ${Math.round(d.daily.uv_index_max[iHoy] ?? 0)})`}</p>
         </div>
-        {d.current.visibility !== undefined ? (
+        {d.current.visibility !== undefined && !dia ? (
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Visibilidad</p>
             <p className="font-medium">{(d.current.visibility / 1000).toFixed(0)} km</p>
           </div>
         ) : null}
-        {d.current.pressure_msl !== undefined ? (
+        {d.current.pressure_msl !== undefined && !dia ? (
           <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-sm">
             <p className="text-xs text-tenue">Presión</p>
             <p className="font-medium">{Math.round(d.current.pressure_msl)} hPa</p>
@@ -305,7 +311,12 @@ function Clima() {
     refetchInterval: 15 * 60_000,
   });
 
-  const actual = clima.data ? tiempo(clima.data.current.weather_code, clima.data.current.is_day === 1) : null;
+  const [dia, setDia] = useState<string | null>(null);
+  const detalle = useClimaDetalle(u?.lat ?? 0, u?.lon ?? 0, Boolean(u));
+  const iDia = dia && clima.data ? clima.data.daily.time.indexOf(dia) : -1;
+  // Del día elegido se toma la hora de las 2 p.m. para sensación, humedad y viento.
+  const hDia = dia && detalle.data ? detalle.data.hourly.time.indexOf(`${dia}T14:00`) : -1;
+  const actual = clima.data ? (iDia >= 0 ? tiempo(clima.data.daily.weather_code[iDia] ?? 0) : tiempo(clima.data.current.weather_code, clima.data.current.is_day === 1)) : null;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -343,26 +354,60 @@ function Clima() {
       <ErrorCaja error={clima.error} />
       {clima.data && actual && u ? (
         <>
-          <Tarjeta titulo={u.nombre} acciones={u.auto ? <Insignia tono="ok">En tiempo real</Insignia> : null}>
+          <Tarjeta
+            titulo={iDia >= 0 ? `${u.nombre} · ${new Date(`${dia}T12:00:00`).toLocaleDateString(localeActual(), { weekday: "long", day: "numeric", month: "long" })}` : u.nombre}
+            acciones={
+              iDia >= 0 ? (
+                <Boton tamano="sm" onClick={() => setDia(null)}>
+                  Volver a hoy
+                </Boton>
+              ) : u.auto ? (
+                <Insignia tono="ok">En tiempo real</Insignia>
+              ) : null
+            }
+          >
             <div className="flex items-center gap-4">
-              <actual.icono className="h-12 w-12 text-acento" />
-              <div>
-                <p className="text-4xl font-bold">{Math.round(clima.data.current.temperature_2m)}°</p>
-                <p className="text-sm text-tenue">
-                  {actual.texto} · Sensación {Math.round(clima.data.current.apparent_temperature)}° · Humedad {clima.data.current.relative_humidity_2m}% · Viento{" "}
-                  {Math.round(clima.data.current.wind_speed_10m)} km/h
-                </p>
+              <actual.icono className="h-12 w-12 shrink-0 text-acento" />
+              <div className="min-w-0">
+                {iDia >= 0 ? (
+                  <>
+                    <p className="text-4xl font-bold">
+                      {Math.round(clima.data.daily.temperature_2m_max[iDia] ?? 0)}° <span className="text-2xl text-tenue">/ {Math.round(clima.data.daily.temperature_2m_min[iDia] ?? 0)}°</span>
+                    </p>
+                    <p className="text-sm text-tenue">
+                      {actual.texto} · Lluvia {clima.data.daily.precipitation_probability_max[iDia] ?? 0}%
+                      {hDia >= 0 && detalle.data
+                        ? ` · Sensación ${Math.round(detalle.data.hourly.apparent_temperature?.[hDia] ?? 0)}° · Humedad ${detalle.data.hourly.relative_humidity_2m?.[hDia] ?? 0}% · Viento ${Math.round(detalle.data.hourly.wind_speed_10m?.[hDia] ?? 0)} km/h (2 p.m.)`
+                        : ""}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-4xl font-bold">{Math.round(clima.data.current.temperature_2m)}°</p>
+                    <p className="text-sm text-tenue">
+                      {actual.texto} · Sensación {Math.round(clima.data.current.apparent_temperature)}° · Humedad {clima.data.current.relative_humidity_2m}% · Viento{" "}
+                      {Math.round(clima.data.current.wind_speed_10m)} km/h
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </Tarjeta>
-          <HoraPorHora lat={u.lat} lon={u.lon} />
+          <HoraPorHora lat={u.lat} lon={u.lon} dia={iDia >= 0 ? dia : null} />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {clima.data.daily.time.map((dia, i) => {
+            {clima.data.daily.time.map((diaTarjeta, i) => {
               const t = tiempo(clima.data.daily.weather_code[i] ?? 0);
+              const elegido = i === 0 ? iDia < 0 : diaTarjeta === dia;
               return (
-                <div key={dia} className="rounded-tarjeta border border-borde bg-superficie p-3 text-center text-sm">
+                <button
+                  key={diaTarjeta}
+                  type="button"
+                  aria-pressed={elegido}
+                  onClick={() => setDia(i === 0 ? null : diaTarjeta)}
+                  className={cx("rounded-tarjeta border bg-superficie p-3 text-center text-sm transition-colors hover:bg-tarjeta", elegido ? "border-acento" : "border-borde")}
+                >
                   <p className="text-tenue">
-                    {new Date(`${dia}T12:00:00`).toLocaleDateString(localeActual(), {
+                    {new Date(`${diaTarjeta}T12:00:00`).toLocaleDateString(localeActual(), {
                       weekday: "short",
                       day: "numeric",
                     })}
@@ -372,7 +417,7 @@ function Clima() {
                     {Math.round(clima.data.daily.temperature_2m_max[i] ?? 0)}° / {Math.round(clima.data.daily.temperature_2m_min[i] ?? 0)}°
                   </p>
                   <p className="text-xs text-tenue">Lluvia {clima.data.daily.precipitation_probability_max[i] ?? 0}%</p>
-                </div>
+                </button>
               );
             })}
           </div>

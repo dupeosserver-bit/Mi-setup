@@ -65,7 +65,7 @@ export const TECLAS: Record<string, Tecla> = Object.fromEntries(
   ].map((t) => [t.id, t]),
 );
 
-export const FILA_1 = ["shift+tab", "ctrl", "esc", "izquierda", "arriba", "abajo", "derecha", "alt", "tab", "ins", "del", "home", "end", "pgUp", "pgDn", "ctrl+C", "ctrl+D", "ctrl+Z", "ctrl+L", "ctrl+R"];
+export const FILA_1 = ["esc", "tab", "ctrl", "alt", "izquierda", "arriba", "abajo", "derecha", "|", "/", "-", "~", "shift+tab", "ctrl+C", "ctrl+D", "ctrl+Z", "ctrl+L", "ctrl+R", "home", "end", "pgUp", "pgDn", "ins", "del"];
 export const FILA_2 = [...SIMBOLOS.slice(0, 24), ...FUNCIONES.map((_, i) => `F${i + 1}`)];
 
 export const GRUPOS_PANEL: { titulo: string; teclas: string[] }[] = [

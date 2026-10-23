@@ -55,6 +55,7 @@ function Consola({
   alId,
   inicial,
   alTeclear,
+  modificar,
 }: {
   clave: string;
   servidor: Servidor;
@@ -66,8 +67,12 @@ function Consola({
   alId: (id: string) => void;
   inicial?: string;
   alTeclear?: (datos: string) => void;
+  /** Celular: aplica Ctrl/Alt que quedaron presionados en la barra de teclas a lo que se escribe. */
+  modificar?: (datos: string) => string;
 }) {
   const caja = useRef<HTMLDivElement>(null);
+  const modificarRef = useRef(modificar);
+  modificarRef.current = modificar;
   const ajuste = useRef<FitAddon | null>(null);
   const terminal = useRef<Terminal | null>(null);
   const prefs = usePreferencias();
@@ -80,8 +85,8 @@ function Consola({
   useEffect(() => {
     const contenedor = caja.current;
     if (!contenedor) return;
-    // En el celular el teclado (Gboard, Samsung…) autocompleta y xterm duplica el texto:
-    // ahí se escribe desde la barra de abajo y la terminal solo muestra.
+    // En el celular el teclado (Gboard, Samsung…) autocompleta y xterm duplica el texto: xterm solo
+    // muestra y se escribe en un cuadro invisible encima (como Termius). Se manda lo que cambió.
     const movil = esMovil() || Boolean(window.matchMedia?.("(pointer: coarse)").matches);
     const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true, disableStdin: movil });
     terminal.current = term;
@@ -90,6 +95,7 @@ function Consola({
     term.loadAddon(fit);
     term.open(contenedor);
     if (movil) term.textarea?.setAttribute("inputmode", "none");
+    const directo = movil ? entradaDirecta(contenedor, clave, (datos) => alDatos(modificarRef.current ? modificarRef.current(datos) : datos)) : null;
     fit.fit();
     const quitarAtajos = atajosPortapapeles(term, contenedor);
 
@@ -143,7 +149,7 @@ function Consola({
     // Historial: se arma la línea que escribes; si usas flechas o Tab no se sabe el texto final y no se guarda.
     let linea = "";
     let fiable = true;
-    const entrada = term.onData((datos) => {
+    function alDatos(datos: string) {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos });
       teclear.current?.(datos);
       for (const ch of datos) {
@@ -158,7 +164,8 @@ function Consola({
         } else if (ch === "\x1b" || ch === "\t") fiable = false;
         else if (ch >= " ") linea += ch;
       }
-    });
+    }
+    const entrada = term.onData(alDatos);
     registrar((texto, enfocar = true) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos: texto });
       if (enfocar && !movil) term.focus();
@@ -183,6 +190,7 @@ function Consola({
       entrada.dispose();
       tamano.dispose();
       observador.disconnect();
+      directo?.();
       term.dispose();
       terminal.current = null;
     };
@@ -202,7 +210,64 @@ function Consola({
     if (visible) requestAnimationFrame(() => ajuste.current?.fit());
   }, [visible]);
 
-  return <div ref={caja} className={cx("h-full w-full p-1", !visible && "hidden")} style={{ background: opciones.theme.background }} />;
+  return <div ref={caja} className={cx("relative h-full w-full p-1", !visible && "hidden")} style={{ background: opciones.theme.background }} />;
+}
+
+/** Al principio del cuadro invisible: así «borrar» con el cuadro vacío también llega a la terminal. */
+const RELLENO = "  ";
+
+/**
+ * Cuadro invisible sobre la terminal del celular: abre el teclado nativo al tocar la terminal y
+ * manda solo lo que cambia (letras nuevas o borradas), aunque el teclado autocorrija.
+ * Devuelve la función para quitarlo.
+ */
+function entradaDirecta(contenedor: HTMLElement, clave: string, mandar: (datos: string) => void): () => void {
+  const cuadro = document.createElement("textarea");
+  cuadro.dataset["terminal"] = clave;
+  cuadro.setAttribute("aria-label", "Escribir en la terminal");
+  cuadro.setAttribute("autocapitalize", "off");
+  cuadro.setAttribute("autocomplete", "off");
+  cuadro.setAttribute("autocorrect", "off");
+  cuadro.setAttribute("spellcheck", "false");
+  cuadro.setAttribute("enterkeyhint", "send");
+  // 16 px: el navegador no hace zoom al enfocar. Transparente: solo se ve la terminal.
+  cuadro.style.cssText = "position:absolute;left:0;bottom:0;width:100%;height:2.5rem;opacity:0;font-size:16px;resize:none;border:0;padding:0;caret-color:transparent;z-index:2;";
+  cuadro.value = RELLENO;
+  let previo = RELLENO;
+  const reiniciar = () => {
+    cuadro.value = RELLENO;
+    previo = RELLENO;
+  };
+  const alEscribir = () => {
+    const actual = cuadro.value;
+    let comun = 0;
+    while (comun < previo.length && comun < actual.length && previo[comun] === actual[comun]) comun++;
+    const datos = "\x7f".repeat(previo.length - comun) + actual.slice(comun).replace(/\n/g, "\r");
+    previo = actual;
+    if (datos) mandar(datos);
+    // Tras Enter o si se borró el relleno, se empieza de nuevo (la terminal ya tiene todo).
+    if (datos.includes("\r") || !actual.startsWith(RELLENO)) reiniciar();
+  };
+  const alTecla = (e: KeyboardEvent) => {
+    // Teclado físico o teclas que no generan texto (Tab, flechas) van directo.
+    const especial: Record<string, string> = { Tab: "\t", Escape: "\x1b", ArrowUp: "\x1b[A", ArrowDown: "\x1b[B", ArrowRight: "\x1b[C", ArrowLeft: "\x1b[D" };
+    const s = especial[e.key];
+    if (s) {
+      e.preventDefault();
+      mandar(s);
+    }
+  };
+  const enfocar = () => cuadro.focus({ preventScroll: true });
+  cuadro.addEventListener("input", alEscribir);
+  cuadro.addEventListener("keydown", alTecla);
+  contenedor.addEventListener("click", enfocar);
+  contenedor.appendChild(cuadro);
+  return () => {
+    cuadro.removeEventListener("input", alEscribir);
+    cuadro.removeEventListener("keydown", alTecla);
+    contenedor.removeEventListener("click", enfocar);
+    cuadro.remove();
+  };
 }
 
 /** Tus cuentas 2FA: tocar una escribe su código actual en la terminal (para scripts que piden autenticación). */
@@ -549,7 +614,8 @@ export default function VpsTerminal() {
   const [paleta, setPaleta] = useState(false);
   const [mods, setMods] = useState<Modificadores>({ ctrl: false, alt: false });
   const [panelBarra, setPanelBarra] = useState<PanelBarra>(null);
-  const [cajaVisible, setCajaVisible] = useState(true);
+  // En el celular se escribe directo en la terminal (como Termius); la caja queda como opción.
+  const [cajaVisible, setCajaVisible] = useState(() => !(typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches));
   const caja = useRef<HTMLInputElement>(null);
   const enviadores = useRef(new Map<string, Enviar>());
   const [, refrescar] = useState(0);
@@ -790,16 +856,19 @@ export default function VpsTerminal() {
 
   const barraSuperior =
     enSesion && (celular || acostado) ? (
-      <div className="safe-top flex shrink-0 items-center gap-1.5 border-b border-borde bg-[#16131f] px-2 py-1.5">
-        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => setVista("hosts")} aria-label="Ver hosts">
+      <div className="safe-top flex shrink-0 items-center gap-1 border-b border-borde bg-[#16131f] px-1.5 py-1">
+        <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-tenue" onClick={() => setVista("hosts")} aria-label="Ver hosts">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none]">{pestanas.map((p) => pestanaBoton(p, true))}</div>
-        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => setPaleta(true)} aria-label="Buscar">
-          <Search className="h-5 w-5" />
+        <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-tenue" onClick={() => { setVista("hosts"); setSeccion("hosts"); }} aria-label="Nueva sesión">
+          <Plus className="h-[18px] w-[18px]" />
         </button>
-        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => abrirIa(true)} aria-label="IA">
-          <Sparkles className="h-5 w-5" />
+        <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-tenue" onClick={() => setPaleta(true)} aria-label="Buscar">
+          <Search className="h-[18px] w-[18px]" />
+        </button>
+        <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-tenue" onClick={() => abrirIa(true)} aria-label="IA">
+          <Sparkles className="h-[18px] w-[18px]" />
         </button>
       </div>
     ) : (
@@ -865,6 +934,11 @@ export default function VpsTerminal() {
                 registrar={registroDe(p.clave)}
                 alId={(id) => conocidas.current.add(id)}
                 alTeclear={(d) => espejo(p.clave, d)}
+                modificar={(d) => {
+                  if (!mods.ctrl && !mods.alt) return d;
+                  setMods({ ctrl: false, alt: false });
+                  return aplicarModificadores(d, mods);
+                }}
               />
             ) : (
               <ConsolaLocal
@@ -971,6 +1045,9 @@ export default function VpsTerminal() {
               cajaVisible={cajaVisible}
               alCaja={() => setCajaVisible((v) => !v)}
               alTeclado={() => {
+                // Abre el teclado escribiendo directo en la terminal activa.
+                const cuadro = document.querySelector<HTMLTextAreaElement>(`textarea[data-terminal="${activa ?? ""}"]`);
+                if (cuadro) return cuadro.focus({ preventScroll: true });
                 setCajaVisible(true);
                 requestAnimationFrame(() => caja.current?.focus());
               }}

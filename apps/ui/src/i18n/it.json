@@ -4967,5 +4967,11 @@
 "Ver código": "Mostra codice",
 "Abrir o guardar": "Apri o salva",
 "Ver foto en grande": "Vedi foto in grande",
-"prueba la demo": "prova la demo"
+"prueba la demo": "prova la demo",
+"Volver a hoy": "Torna a oggi",
+"· Lluvia": "· Pioggia",
+"Hora por hora · {0}": "Ora per ora · {0}",
+"{0} (máx. {1})": "{0} (max. {1})",
+"· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Percepita {0}° · Umidità {1}% · Vento {2} km/h (14:00)",
+"Escribir en la terminal": "Scrivi nel terminale"
 }

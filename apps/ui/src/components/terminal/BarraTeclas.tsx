@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Braces, ClipboardPaste, History, Keyboard, LayoutGrid, SlidersHorizontal, TextCursorInput, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Braces, ClipboardPaste, History, Keyboard, LayoutGrid, MoreHorizontal, SlidersHorizontal, TextCursorInput, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FILA_1, FILA_2, filasValidas, GRUPOS_PANEL, secuenciaDe, TECLAS, type Modificadores, type Tecla } from "../../lib/teclasTerminal";
 import { useGuardarPreferencias, usePreferencias } from "../../lib/preferencias";
@@ -19,8 +19,8 @@ function BotonTecla({ tecla, activa, alTocar, ancho }: { tecla: Tecla; activa: b
       aria-label={tecla.etiqueta}
       aria-pressed={tecla.tipo === "mod" ? activa : undefined}
       className={cx(
-        "grid h-10 shrink-0 snap-start place-items-center rounded-[10px] px-3 font-mono text-[13px] shadow-[0_1px_0_rgba(0,0,0,.5)] transition-colors",
-        ancho ? "w-full min-w-0 px-1 text-xs" : "min-w-11",
+        "grid shrink-0 snap-start place-items-center rounded-[9px] font-mono text-[13px] shadow-[0_1px_0_rgba(0,0,0,.5)] transition-colors",
+        ancho ? "h-10 w-full min-w-0 px-1 text-xs" : "h-9 min-w-10 px-2.5",
         activa ? "bg-acento text-black" : "bg-[#262134] text-texto active:bg-[#352d4a]",
         !activa && (tecla.tipo === "mod" || tecla.tipo === "combo") && "text-acento",
         !activa && tecla.tipo === "fn" && "text-[#7cb7ff]",
@@ -211,6 +211,8 @@ export function BarraTeclas({
   const prefs = usePreferencias();
   const acostado = useAcostado();
   const [personalizar, setPersonalizar] = useState(false);
+  // Como Termius: una sola fila delgada de teclas; los demás botones salen con «Más».
+  const [mas, setMas] = useState(false);
   const fila1 = filasValidas(prefs.terminal.teclas.fila1, FILA_1);
   const fila2 = filasValidas(prefs.terminal.teclas.fila2, FILA_2);
 
@@ -240,12 +242,18 @@ export function BarraTeclas({
       ) : panel ? (
         <div className={cx("max-h-[300px] overflow-y-auto p-2.5", acostado && "min-w-0 flex-1")}>{contenidoPanel}</div>
       ) : (
-        <div className={cx("flex gap-1.5 pt-2 pb-1", acostado ? "min-w-0 flex-1 flex-row py-1.5" : "flex-col")}>
-          <Fila ids={fila1} mods={mods} alTecla={alTecla} />
-          {acostado ? null : <Fila ids={fila2} mods={mods} alTecla={alTecla} />}
+        <div className={cx("flex items-center gap-1 py-1", acostado ? "min-w-0 flex-1 flex-row" : "flex-row")}>
+          <div className="min-w-0 flex-1">
+            <Fila ids={mas && !acostado ? [...fila1, ...fila2.filter((id) => !fila1.includes(id))] : fila1} mods={mods} alTecla={alTecla} />
+          </div>
+          {acostado ? null : (
+            <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => setMas((v) => !v)} aria-label="Más opciones" aria-pressed={mas} className={cx("mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-[9px]", mas ? "bg-[color-mix(in_srgb,var(--acento)_16%,transparent)] text-acento" : "text-tenue")}>
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          )}
         </div>
       )}
-      <div className={cx("flex items-center", acostado ? "gap-0.5 border-l border-borde px-1" : "h-12 justify-around border-t border-borde px-1.5")}>
+      <div className={cx("items-center", acostado ? "flex gap-0.5 border-l border-borde px-1" : mas || panel ? "flex h-11 justify-around border-t border-borde px-1.5" : "hidden")}>
         {botones.map(([id, Icono, nombre]) => {
           const encendido = (id === "caja" && cajaVisible) || id === panel;
           return (

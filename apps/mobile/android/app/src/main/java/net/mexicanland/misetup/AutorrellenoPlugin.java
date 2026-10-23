@@ -75,7 +75,8 @@ public class AutorrellenoPlugin extends Plugin {
             return;
         }
         String titulo = call.getString("titulo", "Desbloquear con la huella dactilar");
-        String subtitulo = call.getString("subtitulo", "Escanee su huella digital.");
+        // Sin subtítulo por omisión: Android ya escribe su propio «Escanee su huella digital».
+        String subtitulo = call.getString("subtitulo", "");
         String cancelar = call.getString("cancelar", "Cancelar");
         getActivity().runOnUiThread(() -> {
             try {
@@ -95,13 +96,13 @@ public class AutorrellenoPlugin extends Plugin {
                         call.reject(cancelada ? "Cancelaste la huella" : texto.toString(), cancelada ? "cancelada" : "error");
                     }
                 });
-                BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+                BiometricPrompt.PromptInfo.Builder armado = new BiometricPrompt.PromptInfo.Builder()
                         .setTitle(titulo)
-                        .setSubtitle(subtitulo)
                         .setNegativeButtonText(cancelar)
                         .setAllowedAuthenticators(TIPOS)
-                        .setConfirmationRequired(false)
-                        .build();
+                        .setConfirmationRequired(false);
+                if (subtitulo != null && !subtitulo.isEmpty()) armado.setSubtitle(subtitulo);
+                BiometricPrompt.PromptInfo info = armado.build();
                 prompt.authenticate(info);
             } catch (Exception err) {
                 call.reject("No se pudo mostrar la huella: " + err.getMessage(), "error");

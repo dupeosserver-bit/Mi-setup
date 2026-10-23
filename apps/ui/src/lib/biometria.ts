@@ -39,7 +39,8 @@ async function huellaPropia(): Promise<boolean> {
 }
 
 /** Texto del aviso, igual al de las apps del banco. */
-export const TEXTOS_HUELLA = { titulo: "Desbloquear con la huella dactilar", subtitulo: "Escanee su huella digital.", cancelar: "Cancelar" };
+// Sin subtítulo: Android ya pone «Escanee su huella digital» (antes salía dos veces).
+export const TEXTOS_HUELLA = { titulo: "Desbloquear con la huella dactilar", cancelar: "Cancelar" };
 
 export function textoDeLlave(id: string, secreto: string): string {
   return JSON.stringify({ id, secreto });
@@ -71,9 +72,25 @@ export async function biometriaDisponible(): Promise<boolean> {
   return localStorage.getItem(CLAVE) !== null && (await biometriaSoportada());
 }
 
+let huellaEnCurso: Promise<void> | null = null;
+let ultimaHuella = 0;
+
+/**
+ * Un solo aviso de huella: si dos partes de la app la piden a la vez (el diálogo de
+ * confirmar y la bóveda) se espera la misma, y la que se acaba de poner sirve 5 s.
+ */
 async function pedirHuella(propia: boolean, motivo: string): Promise<void> {
-  if (propia) await Nativo.huellaPedir(TEXTOS_HUELLA);
-  else await (await plugin()).verifyIdentity({ reason: motivo, title: "Mi Setup", negativeButtonText: "Cancelar" });
+  if (Date.now() - ultimaHuella < 5_000) return;
+  if (!huellaEnCurso) {
+    huellaEnCurso = (async () => {
+      if (propia) await Nativo.huellaPedir(TEXTOS_HUELLA);
+      else await (await plugin()).verifyIdentity({ reason: motivo, title: "Mi Setup", negativeButtonText: "Cancelar" });
+      ultimaHuella = Date.now();
+    })().finally(() => {
+      huellaEnCurso = null;
+    });
+  }
+  await huellaEnCurso;
 }
 
 export async function inscribirBiometria(): Promise<void> {
