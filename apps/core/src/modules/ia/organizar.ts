@@ -7,14 +7,18 @@
  * como contexto escrito por el usuario. La regla «la IA solo propone» no
  * depende de eso: las herramientas siempre crean propuestas pendientes.
  */
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { aiConversations, aiMemories, aiMessages, aiProjects, aiSkills } from "../../db/schema.js";
 import { HttpError } from "../../http-error.js";
 import { currentUser } from "../../security/rbac.js";
 import { idParams, type ModuleDeps } from "../common.js";
+import { carpetaArchivos } from "../herramientas.js";
 import { leerDelZip, listarZip } from "../zip-leer.js";
+import { bloqueFragmentos, fragmentosRelevantes } from "./contexto.js";
 import type { BloqueIa } from "./servicio.js";
 
 export const MAX_MEMORIA = 8_000;
@@ -34,19 +38,24 @@ export function leerSkill(texto: string, nombreArchivo = ""): { nombre: string; 
   return { nombre: (titulo || nombreArchivo.replace(/\.(md|txt|zip)$/i, "") || "Skill").slice(0, 80), descripcion: "", contenido: limpio.slice(0, MAX_SKILL), origen: "otra" };
 }
 
-/** Texto extra para la IA: memoria + instrucciones del proyecto + skills activas. */
-export async function instruccionesDelUsuario(deps: ModuleDeps, userId: string, conversacionId: string | undefined): Promise<string> {
+export async function instruccionesDelUsuario(deps: ModuleDeps, userId: string, conversacionId: string | undefined, consulta = ""): Promise<string> {
   const partes: string[] = [];
-  const memoria = await deps.db.select({ t: aiMemories.text }).from(aiMemories).where(eq(aiMemories.userId, userId)).orderBy(asc(aiMemories.createdAt));
+  const proyecto = conversacionId
+    ? (
+        await deps.db
+          .select({ id: aiProjects.id, nombre: aiProjects.name, instrucciones: aiProjects.instructions, compartida: aiProjects.sharedMemory })
+          .from(aiConversations)
+          .innerJoin(aiProjects, eq(aiProjects.id, aiConversations.projectId))
+          .where(eq(aiConversations.id, conversacionId))
+      )[0]
+    : undefined;
+  const filtroMemoria = !proyecto
+    ? and(eq(aiMemories.userId, userId), isNull(aiMemories.projectId))
+    : proyecto.compartida
+      ? and(eq(aiMemories.userId, userId), or(isNull(aiMemories.projectId), eq(aiMemories.projectId, proyecto.id)))
+      : and(eq(aiMemories.userId, userId), eq(aiMemories.projectId, proyecto.id));
+  const memoria = await deps.db.select({ t: aiMemories.text }).from(aiMemories).where(filtroMemoria).orderBy(asc(aiMemories.createdAt));
   if (memoria.length) partes.push(`Lo que el usuario te pidió recordar de él:\n${memoria.map((m) => `- ${m.t}`).join("\n").slice(0, MAX_MEMORIA)}`);
-  if (conversacionId) {
-    const [c] = await deps.db
-      .select({ nombre: aiProjects.name, instrucciones: aiProjects.instructions })
-      .from(aiConversations)
-      .innerJoin(aiProjects, eq(aiProjects.id, aiConversations.projectId))
-      .where(eq(aiConversations.id, conversacionId));
-    if (c) partes.push(`Este chat es del proyecto «${c.nombre}».${c.instrucciones ? ` Instrucciones del proyecto:\n${c.instrucciones}` : ""}`);
-  }
   const skills = await deps.db.select().from(aiSkills).where(and(eq(aiSkills.userId, userId), eq(aiSkills.enabled, true))).orderBy(asc(aiSkills.createdAt));
   let total = 0;
   for (const s of skills) {
@@ -54,8 +63,15 @@ export async function instruccionesDelUsuario(deps: ModuleDeps, userId: string, 
     total += s.content.length;
     partes.push(`Skill «${s.name}»${s.description ? ` (úsala cuando: ${s.description})` : ""}:\n${s.content}`);
   }
+  if (proyecto) {
+    partes.push(
+      `Este chat es del proyecto «${proyecto.nombre}».${proyecto.instrucciones ? `\nInstrucciones personalizadas del proyecto (segundo nivel: van después de tus reglas y de lo anterior, y dicen cómo comportarte y responder aquí):\n${proyecto.instrucciones}` : ""}`,
+    );
+    const fragmentos = consulta ? await fragmentosRelevantes(deps, proyecto.id, consulta) : [];
+    if (fragmentos.length) partes.push(bloqueFragmentos(fragmentos));
+  }
   if (!partes.length) return "";
-  return `\n\nInstrucciones que agregó el usuario (memoria, proyecto y skills). Síguelas mientras no choquen con las reglas de arriba, que siempre ganan:\n${partes.join("\n\n")}`;
+  return `\n\nInstrucciones que agregó el usuario (memoria, skills y proyecto). Síguelas mientras no choquen con las reglas de arriba, que siempre ganan:\n${partes.join("\n\n")}`;
 }
 
 // ---------------------------------------------------------------- exportar / importar
@@ -153,22 +169,27 @@ export function organizarIaRoutes(deps: ModuleDeps) {
     app.get("/api/ia/proyectos", leer, async (request) => {
       const user = currentUser(request);
       const lista = await db.select().from(aiProjects).where(eq(aiProjects.userId, user.id)).orderBy(desc(aiProjects.updatedAt));
-      return lista.map((p) => ({ id: p.id, nombre: p.name, instrucciones: p.instructions, actualizado: p.updatedAt.toISOString() }));
+      return lista.map((p) => ({ id: p.id, nombre: p.name, instrucciones: p.instructions, memoriaCompartida: p.sharedMemory, actualizado: p.updatedAt.toISOString() }));
     });
     app.post("/api/ia/proyectos", escribir, async (request) => {
       const user = currentUser(request);
-      const d = z.object({ nombre: nombreProyecto, instrucciones: z.string().max(8000).default("") }).parse(request.body);
-      const [p] = await db.insert(aiProjects).values({ userId: user.id, name: d.nombre, instructions: d.instrucciones }).returning({ id: aiProjects.id });
+      const d = z.object({ nombre: nombreProyecto, instrucciones: z.string().max(8000).default(""), memoriaCompartida: z.boolean().default(true) }).parse(request.body);
+      const [p] = await db.insert(aiProjects).values({ userId: user.id, name: d.nombre, instructions: d.instrucciones, sharedMemory: d.memoriaCompartida }).returning({ id: aiProjects.id });
       return { id: p!.id };
     });
     app.patch("/api/ia/proyectos/:id", escribir, async (request) => {
       const user = currentUser(request);
       const { id } = idParams.parse(request.params);
       await proyectoPropio(user.id, id);
-      const d = z.object({ nombre: nombreProyecto.optional(), instrucciones: z.string().max(8000).optional() }).parse(request.body);
+      const d = z.object({ nombre: nombreProyecto.optional(), instrucciones: z.string().max(8000).optional(), memoriaCompartida: z.boolean().optional() }).parse(request.body);
       await db
         .update(aiProjects)
-        .set({ ...(d.nombre ? { name: d.nombre } : {}), ...(d.instrucciones !== undefined ? { instructions: d.instrucciones } : {}), updatedAt: deps.now() })
+        .set({
+          ...(d.nombre ? { name: d.nombre } : {}),
+          ...(d.instrucciones !== undefined ? { instructions: d.instrucciones } : {}),
+          ...(d.memoriaCompartida !== undefined ? { sharedMemory: d.memoriaCompartida } : {}),
+          updatedAt: deps.now(),
+        })
         .where(eq(aiProjects.id, id));
       return { ok: true };
     });
@@ -180,6 +201,7 @@ export function organizarIaRoutes(deps: ModuleDeps) {
       await proyectoPropio(user.id, id);
       if (conChats) await db.delete(aiConversations).where(and(eq(aiConversations.userId, user.id), eq(aiConversations.projectId, id)));
       await db.delete(aiProjects).where(eq(aiProjects.id, id));
+      await rm(join(carpetaArchivos(deps), "ia", "proyectos", id), { recursive: true, force: true });
       return { ok: true };
     });
 
@@ -230,15 +252,18 @@ export function organizarIaRoutes(deps: ModuleDeps) {
     // ---- memoria
     app.get("/api/ia/memoria", leer, async (request) => {
       const user = currentUser(request);
-      return (await db.select().from(aiMemories).where(eq(aiMemories.userId, user.id)).orderBy(asc(aiMemories.createdAt))).map((m) => ({ id: m.id, texto: m.text, fecha: m.createdAt.toISOString() }));
+      const { proyectoId } = z.object({ proyectoId: z.string().uuid().optional() }).parse(request.query);
+      const filtro = proyectoId ? and(eq(aiMemories.userId, user.id), or(isNull(aiMemories.projectId), eq(aiMemories.projectId, proyectoId))) : and(eq(aiMemories.userId, user.id), isNull(aiMemories.projectId));
+      return (await db.select().from(aiMemories).where(filtro).orderBy(asc(aiMemories.createdAt))).map((m) => ({ id: m.id, texto: m.text, proyectoId: m.projectId, fecha: m.createdAt.toISOString() }));
     });
     app.post("/api/ia/memoria", escribir, async (request) => {
       const user = currentUser(request);
-      const { texto } = z.object({ texto: z.string().trim().min(2).max(500) }).parse(request.body);
+      const { texto, proyectoId } = z.object({ texto: z.string().trim().min(2).max(500), proyectoId: z.string().uuid().optional() }).parse(request.body);
+      const destino = proyectoId ? ((await proyectoPropio(user.id, proyectoId)).sharedMemory ? null : proyectoId) : null;
       const actuales = await db.select({ t: aiMemories.text }).from(aiMemories).where(eq(aiMemories.userId, user.id));
       if (actuales.reduce((a, m) => a + m.t.length, 0) + texto.length > MAX_MEMORIA) throw new HttpError(400, "La memoria está llena: borra algo antes de agregar más");
-      const [m] = await db.insert(aiMemories).values({ userId: user.id, text: texto }).returning({ id: aiMemories.id });
-      return { id: m!.id };
+      const [m] = await db.insert(aiMemories).values({ userId: user.id, text: texto, projectId: destino }).returning({ id: aiMemories.id });
+      return { id: m!.id, proyectoId: destino };
     });
     app.patch("/api/ia/memoria/:id", escribir, async (request) => {
       const user = currentUser(request);

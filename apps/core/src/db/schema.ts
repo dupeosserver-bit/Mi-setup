@@ -505,10 +505,84 @@ export const aiProjects = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     instructions: text("instructions").notNull().default(""),
+    sharedMemory: boolean("shared_memory").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("ai_projects_usuario").on(t.userId)],
+);
+
+/** Archivos de contexto de un proyecto (0.11.4b): la IA solo lee los fragmentos que necesita. */
+export const aiProjectFiles = pgTable(
+  "ai_project_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => aiProjects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_project_files_proyecto").on(t.projectId)],
+);
+
+export const aiProjectChunks = pgTable(
+  "ai_project_chunks",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => aiProjectFiles.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => aiProjects.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    text: text("text").notNull(),
+    search: text("search").notNull(),
+  },
+  (t) => [index("ai_project_chunks_proyecto").on(t.projectId)],
+);
+
+/** Casos de deudas (0.11.4b): conversación de seguimiento, adjuntos y siguientes pasos. */
+export const aiDebtCases = pgTable(
+  "ai_debt_cases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    kind: text("kind").notNull().default("debo"),
+    counterpart: text("counterpart").notNull().default(""),
+    amount: text("amount").notNull().default(""),
+    status: text("status").notNull().default("abierto"),
+    steps: jsonb("steps").notNull().default(sql`'[]'::jsonb`),
+    chance: integer("chance"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_debt_cases_usuario").on(t.userId)],
+);
+
+export const aiDebtMessages = pgTable(
+  "ai_debt_messages",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => aiDebtCases.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    text: text("text").notNull(),
+    ready: text("ready"),
+    attachments: jsonb("attachments").notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_debt_messages_caso").on(t.caseId, t.id)],
 );
 
 export const aiConversations = pgTable("ai_conversations", {
@@ -532,6 +606,7 @@ export const aiMemories = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
+    projectId: uuid("project_id").references(() => aiProjects.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("ai_memories_usuario").on(t.userId)],

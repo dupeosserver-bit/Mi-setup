@@ -18,8 +18,8 @@ Rama: `version-0.11.4b`. Un commit por fase, en esta misma rama. Nunca push a `m
 | 12 | Sitios: mantenimiento / cerrado sin borrar, ícono con IA o JPG/PNG | Hecha |
 | 13 | Editor de fotos tipo Photoshop | Hecha |
 | 14 | Música: Spotify (Web API + Connect, App Remote en Android) y tu música con páginas de 6 | Hecha |
-| **15** | **IA asistente tipo Claude** | **Sigue aquí** |
-| 16 | Ajustes y actualizaciones | Pendiente |
+| 15 | IA asistente tipo Claude: proyectos con archivos de contexto (límite visible, solo lee las partes que sirven), memoria compartida por proyecto, instrucciones del proyecto, casos de deudas con seguimiento y adjuntos | Hecha |
+| **16** | **Ajustes y actualizaciones** | **Sigue aquí** |
 | 17 | Rediseño del resto de pantallas y cierre | Pendiente |
 
 ## Diseños aprobados

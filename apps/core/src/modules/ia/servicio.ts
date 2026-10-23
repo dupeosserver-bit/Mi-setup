@@ -438,7 +438,7 @@ export class ServicioIa {
     let costoTotal = 0;
 
     // Memoria, instrucciones del proyecto y skills del usuario.
-    const delUsuario = await instruccionesDelUsuario(this.deps, user.id, conversacionId);
+    const delUsuario = await instruccionesDelUsuario(this.deps, user.id, conversacionId, entrada.mensaje);
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       if (vuelta > 0 && !usarLocal && (await this.gastoDelMes()) >= this.presupuesto) break;
       const r = await cliente.mensajes({

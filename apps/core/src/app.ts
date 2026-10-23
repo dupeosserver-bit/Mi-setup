@@ -28,6 +28,8 @@ import { actualizarTasas, rendimientosRoutes } from "./modules/rendimientos.js";
 import { finanzasExtraRoutes, limpiarTickets } from "./modules/finanzas-extra.js";
 import { clavesUsuarioRoutes } from "./modules/claves-usuario.js";
 import { crearIaSimple } from "./modules/ia/simple.js";
+import { contextoIaRoutes } from "./modules/ia/contexto.js";
+import { deudasRoutes } from "./modules/ia/deudas.js";
 import { iaExtrasRoutes } from "./modules/ia/extras.js";
 import { extrasRoutes } from "./modules/extras.js";
 import { entretenimientoRoutes } from "./modules/entretenimiento.js";
@@ -213,6 +215,8 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
   await app.register(seguridadCuentaRoutes(deps));
   await app.register(correoGoogleRoutes(deps, iaSimple));
   await app.register(iaExtrasRoutes(deps, iaSimple));
+  await app.register(deudasRoutes(deps, iaSimple));
+  await app.register(contextoIaRoutes(deps));
   await app.register(recordatoriosRoutes(deps));
   await app.register(chatRoutes(deps));
   await app.register(descargasRoutes(deps));

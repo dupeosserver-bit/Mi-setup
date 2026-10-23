@@ -86,7 +86,7 @@ export function senalesIa(texto: string): { puntaje: number; senales: string[]; 
   return { puntaje: Math.max(0, Math.min(100, puntaje)), senales, frases };
 }
 
-const AVISO_LEGAL =
+export const AVISO_LEGAL =
   "Esto es orientación general hecha por IA, no asesoría legal. Las leyes y montos cambian: confirma con CONDUSEF (55 5340 0999, condusef.gob.mx), PROFECO (55 5568 8722) o un abogado antes de firmar o pagar.";
 
 export function iaExtrasRoutes(deps: ModuleDeps, ia: IaSimple) {

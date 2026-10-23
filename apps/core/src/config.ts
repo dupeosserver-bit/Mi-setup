@@ -76,6 +76,8 @@ export const envBase = z.object({
     ANTHROPIC_API_KEY: optionalString,
     AI_MODEL: optionalString.transform((v) => v ?? "claude-sonnet-5-5"),
     AI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10_000).default(10),
+    IA_CONTEXTO_MAX_ARCHIVOS: z.coerce.number().int().min(1).max(500).default(20),
+    IA_CONTEXTO_MAX_MB: z.coerce.number().int().min(1).max(5000).default(100),
     /** IA gratuita local (Ollama en el VPS), p. ej. http://misetup-ollama:11434. */
     OLLAMA_URL: optionalString,
     OLLAMA_MODEL: optionalString.transform((v) => v ?? "llama3.2:3b"),
