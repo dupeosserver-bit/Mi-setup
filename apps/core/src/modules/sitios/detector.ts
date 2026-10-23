@@ -49,4 +49,4 @@ export function crearDetectorSitios(config: Config): DetectorSitios {
 
 export const SLUG_VALIDO = SLUG;
 /** Subdominios que no se pueden usar para sitios. */
-export const SLUGS_RESERVADOS = new Set(["www", "setup", "ntfy", "rd", "panel", "api", "mail", "admin", "app", "node", "nodetest", "vpn", "status"]);
+export const SLUGS_RESERVADOS = new Set(["www", "setup", "ntfy", "rd", "panel", "api", "mail", "admin", "app", "test", "pruebas", "node", "nodetest", "vpn", "status"]);

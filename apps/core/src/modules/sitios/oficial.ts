@@ -198,7 +198,7 @@ ${tarjeta("📈", "Novedades", "Noticias, cripto, inversiones y tipo de cambio."
 <div data-ms-descargas>Cargando descargas…</div>
 <div class="rejilla" style="margin-top:28px">
 <div class="tarjeta"><div class="icono">🖥️</div><h3>Servidor</h3><p>Código fuente con Docker para Ubuntu 22.04 o 24.04.</p><p style="margin-top:12px"><a class="boton" href="/instalar">Cómo instalar</a></p></div>
-<div class="tarjeta"><div class="icono">🌐</div><h3>En el navegador</h3><p>Sin descargar nada: escribe la dirección de tu Mi Setup y entra. En el celular, «Agregar a inicio» la deja como app. No trae Servidores en mi PC, la terminal de PowerShell, autocompletar ni huella.</p><p style="margin-top:12px"><a class="boton" href="/app/">Usar en el navegador</a></p></div>
+<div class="tarjeta"><div class="icono">🌐</div><h3>En el navegador</h3><p>Sin descargar nada: escribe la dirección de tu Mi Setup y entra. En el celular, «Agregar a inicio» la deja como app. No trae el host local, la terminal de PowerShell, autocompletar ni huella.</p><p style="margin-top:12px"><a class="boton" href="/app/">Usar en el navegador</a></p></div>
 <div class="tarjeta"><div class="icono">🐙</div><h3>GitHub</h3><p>Todo el código, abierto y con licencia MIT.</p><p style="margin-top:12px"><a class="boton" href="${GITHUB}" target="_blank" rel="noopener">Abrir GitHub</a></p></div>
 </div>`,
 

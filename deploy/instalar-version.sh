@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=deploy/instancias.sh
-. "$AQUI/instancias.sh"
-ENV_PERSONAL="${ENV_FILE:-$BASE_PRINCIPAL/.env}"
-
 if [ "$#" -lt 2 ]; then
   echo "Uso: $0 <version> <paquete.tar> [instalaciones…]"
   echo "Ejemplo: $0 0.11.5b /home/ubuntu/mi-setup.tar.gz                 (solo la personal)"
@@ -20,6 +15,18 @@ VERSION="$1"
 PAQUETE="$2"
 shift 2
 [ -f "$PAQUETE" ] || { echo "No encuentro el paquete: $PAQUETE"; exit 1; }
+
+# Las funciones viven junto a este script; si lo sacaste solo del paquete
+# (p. ej. a /root/), se leen del mismo paquete.
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$AQUI/instancias.sh" ]; then
+  # shellcheck source=deploy/instancias.sh
+  . "$AQUI/instancias.sh"
+else
+  # shellcheck disable=SC1090
+  . <(tar -xOf "$PAQUETE" deploy/instancias.sh)
+fi
+ENV_PERSONAL="${ENV_FILE:-$BASE_PRINCIPAL/.env}"
 
 if [ "$#" -eq 0 ]; then
   set -- personal
@@ -38,6 +45,7 @@ instalar_en() {
   local ENV_FILE="$BASE/.env"
   [ "$NOMBRE" != "personal" ] || ENV_FILE="$ENV_PERSONAL"
   local APP="$BASE/app"
+  [ "$NOMBRE" != "personal" ] || APP="${APP_DIR:-$APP}"
   local DESTINO="$BASE/versiones/$VERSION"
   local FECHA; FECHA="$(date +%Y-%m-%d_%H%M)"
   local PREFIJO; PREFIJO="$(prefijo_de "$NOMBRE")"

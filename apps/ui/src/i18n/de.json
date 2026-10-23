@@ -4937,7 +4937,7 @@
 "Publicados": "Gepostet",
 "Seguridad más clara": "Übersichtlichere Sicherheit",
 "Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Deine Sitzungen sind jetzt unter Geräte und die Serveranmeldungen unter VPS. Du kannst bis zu 10 Google-Konten verknüpfen.",
-"Servidores en mi PC (host local)": "Server auf meinem PC (lokaler Host)",
+"El host local de tu PC": "Der lokale Host deines PCs",
 "La terminal de PowerShell de tu PC": "Das PowerShell-Terminal deines PCs",
 "Autocompletar contraseñas": "Passwörter automatisch ausfüllen",
 "Entrar con huella": "Mit Fingerabdruck anmelden",
@@ -4949,5 +4949,12 @@
 "Dirección de tu Mi Setup": "Adresse deines Mi Setup",
 "En el celular: menú del navegador → «Agregar a inicio» y se abre como app.": "Auf dem Handy: Browsermenü → „Zum Startbildschirm“ und es öffnet sich wie eine App.",
 "¿Todavía no tienes Mi Setup?": "Noch kein Mi Setup?",
-"Instálalo en tu VPS": "Installiere es auf deinem VPS"
+"Instálalo en tu VPS": "Installiere es auf deinem VPS",
+"Mi Setup en el navegador": "Mi Setup im Browser",
+"En la página oficial, «Usar en el navegador» abre tu Mi Setup sin descargar nada. En el celular, «Agregar a inicio» la deja como app.": "Auf der offiziellen Seite öffnet „Im Browser nutzen“ dein Mi Setup ohne Download. Auf dem Handy wird es mit „Zum Startbildschirm“ zur App.",
+"Página oficial nueva": "Neue offizielle Seite",
+"Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo.": "Neue Screenshots und ein Rundgang-Video auf PC und Handy, mit Beispieldaten.",
+"Videos en tus sitios": "Videos auf deinen Websites",
+"Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse.": "MP4- und WebM-Videos, die du auf deine Website lädst, laufen jetzt auf der Seite statt heruntergeladen zu werden.",
+"Usar en el navegador": "Im Browser nutzen"
 }

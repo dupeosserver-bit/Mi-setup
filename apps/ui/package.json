@@ -1,6 +1,6 @@
 {
   "name": "@mi-setup/ui",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "etapa": "b",
   "private": true,
   "type": "module",

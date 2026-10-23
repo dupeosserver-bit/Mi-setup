@@ -52,14 +52,14 @@ if [ -f "$ENV_FILE" ]; then
   echo "Ya existe $ENV_FILE: se conserva tal cual."
 else
   secreto() { openssl rand -base64 48 | tr -d '\n/+=' | cut -c1-48; }
-  DOMINIO="$(valor_env "$PRINCIPAL_ENV" DOMAIN)"
   NTFY="$(valor_env "$PRINCIPAL_ENV" NTFY_HOST)"
   OLLAMA="$(valor_env "$PRINCIPAL_ENV" OLLAMA_URL)"
   umask 077
   # Lo propio de esta instalación va al final; se quitan antes del ejemplo para no repetir.
+  # DOMAIN es su propia dirección: así sus sitios (nombre.<dirección>) no chocan con los de la personal.
   grep -vE '^(EDICION|BACKUP_HOST_DIR|DESCARGAS_HOST_DIR|OLLAMA_URL|CLAMAV_HOST|MISETUP_PREFIJO|NTFY_URL_INTERNA|COMPOSE_PROFILES)=' "$APP/.env.example" |
     sed \
-      -e "s|^DOMAIN=.*|DOMAIN=${DOMINIO:-${HOST#*.}}|" \
+      -e "s|^DOMAIN=.*|DOMAIN=${HOST}|" \
       -e "s|^APP_HOST=.*|APP_HOST=${HOST}|" \
       -e "s|^NTFY_HOST=.*|NTFY_HOST=${NTFY:-ntfy.${HOST#*.}}|" \
       -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(secreto)|" \

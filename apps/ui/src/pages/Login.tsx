@@ -68,7 +68,7 @@ function Servidor() {
 }
 
 /** Lo que solo existe en las apps de PC y celular. */
-const SOLO_EN_APPS = ["Servidores en mi PC (host local)", "La terminal de PowerShell de tu PC", "Autocompletar contraseñas", "Entrar con huella"];
+const SOLO_EN_APPS = ["El host local de tu PC", "La terminal de PowerShell de tu PC", "Autocompletar contraseñas", "Entrar con huella"];
 
 function SoloEnApps() {
   return (

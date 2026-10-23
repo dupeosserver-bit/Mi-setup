@@ -4937,7 +4937,7 @@
 "Publicados": "Posted",
 "Seguridad más clara": "Clearer security",
 "Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google.": "Your sessions are now in Devices and server sign-ins are in VPS. You can link up to 10 Google accounts.",
-"Servidores en mi PC (host local)": "Servers on my PC (local host)",
+"El host local de tu PC": "Your PC's local host",
 "La terminal de PowerShell de tu PC": "Your PC's PowerShell terminal",
 "Autocompletar contraseñas": "Password autofill",
 "Entrar con huella": "Sign in with fingerprint",
@@ -4949,5 +4949,12 @@
 "Dirección de tu Mi Setup": "Your Mi Setup address",
 "En el celular: menú del navegador → «Agregar a inicio» y se abre como app.": "On your phone: browser menu → “Add to Home screen” and it opens like an app.",
 "¿Todavía no tienes Mi Setup?": "Don't have Mi Setup yet?",
-"Instálalo en tu VPS": "Install it on your VPS"
+"Instálalo en tu VPS": "Install it on your VPS",
+"Mi Setup en el navegador": "Mi Setup in the browser",
+"En la página oficial, «Usar en el navegador» abre tu Mi Setup sin descargar nada. En el celular, «Agregar a inicio» la deja como app.": "On the official site, “Use in the browser” opens your Mi Setup with nothing to download. On your phone, “Add to Home screen” keeps it as an app.",
+"Página oficial nueva": "New official site",
+"Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo.": "New screenshots and a walkthrough video on PC and phone, with sample data.",
+"Videos en tus sitios": "Videos on your sites",
+"Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse.": "MP4 and WebM videos you upload to your site now play on the page instead of downloading.",
+"Usar en el navegador": "Use in the browser"
 }

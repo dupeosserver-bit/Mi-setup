@@ -1,43 +1,22 @@
 import type { ModuleId } from "@mi-setup/shared";
 import {
-  Bot,
   Check,
-  Code2,
   Gift,
   Globe2,
   Image,
-  LayoutDashboard,
-  Music,
-  QrCode,
-  RefreshCw,
-  ShieldCheck,
   Sparkles,
-  Terminal,
-  Users,
-  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Boton } from "./ui";
 
-export const VERSION_NOVEDADES = "0.11.4b";
+export const VERSION_NOVEDADES = "0.11.5b";
 
 export const NOVEDADES: readonly { modulo: ModuleId; icono: LucideIcon; titulo: string; texto: string }[] = [
-  { modulo: "ajustes", icono: LayoutDashboard, titulo: "Diseño nuevo", texto: "Toda la app se acomoda a PC, monitor vertical, tablet y celular. Las listas tienen páginas y ya no se suben al cambiar de página." },
-  { modulo: "ajustes", icono: RefreshCw, titulo: "Actualizaciones solas", texto: "La app se baja sola y al abrirla te enseña esta pantalla. Ajustes tiene nuevo diseño y descargas para PC, Android e iPhone." },
-  { modulo: "equipos", icono: Users, titulo: "Equipos", texto: "Si reinstalas la app en el mismo aparato cuenta como uno. Reconoce PC, tablet o celular y puedes cerrar todas las sesiones menos esta." },
-  { modulo: "finanzas_personales", icono: Wallet, titulo: "Mis finanzas", texto: "Marca los pagos como pagados; lo que no marques pasa solo al mes siguiente. Ya puedes editar tus suscripciones." },
-  { modulo: "vps_terminal", icono: Terminal, titulo: "Terminal tipo Termius", texto: "Se abre a pantalla completa, con barra de teclas que se desliza en el celular, comandos guardados y dividir en 2." },
-  { modulo: "ia", icono: Sparkles, titulo: "IA asistente", texto: "Proyectos con archivos, memoria compartida e instrucciones propias. Deudas con seguimiento y pasos a seguir." },
-  { modulo: "musica", icono: Music, titulo: "Música", texto: "Spotify con «Dónde suena», canciones parecidas, playlists, historial y Top 50. Tu música de 6 en 6." },
-  { modulo: "editor_fotos", icono: Image, titulo: "Editor de fotos", texto: "Herramientas tipo Photoshop: capas, historial, pincel con dureza, relleno y más, también en tablet y celular." },
-  { modulo: "sitios", icono: Globe2, titulo: "Sitios", texto: "Pon tu sitio en mantenimiento o ciérralo sin borrarlo, y haz su ícono con la IA o con tu imagen." },
-  { modulo: "herramientas", icono: QrCode, titulo: "QR nuevo", texto: "Formas, esquinas, degradado, logo y marco con texto. Y tu firma escrita si no tienes una dibujada." },
-  { modulo: "codigo", icono: Code2, titulo: "Programación", texto: "El editor se adapta al celular. Ejercicios nuevos de Java, HTML y CSS con videos para aprender." },
-  { modulo: "pterodactyl", icono: ShieldCheck, titulo: "Pterodactyl", texto: "Ya acepta archivos .blueprint y la tienda gratis instala sola lo que se puede descargar." },
-  { modulo: "vps_agentes", icono: Bot, titulo: "Agentes de IA", texto: "Ahora viven en la categoría IA." },
-  { modulo: "ciberseguridad", icono: ShieldCheck, titulo: "Seguridad más clara", texto: "Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google." },
+  { modulo: "ajustes", icono: Globe2, titulo: "Mi Setup en el navegador", texto: "En la página oficial, «Usar en el navegador» abre tu Mi Setup sin descargar nada. En el celular, «Agregar a inicio» la deja como app." },
+  { modulo: "ajustes", icono: Sparkles, titulo: "Página oficial nueva", texto: "Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo." },
+  { modulo: "sitios", icono: Image, titulo: "Videos en tus sitios", texto: "Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse." },
 ];
 
 export function QueHayDeNuevo({ puede, alTerminar }: { puede: (m: ModuleId) => boolean; alTerminar: () => void }) {

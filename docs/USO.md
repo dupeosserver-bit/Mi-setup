@@ -683,3 +683,54 @@ Para regresar la base al estado de antes, el script imprime el comando de `pg_re
 - **Host local**: solo el dueño.
 - **Redes y streams**: el dueño y quien tenga el rol «Invitado» (Ajustes → Cuentas y permisos).
 - **Negocio y cobros** para los demás usuarios aparece en Sitios web.
+
+## Versión 0.11.5b
+
+La lista de cambios por fase, la RAM de cada instalación y lo pendiente están en `docs/CAMBIOS-0.11.5b.md`.
+
+### Tres instalaciones en el mismo VPS
+
+| Instalación | Dirección | Carpeta | Edición |
+|---|---|---|---|
+| Personal (la principal) | `setup.mexicanland.net` | `/opt/mi-setup` | `personal` |
+| Pública | `app.mexicanland.net` | `/opt/mi-setup-publica` | `publica` |
+| Pruebas | `test.mexicanland.net` | `/opt/mi-setup-pruebas` | `publica` |
+
+- Cada una tiene su `.env`, su base de datos y sus volúmenes. Sus contenedores llevan su nombre: `misetup-core` (personal), `misetup-publica-core`, `misetup-pruebas-core`…
+- Solo la personal enciende Caddy, ntfy, Ollama y ClamAV; las otras los usan por la red `misetup-compartida`. Caddy manda cada dirección a su app con un archivo en `/opt/mi-setup/caddy/mi-setup-<nombre>.caddy`.
+- Primero se actualiza la personal (crea la red compartida). Luego, una sola vez, se crea cada instalación con su contraseña nueva:
+
+```bash
+bash /opt/mi-setup/app/deploy/crear-instancia.sh publica app.mexicanland.net publica /home/ubuntu/mi-setup.tar.gz
+bash /opt/mi-setup/app/deploy/crear-instancia.sh pruebas test.mexicanland.net publica /home/ubuntu/mi-setup.tar.gz
+docker exec -it misetup-publica-core node dist/cli/crear-maestra.js
+```
+
+- Para actualizar: `deploy/instalar-version.sh <versión> <paquete> [instalaciones…]`. Sin lista instala solo la personal; `pruebas` solo la de pruebas; `todas` todas (la personal primero).
+- Cuánta memoria usa cada una: `docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}"` y la del VPS con `free -h`.
+- Respaldo diario de otra instalación: `MISETUP_PREFIJO=misetup-publica PROYECTO=mi-setup-publica BACKUP_HOST_DIR=/opt/mi-setup-publica/backups /opt/mi-setup/app/deploy/respaldo.sh`.
+- Los sitios no pueden llamarse `app`, `test` ni `pruebas` (son de las instalaciones).
+
+### Edición pública
+
+Además de no traer Pterodactyl, Redes y streams, bots, Servidores en mi PC, Mi casa ni Control remoto, la edición pública no menciona MexicanLand: la IA se presenta como «la app con la que la persona maneja su servidor», Sitios muestra el dominio del propio servidor y los ejemplos son neutros.
+
+### Mi Setup en el navegador
+
+- En la página oficial, **Usar en el navegador** lleva a `misetup.mexicanland.net/app`. Ahí escribes la dirección de tu Mi Setup (por ejemplo `setup.tudominio.com`) y entras con tu cuenta. En el celular: menú del navegador → **Agregar a inicio**.
+- No funciona en el navegador: el host local, la terminal de PowerShell de tu PC, autocompletar contraseñas y entrar con huella. Para eso están las apps de Windows y Android.
+- Cada instalación de Mi Setup acepta esa página por la variable `APP_WEB_ORIGEN` (ya viene puesta; vacía la apaga).
+
+### Página oficial con video
+
+El inicio de la página oficial enseña un video del recorrido (PC y celular, sin sonido y en bucle). Capturas y video salen de la demo con datos de ejemplo.
+
+### Todo al día con cada versión
+
+En la PC, dentro del proyecto:
+
+```powershell
+pnpm al-dia 0.11.6b
+```
+
+Sube la versión (package.json y Android), compila la demo, saca capturas y video, rehace la wiki de la página oficial y pone al día el README. Sin versión solo regenera. Para ir rápido: `--sin-video` o `--sin-capturas`. Necesita Playwright: `npm i -g @playwright/cli` y `npx playwright install chromium ffmpeg`.
