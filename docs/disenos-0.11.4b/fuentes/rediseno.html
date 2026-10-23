@@ -1,0 +1,1582 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sala de control · Mi Setup (maqueta)</title>
+<!--
+  =============================================================================
+  MAQUETA DE TODA LA APP — Mi Setup con la Terminal Pro integrada
+  =============================================================================
+  Es una REFERENCIA de diseño (no se conecta a nada). Muestra cómo encaja la
+  terminal nueva con el resto de la app y cómo se pasan datos entre apartados.
+
+  CÓMO SE CONECTA (lo importante para pasarlo a la app real):
+  · Ajustes → Terminal: tema, fuente y tamaño. La terminal SOLO lee esto; dentro
+    de la terminal únicamente hay un botón «Apariencia» que lleva aquí.
+  · VPS → Comandos guardados: lo que se guarda aquí aparece en la terminal al
+    escribir /nombre y en su panel «Comandos».
+  · VPS → Archivos: «Abrir terminal aquí» abre una pestaña y hace cd a esa carpeta.
+    El botón «SFTP» de la terminal lleva a Archivos con ese servidor.
+  · VPS → Rendimiento e Inicio: «Abrir terminal» abre ese servidor directamente.
+  · Ajustes → Apariencia: letras más legibles y transparencia aplican a TODA la app.
+
+  TAMAÑOS (probar siempre vertical y acostado):
+  · PC (≥ 1200 px): menú lateral completo (240 px) + contenido.
+  · Tablet (641–1199 px): menú solo con íconos (68 px). Se abre completo encima.
+  · Celular (≤ 640 px): barra de arriba con ☰, título, estado y buscar; el menú
+    es un cajón.
+  · En la terminal (en todos los tamaños) el botón flotante de la IA se esconde
+    para no tapar «Enviar»; la IA se abre con el botón «IA» de la barra.
+  · La terminal usa «container queries»: se acomoda al espacio que le deja el
+    menú, no al ancho de toda la pantalla.
+
+  Colores y letras: los de Mi Setup (fondo #0b0a10, paneles #13111c, acento
+  lavanda #b497ff, Inter para la interfaz, JetBrains Mono para la terminal).
+  Íconos: Lucide (los mismos de la app).
+  =============================================================================
+-->
+<style>
+  :root {
+    --fondo: #0b0a10; --panel: #13111c; --panel-2: #191624; --panel-3: #221e31;
+    --borde: rgba(255,255,255,.07); --borde-fuerte: rgba(255,255,255,.12);
+    --texto: #ecebf5; --tenue: #9a96b0; --apagado: #625e77;
+    --acento: #b497ff; --acento-suave: rgba(180,151,255,.14);
+    --ok: #3ddc84; --aviso: #f5c451; --peligro: #ff6b81;
+    --term-fondo: #121212; --term-texto: #F2F2F7; --term-cursor: #E5E5EA; --term-letra: 14px;
+    --term-fuente: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --barra-alto: 52px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--texto); font: 13px/1.45 var(--ui); overflow: hidden; }
+  body { background: radial-gradient(1200px 600px at 70% -10%, rgba(180,151,255,.10), transparent 60%), var(--fondo); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: var(--acento); text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+  .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+
+  /* ================================================================ estructura */
+  .app { height: 100dvh; display: grid; grid-template-columns: 240px minmax(0,1fr); grid-template-rows: var(--barra-alto) minmax(0,1fr); }
+  .app.compacto { grid-template-columns: 68px minmax(0,1fr); }
+  .marca { grid-row: 1; grid-column: 1; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-right: 1px solid var(--borde); border-bottom: 1px solid var(--borde); background: var(--panel); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; }
+  .marca .logo { width: 28px; height: 28px; border-radius: 50%; background: conic-gradient(from 200deg, #ff6fb5, #b497ff, #7dd3fc, #5be39e, #ff6fb5); display: grid; place-items: center; color: #111; font-weight: 800; flex: none; }
+  .superior { grid-row: 1; grid-column: 2; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--borde); background: color-mix(in srgb, var(--panel) 85%, transparent); }
+  .superior .titulo-movil { display: none; font-weight: 600; font-size: 16px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .superior .espacio { flex: 1; }
+  .conectado { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; font-size: 12px; }
+  .usuario { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #3a3350, #6b5f8a); display: grid; place-items: center; font-size: 11px; }
+
+  /* ================================================================ menú lateral */
+  .menu { grid-row: 2; grid-column: 1; background: var(--panel); border-right: 1px solid var(--borde); display: flex; flex-direction: column; min-height: 0; }
+  .menu nav { flex: 1; overflow-y: auto; padding: 8px; }
+  .cat { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--apagado); padding: 14px 10px 6px; white-space: nowrap; }
+  .item-menu { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--tenue); text-align: left; white-space: nowrap; }
+  .item-menu .ic { width: 17px; height: 17px; }
+  .item-menu span { overflow: hidden; text-overflow: ellipsis; }
+  .item-menu:hover { background: var(--panel-3); color: var(--texto); }
+  .item-menu.activo { background: var(--acento); color: #15121f; font-weight: 600; }
+  .pie-menu { border-top: 1px solid var(--borde); padding: 8px; }
+  .app.compacto .cat { font-size: 0; padding: 8px 0 2px; border-top: 1px solid var(--borde); margin: 6px 8px 0; }
+  .app.compacto .item-menu { justify-content: center; padding: 0; }
+  .app.compacto .item-menu span, .app.compacto .marca .nombre-app { display: none; }
+  .app.compacto .marca { padding: 0; justify-content: center; }
+  .velo { display: none; position: fixed; inset: 0; background: rgba(5,4,9,.55); z-index: 40; }
+  .velo.ver { display: block; }
+
+  /* ================================================================ contenido */
+  .contenido { grid-row: 2; grid-column: 2; overflow-y: auto; min-height: 0; position: relative; }
+  .pagina { max-width: 1440px; margin: 0 auto; padding: 28px 28px 90px; }
+  .pagina.completa { max-width: none; height: 100%; padding: 16px; display: flex; flex-direction: column; }
+  .encabezado { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .encabezado h1 { margin: 0; font-size: 24px; letter-spacing: -.01em; }
+  .encabezado p { margin: 2px 0 0; color: var(--tenue); }
+  .encabezado .der { margin-left: auto; display: flex; gap: 8px; }
+  .ayuda { position: absolute; right: 24px; top: 14px; color: var(--tenue); display: inline-flex; gap: 6px; align-items: center; font-size: 12px; background: none; border: 0; }
+  .tarjeta { background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--borde); border-radius: 16px; padding: 16px; }
+  .tarjeta h3 { margin: 0 0 12px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .rejilla { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .fila-dato { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--borde); margin-bottom: 8px; }
+  .fila-dato .izq { display: flex; align-items: center; gap: 10px; color: var(--texto); font-weight: 600; }
+  .fila-dato .der { color: var(--tenue); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pestanas-pag { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--borde); overflow-x: auto; margin-bottom: 16px; scrollbar-width: none; }
+  .pestanas-pag button { flex: none; height: 34px; padding: 0 14px; border-radius: 9px; border: 0; background: transparent; color: var(--tenue); font-weight: 500; }
+  .pestanas-pag button.activo { background: var(--panel-3); color: var(--texto); font-weight: 600; }
+  .vacio { text-align: center; color: var(--tenue); padding: 40px 16px; }
+  .vacio .ic { width: 34px; height: 34px; color: var(--acento); }
+
+  /* ================================================================ botones y campos */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--tenue); white-space: nowrap; transition: background .12s, color .12s; }
+  .btn:hover { background: var(--panel-3); color: var(--texto); }
+  .btn.primario { background: var(--acento); color: #15121f; font-weight: 600; }
+  .btn.primario:hover { background: #c4adff; }
+  .btn.borde { border-color: var(--borde-fuerte); color: var(--texto); background: var(--panel-2); }
+  .btn.activo { background: var(--acento-suave); color: var(--acento); }
+  .btn.icono { width: 34px; padding: 0; }
+  .btn.chico { height: 30px; padding: 0 10px; }
+  .btn.peligro { background: var(--peligro); color: #1b0a0f; font-weight: 600; }
+  .kbd { font: 11px var(--mono); color: var(--apagado); border: 1px solid var(--borde-fuerte); border-radius: 5px; padding: 0 5px; }
+  .campo { display: block; margin-bottom: 14px; }
+  .campo > span { display: block; font-size: 12px; font-weight: 600; color: var(--tenue); margin-bottom: 6px; }
+  .entrada { width: 100%; height: 38px; border-radius: 10px; border: 1px solid var(--borde-fuerte); background: var(--panel-2); padding: 0 12px; outline: 0; }
+  .entrada:focus { border-color: var(--acento); }
+  input[type=range] { width: 100%; accent-color: var(--acento); }
+  .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--apagado); flex: none; display: inline-block; }
+  .punto.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(61,220,132,.15); }
+  .punto.aviso { background: var(--aviso); }
+  .etiqueta { font-size: 10px; padding: 1px 7px; border-radius: 99px; background: var(--panel-3); color: var(--tenue); }
+  .flotante { position: fixed; right: 20px; bottom: 20px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--acento); color: #15121f; display: grid; place-items: center; box-shadow: 0 10px 30px rgba(180,151,255,.35); z-index: 20; }
+  .flotante .ic { width: 22px; height: 22px; }
+  /* En la terminal el botón flotante de la IA taparía «Enviar»: ahí la IA va en la barra de la terminal. */
+  .app.en-terminal .flotante { display: none; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; background: var(--panel-3); border: 1px solid var(--borde-fuerte); padding: 10px 14px; border-radius: 10px; transition: .2s; pointer-events: none; z-index: 90; box-shadow: 0 12px 30px rgba(0,0,0,.5); max-width: calc(100% - 32px); }
+  .toast.ver { opacity: 1; transform: translate(-50%, 0); }
+  .fondo-modal { position: fixed; inset: 0; background: rgba(5,4,9,.7); display: none; place-items: center; z-index: 80; padding: 16px; }
+  .fondo-modal.ver { display: grid; }
+  .modal { width: min(440px, 100%); background: var(--panel); border: 1px solid var(--borde-fuerte); border-radius: 16px; padding: 18px; }
+  .modal h3 { margin: 0 0 6px; font-size: 15px; display: flex; gap: 8px; align-items: center; }
+  .modal p { color: var(--tenue); margin: 0 0 12px; }
+  .modal pre { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 10px; font: 12px var(--mono); color: var(--peligro); white-space: pre-wrap; }
+  .modal .fila-btn { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+  /* ================================================================ inicio / rendimiento / archivos */
+  .medidor { height: 8px; border-radius: 99px; background: var(--panel-3); overflow: hidden; margin-top: 8px; }
+  .medidor i { display: block; height: 100%; border-radius: 99px; background: var(--acento); }
+  .grande { font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  .barras { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin-top: 12px; }
+  .barras i { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(var(--acento), rgba(180,151,255,.35)); min-height: 4px; }
+  .rejilla > * { min-width: 0; }
+  .acceso { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--borde); background: var(--panel-2); color: var(--texto); font-weight: 500; }
+  .acceso:hover { border-color: var(--borde-fuerte); }
+  .tabla { width: 100%; border-collapse: collapse; }
+  .tabla td, .tabla th { padding: 10px 12px; border-bottom: 1px solid var(--borde); text-align: left; white-space: nowrap; }
+  .tabla th { color: var(--apagado); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  .tabla tr:hover td { background: var(--panel-2); }
+  .tabla .nom { display: flex; align-items: center; gap: 10px; color: var(--texto); }
+  .ruta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; font: 12px var(--mono); }
+  .ruta button { border: 0; background: var(--panel-2); border-radius: 7px; padding: 4px 8px; color: var(--tenue); }
+  .ruta button:last-child { color: var(--texto); }
+  .desliza-x { overflow-x: auto; }
+
+  /* ================================================================ ajustes → terminal */
+  .temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .tema { border: 1px solid var(--borde); border-radius: 12px; background: var(--panel-2); padding: 8px; text-align: left; }
+  .tema.sel { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+  .tema .mini { border-radius: 7px; padding: 6px 8px; font: 11px var(--mono); margin-bottom: 6px; }
+  .tema b { font-size: 12px; }
+  .previa { border-radius: 12px; padding: 14px; font-family: var(--term-fuente); font-size: var(--term-letra); background: var(--term-fondo); color: var(--term-texto); line-height: 1.55; white-space: pre-wrap; }
+  .dos-col { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 14px; }
+
+  /* ================================================================ TERMINAL PRO */
+  .term { flex: 1; min-height: 0; container-type: inline-size; container-name: term; }
+  .term-caja { height: 100%; display: grid; grid-template-columns: 250px minmax(0,1fr) 290px; border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; background: var(--panel); position: relative; }
+  .term-caja.sin-panel { grid-template-columns: 250px minmax(0,1fr); }
+  .term-caja.sin-panel .t-lateral { display: none; }
+  .t-hosts { border-right: 1px solid var(--borde); display: flex; flex-direction: column; min-height: 0; }
+  .t-buscar { margin: 10px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--borde); color: var(--tenue); }
+  .t-buscar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; }
+  .t-lista { overflow-y: auto; padding: 0 8px 10px; flex: 1; }
+  .t-grupo { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--apagado); padding: 10px 8px 6px; display: flex; justify-content: space-between; }
+  .t-host { display: grid; grid-template-columns: 32px 1fr auto; gap: 9px; align-items: center; padding: 7px 8px; border-radius: 10px; border: 1px solid transparent; }
+  .t-host:hover, .t-host.sel { background: var(--panel-2); }
+  .t-host.sel { border-color: var(--borde-fuerte); }
+  .t-host .av { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--panel-3); color: var(--acento); }
+  .t-host .nom { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .t-host .det { font: 11px var(--mono); color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-pie { border-top: 1px solid var(--borde); padding: 8px; display: flex; gap: 6px; }
+  .t-pie .btn { flex: 1; }
+  .t-centro { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .t-chips { display: none; gap: 6px; padding: 8px; overflow-x: auto; border-bottom: 1px solid var(--borde); scrollbar-width: none; }
+  .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--borde-fuerte); background: var(--panel-2); }
+  .chip.sel { border-color: var(--acento); color: var(--acento); }
+  .t-pestanas { display: flex; height: 40px; border-bottom: 1px solid var(--borde); overflow-x: auto; scrollbar-width: none; flex: none; }
+  .t-pestana { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-right: 1px solid var(--borde); color: var(--tenue); border-top: 2px solid transparent; min-width: 140px; max-width: 210px; cursor: pointer; }
+  .t-pestana .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-pestana.activa { background: var(--term-fondo); color: var(--texto); border-top-color: var(--acento); }
+  .t-pestana .x { width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--apagado); display: grid; place-items: center; padding: 0; }
+  .t-pestana .x:hover { background: var(--panel-3); color: var(--texto); }
+  .t-nueva { border: 0; background: transparent; color: var(--tenue); padding: 0 12px; }
+  .t-barra { display: flex; align-items: center; gap: 2px; padding: 5px 6px; border-bottom: 1px solid var(--borde); overflow-x: auto; scrollbar-width: none; flex: none; }
+  .t-barra .sep { width: 1px; height: 18px; background: var(--borde-fuerte); margin: 0 4px; flex: none; }
+  .t-zona { flex: 1; min-height: 0; display: grid; background: var(--term-fondo); position: relative; }
+  .t-zona.dividida { grid-template-columns: 1fr 1fr; }
+  .t-zona.dividida .t-vista + .t-vista { border-left: 1px solid var(--borde-fuerte); }
+  .t-vista { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 14px 6px; font-family: var(--term-fuente); font-size: var(--term-letra); line-height: 1.55; color: var(--term-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .t-vista .linea { min-height: 1.55em; }
+  .c-verde { color: #3ddc84; } .c-azul { color: #7cb7ff; } .c-lila { color: #b497ff; } .c-amarillo { color: #f5c451; } .c-rojo { color: #ff6b81; } .c-gris { color: #6d6984; } .c-cian { color: #6fe3e3; } .negrita { font-weight: 700; }
+  .cursor { display: inline-block; width: .6em; height: 1.15em; vertical-align: -.2em; background: var(--term-cursor); animation: parpadeo 1.1s steps(1) infinite; }
+  @keyframes parpadeo { 50% { opacity: 0; } }
+  mark { background: rgba(245,196,81,.35); color: inherit; border-radius: 2px; }
+  .t-busqueda { position: absolute; top: 8px; right: 12px; display: none; align-items: center; gap: 6px; padding: 6px; background: var(--panel-2); border: 1px solid var(--borde-fuerte); border-radius: 10px; z-index: 5; }
+  .t-busqueda.ver { display: flex; }
+  .t-busqueda input { width: 190px; height: 28px; border-radius: 7px; border: 1px solid var(--borde); background: var(--fondo); padding: 0 8px; outline: 0; }
+  .t-estado { display: flex; align-items: center; gap: 14px; height: 26px; padding: 0 12px; border-top: 1px solid var(--borde); color: var(--tenue); font: 11px var(--mono); overflow-x: auto; white-space: nowrap; scrollbar-width: none; flex: none; }
+  .t-estado .der { margin-left: auto; display: flex; gap: 14px; }
+  .t-comando { border-top: 1px solid var(--borde); padding: 8px; position: relative; flex: none; }
+  .t-teclas { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
+  .tecla { flex: none; min-width: 40px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--borde-fuerte); background: var(--panel-2); font: 12px var(--mono); }
+  .tecla.activa { border-color: var(--acento); color: var(--acento); }
+  .t-entrada { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 12px; border-radius: 10px; border: 1px solid var(--borde-fuerte); background: var(--fondo); }
+  .t-entrada:focus-within { border-color: var(--acento); }
+  .t-entrada .p { font: 13px var(--mono); color: var(--acento); }
+  .t-entrada input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 13px var(--mono); }
+  .t-sug { position: absolute; left: 8px; right: 8px; bottom: calc(100% - 4px); background: var(--panel-2); border: 1px solid var(--borde-fuerte); border-radius: 10px; display: none; max-height: 220px; overflow-y: auto; padding: 4px; z-index: 6; }
+  .t-sug.ver { display: block; }
+  .sug { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; }
+  .sug:hover, .sug.sel { background: var(--panel-3); }
+  .sug b { font: 600 12px var(--mono); color: var(--acento); }
+  .sug span { color: var(--tenue); font-size: 12px; }
+  .sug code { grid-column: 2; font: 11px var(--mono); color: var(--apagado); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-lateral { border-left: 1px solid var(--borde); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  .t-lateral .tabs { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--borde); }
+  .t-lateral .tabs .btn { flex: 1; padding: 0 6px; }
+  .t-lateral .cont { flex: 1; overflow-y: auto; padding: 10px; }
+  .t-item { width: 100%; text-align: left; padding: 10px; border-radius: 10px; border: 1px solid var(--borde); background: var(--panel-2); margin-bottom: 8px; display: block; }
+  .t-item code { display: block; margin-top: 6px; font: 12px var(--mono); color: var(--tenue); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .t-item .meta { margin-top: 6px; display: flex; gap: 8px; color: var(--apagado); font-size: 11px; }
+  .t-item .acc { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .t-sec { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--apagado); margin: 4px 2px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .t-velo { display: none; }
+  .solo-compacto, .solo-cel { display: none !important; }
+
+  /* La terminal se acomoda al espacio que le deja el menú (container queries). */
+  @container term (max-width: 1050px) {
+    .term-caja, .term-caja.sin-panel { grid-template-columns: 220px minmax(0,1fr); }
+    .t-lateral { position: absolute; top: 0; right: 0; bottom: 0; width: min(320px, 88%); z-index: 8; display: flex !important; transform: translateX(105%); transition: transform .22s; box-shadow: -20px 0 50px rgba(0,0,0,.55); border-left: 1px solid var(--borde-fuerte); }
+    .t-lateral.abierto { transform: none; }
+    .t-velo.ver { display: block; position: absolute; inset: 0; background: rgba(5,4,9,.45); z-index: 7; }
+    .solo-compacto { display: inline-flex !important; }
+    .solo-ancho { display: none !important; }
+    .t-zona.dividida { grid-template-columns: 1fr; }
+    .t-zona.dividida .t-vista + .t-vista { display: none; }
+  }
+  @container term (max-width: 600px) {
+    .term-caja, .term-caja.sin-panel { grid-template-columns: minmax(0,1fr); border-radius: 0; border-left: 0; border-right: 0; }
+    .t-hosts { display: none; }
+    .t-chips { display: flex; }
+    .t-lateral { top: auto; left: 0; width: auto; height: 65%; border-radius: 18px 18px 0 0; transform: translateY(105%); }
+    .t-barra .txt { display: none; }
+    .t-estado .ocultable { display: none; }
+    .solo-cel { display: inline-flex !important; }
+    .t-vista { font-size: calc(var(--term-letra) - 1px); padding: 10px; }
+    .t-busqueda { left: 8px; right: 8px; }
+    .t-busqueda input { flex: 1; width: auto; }
+  }
+
+  /* ================================================================ tablet */
+  @media (max-width: 999px), (max-width: 1199px) and (pointer: coarse) {
+    .app, .app.compacto { grid-template-columns: 68px minmax(0,1fr); }
+    .app .cat { font-size: 0; padding: 8px 0 2px; border-top: 1px solid var(--borde); margin: 6px 8px 0; }
+    .app .item-menu { justify-content: center; padding: 0; }
+    .app .item-menu span, .app .marca .nombre-app, .pie-menu .txt-compacto { display: none; }
+    .app .marca { padding: 0; justify-content: center; }
+    /* Menú abierto encima (botón ☰ o «Ver todo»). */
+    .app.menu-abierto .menu { position: fixed; left: 0; top: 0; bottom: 0; width: 260px; z-index: 50; box-shadow: 20px 0 50px rgba(0,0,0,.5); }
+    .app.menu-abierto .menu .cat { font-size: 11px; padding: 14px 10px 6px; border: 0; margin: 0; }
+    .app.menu-abierto .menu .item-menu { justify-content: flex-start; padding: 0 10px; }
+    .app.menu-abierto .menu .item-menu span { display: inline; }
+    .pagina { padding: 22px 18px 90px; }
+    .dos-col { grid-template-columns: 1fr; }
+  }
+  @media (pointer: coarse) {
+    .btn { height: 40px; } .btn.icono { width: 40px; } .btn.chico { height: 36px; }
+    .item-menu { height: 42px; }
+    .tecla { height: 40px; min-width: 46px; font-size: 13px; }
+    .t-entrada { height: 46px; }
+    .t-pestanas { height: 46px; }
+  }
+
+  /* ================================================================ celular */
+  @media (max-width: 640px) {
+    .app, .app.compacto { grid-template-columns: minmax(0,1fr); grid-template-rows: 56px minmax(0,1fr); }
+    .marca { display: none; }
+    .superior { grid-column: 1; padding: 0 8px; padding-top: env(safe-area-inset-top); }
+    .superior .titulo-movil { display: block; }
+    .superior .solo-pc-sup { display: none !important; }
+    .menu { position: fixed; left: 0; top: 0; bottom: 0; width: 82vw; max-width: 300px; z-index: 50; transform: translateX(-102%); transition: transform .22s; }
+    .app.menu-abierto .menu { transform: none; }
+    .app .menu .cat { font-size: 11px; padding: 14px 10px 6px; border: 0; margin: 0; }
+    .app .menu .item-menu { justify-content: flex-start; padding: 0 12px; }
+    .app .menu .item-menu span { display: inline; }
+    .contenido { grid-column: 1; }
+    .pagina { padding: 16px 14px 96px; }
+    .pagina.completa { padding: 0; }
+    .ayuda { position: static; margin-bottom: 8px; }
+    .encabezado h1 { font-size: 22px; }
+  }
+  @media (max-height: 500px) {
+    .app { grid-template-rows: 44px minmax(0,1fr); }
+    .pagina.completa { padding: 0; }
+    .t-estado { display: none; }
+    .t-chips { display: none !important; }
+    .t-barra .txt { display: none; }
+    .tecla { height: 34px; }
+  }
+  .t-k { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--borde-fuerte); color: var(--tenue); background: transparent; white-space: nowrap; flex: none; margin-left: auto; }
+  .paleta-velo { display: none; position: absolute; inset: 0; background: rgba(5,4,9,.55); z-index: 20; }
+  .paleta-velo.ver { display: block; }
+  .paleta { display: none; position: absolute; top: 56px; left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 20px)); background: var(--panel); border: 1px solid var(--borde-fuerte); border-radius: 16px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; z-index: 21; }
+  .paleta.ver { display: block; }
+  .paleta .buscar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--borde); }
+  .paleta .buscar input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 15px; }
+  .paleta .lista { max-height: min(380px, 55vh); overflow-y: auto; padding-bottom: 6px; }
+  .p-sec { padding: 8px 16px 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--apagado); }
+  .p-op { display: flex; align-items: center; gap: 12px; padding: 8px 16px; width: 100%; border: 0; background: transparent; text-align: left; }
+  .p-op.sel, .p-op:hover { background: var(--acento-suave); }
+  .p-op .ico { width: 30px; height: 30px; border-radius: 9px; background: var(--panel-3); display: grid; place-items: center; color: var(--acento); flex: none; }
+  .p-op b { display: block; font-weight: 600; }
+  .p-op small { color: var(--tenue); font: 11px var(--mono); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-op .der { margin-left: auto; flex: none; }
+  .p-op > div { min-width: 0; }
+  .ficha .cab { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .ficha .av { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #fff; flex: none; }
+  .ficha .campo-f { margin-bottom: 10px; }
+  .ficha .campo-f span { display: block; font-size: 10px; color: var(--apagado); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; font-weight: 700; }
+  .ficha .campo-f div { padding: 9px 11px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--borde); font: 12px var(--mono); }
+  .ficha .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin: 12px 0; }
+  .ficha .stats div { padding: 9px; border-radius: 10px; background: var(--panel-2); text-align: center; }
+  .ficha .stats b { display: block; font-size: 15px; }
+  .ficha .stats small { color: var(--tenue); }
+  .ficha .acc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .ficha .acc .btn { width: 100%; }
+  .ficha .acc .btn.primario { grid-column: 1/-1; }
+  .t-host { cursor: pointer; }
+
+  .musica { container-type: inline-size; container-name: mus; }
+  .m-grid { display: grid; grid-template-columns: minmax(0,5fr) minmax(0,7fr); gap: 16px; }
+  .vidrio { background: rgba(255,255,255,.045); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.09); border-radius: 22px; padding: 18px; }
+  .m-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .m-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
+  .m-cab h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .spotify { color: #1ed760; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .portada { border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: rgba(255,255,255,.9); flex: none; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .reproduciendo { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; }
+  .reproduciendo .info { flex: 1; min-width: 0; }
+  .reproduciendo h2 { margin: 0; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reproduciendo p { margin: 2px 0 0; color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reproduciendo .disp { color: #1ed760; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; }
+  .corazon { width: 42px; height: 42px; border-radius: 50%; border: 0; background: transparent; color: var(--tenue); display: grid; place-items: center; transition: color .15s, transform .15s; }
+  .corazon.on { color: #ff4d8d; }
+  .corazon.on .ic { fill: currentColor; }
+  .corazon:active { transform: scale(.88); }
+  .progreso { height: 5px; border-radius: 99px; background: rgba(255,255,255,.12); position: relative; }
+  .progreso i { position: absolute; inset: 0 auto 0 0; width: 34%; border-radius: 99px; background: #1ed760; }
+  .progreso i::after { content: ""; position: absolute; right: -6px; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: #fff; transform: translateY(-50%); }
+  .tiempos { display: flex; justify-content: space-between; color: var(--tenue); font: 11px var(--mono); margin: 6px 0 12px; }
+  .controles { display: flex; align-items: center; justify-content: space-between; }
+  .controles button { width: 44px; height: 44px; border: 0; border-radius: 14px; background: transparent; color: var(--texto); display: grid; place-items: center; }
+  .controles button .ic { width: 22px; height: 22px; }
+  .controles .play { width: 60px; height: 60px; border-radius: 20px; background: var(--acento); color: #15121f; box-shadow: 0 10px 30px rgba(180,151,255,.35); }
+  .controles .play .ic { width: 26px; height: 26px; fill: currentColor; }
+  .controles .varita { color: var(--acento); }
+  .dispositivos { display: none; margin-top: 12px; padding: 8px; border-radius: 14px; background: rgba(0,0,0,.25); border: 1px solid var(--borde); }
+  .dispositivos.ver { display: block; }
+  .disp-op { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left; }
+  .disp-op.sel { color: #1ed760; background: rgba(30,215,96,.08); }
+  .disp-op:hover { background: rgba(255,255,255,.06); }
+  .pista { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; width: 100%; border: 0; background: transparent; text-align: left; }
+  .pista:hover { background: rgba(255,255,255,.06); }
+  .pista .info { flex: 1; min-width: 0; }
+  .pista b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pista small { color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .pista .num { width: 20px; text-align: center; color: var(--tenue); font-weight: 700; flex: none; }
+  .tipo { font: 10px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--panel-3); color: var(--tenue); flex: none; }
+  .playlists { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+  .playlist { padding: 10px; border-radius: 16px; background: rgba(255,255,255,.04); border: 0; text-align: left; }
+  .playlist:hover { background: rgba(255,255,255,.08); }
+  .playlist .portada { width: 100%; aspect-ratio: 1; margin-bottom: 8px; font-size: 26px !important; }
+  .playlist b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .playlist small { color: var(--tenue); }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pag-m { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+  .pag-m button { min-width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--borde-fuerte); background: transparent; }
+  .pag-m button.sel { background: var(--acento); color: #15121f; border-color: transparent; font-weight: 700; }
+  .detalle-pl { display: none; }
+  .detalle-pl.ver { display: block; }
+  .mini { display: none; }
+  @container mus (max-width: 980px) { .m-grid { grid-template-columns: 1fr; } .playlists { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  @container mus (max-width: 560px) {
+    .dos { grid-template-columns: 1fr; }
+    .playlists { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .vidrio { padding: 14px; border-radius: 18px; }
+  }
+  @media (max-width: 640px) {
+    .app.en-musica .flotante { bottom: 92px; }
+    .musica { padding-bottom: 170px; }
+    .mini { display: flex; position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 25; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 18px; background: rgba(28,24,40,.92); backdrop-filter: blur(14px); border: 1px solid var(--borde-fuerte); }
+    .mini .info { flex: 1; min-width: 0; }
+    .mini b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mini small { color: #1ed760; }
+    .mini button { width: 40px; height: 40px; border: 0; border-radius: 12px; background: transparent; display: grid; place-items: center; }
+    .mini .play { background: var(--acento); color: #15121f; }
+  }
+  .pagina.pleno { max-width: none; height: 100%; padding: 0; display: flex; flex-direction: column; }
+  .vt { flex: 1; min-height: 0; display: grid; grid-template-rows: auto minmax(0,1fr); background: var(--panel); container-type: inline-size; container-name: vt; }
+  .vt-tabs { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--fondo); border-bottom: 1px solid var(--borde); overflow-x: auto; scrollbar-width: none; }
+  .vt-tab { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 9px; background: var(--panel-2); color: var(--tenue); white-space: nowrap; flex: none; font-weight: 500; }
+  .vt-tab.sel { background: var(--panel-3); color: var(--texto); }
+  .vt-tab.ses.sel { background: rgba(61,220,132,.12); color: var(--ok); box-shadow: inset 0 0 0 1px rgba(61,220,132,.3); }
+  .vt-tab .ic { width: 15px; height: 15px; }
+  .vt-sep { width: 1px; height: 20px; background: var(--borde-fuerte); flex: none; margin: 0 2px; }
+  .vt-der { margin-left: auto; display: flex; gap: 4px; align-items: center; flex: none; }
+  .vt-cuerpo { display: grid; grid-template-columns: 200px minmax(0,1fr) 320px; min-height: 0; }
+  .vt-nav { border-right: 1px solid var(--borde); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--panel); }
+  .vt-nav span { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; color: var(--tenue); font-weight: 500; }
+  .vt-nav span.sel { background: var(--panel-3); color: var(--texto); }
+  .vt-centro { padding: 16px 20px; overflow: auto; background: color-mix(in srgb, var(--fondo) 55%, var(--panel)); }
+  .vt-busca { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 6px 0 14px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--borde); color: var(--tenue); margin-bottom: 12px; }
+  .vt-busca .t { flex: 1; }
+  .vt-acciones { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .vt-h { font-weight: 700; margin: 6px 0 10px; }
+  .vt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 10px; margin-bottom: 20px; }
+  .vt-host { display: grid; grid-template-columns: 40px minmax(0,1fr); gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--borde); }
+  .vt-host.sel { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+  .vt-host .av { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: #fff; }
+  .vt-host b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vt-host small { color: var(--tenue); font-size: 11px; }
+  .vt-det { border-left: 1px solid var(--borde); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .vt-det .cab { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--borde); font-weight: 700; }
+  .vt-det .cuerpo { flex: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .vt-caja { padding: 14px; border-radius: 12px; background: var(--panel-2); }
+  .vt-caja h4 { margin: 0 0 10px; font-size: 13px; }
+  .vt-in { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--borde-fuerte); background: var(--fondo); margin-bottom: 8px; font-size: 13px; }
+  .vt-in.mono { font-family: var(--mono); font-size: 12px; }
+  .vt-det .pie { padding: 12px 16px; border-top: 1px solid var(--borde); }
+  .vt-det .pie .btn { width: 100%; height: 42px; }
+  .vt-ses { display: grid; grid-template-columns: minmax(0,1fr); min-height: 0; background: var(--term-fondo); }
+  .vt-ses.con-panel { grid-template-columns: minmax(0,1fr) 300px; }
+  .vt-term { padding: 12px 14px; font: 14px/1.55 var(--mono); color: var(--term-texto); white-space: pre-wrap; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .vt-term .salida { flex: 1; min-height: 0; overflow: hidden; }
+  .vt-tactil { display: none; }
+  .vt-lado { border-left: 1px solid var(--borde); background: var(--panel); padding: 12px; overflow: auto; }
+  .vt-bottom { display: none; }
+  .app.en-pleno .flotante { display: none; }
+  @container vt (max-width: 1100px) { .vt-cuerpo { grid-template-columns: 64px minmax(0,1fr) 300px; } .vt-nav span .txt { display: none; } .vt-nav span { justify-content: center; padding: 0; } .vt-ses.con-panel { grid-template-columns: minmax(0,1fr); } .vt-ses.con-panel .vt-lado { display: none; } }
+  @container vt (max-width: 820px) { .vt-cuerpo { grid-template-columns: 64px minmax(0,1fr); } .vt-det { display: none; } }
+  @container vt (max-width: 600px) {
+    .vt { grid-template-rows: auto minmax(0,1fr) 62px; }
+    .vt-cuerpo { grid-template-columns: minmax(0,1fr); }
+    .vt-nav { display: none; }
+    .vt-centro { padding: 12px; }
+    .vt-grid { grid-template-columns: 1fr; }
+    .vt-bottom { display: flex; justify-content: space-around; align-items: center; border-top: 1px solid var(--borde); background: var(--panel); }
+    .vt-bottom span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: var(--tenue); flex: 1; padding: 6px 0; border-radius: 12px; }
+    .vt-bottom span.sel { color: var(--acento); background: var(--acento-suave); }
+    .vt-bottom .ic { width: 20px; height: 20px; }
+    .vt-tab .txt { display: none; }
+    .vt-term { font-size: 12.5px; padding: 10px; }
+  }
+  @media (pointer: coarse) { .vt-tactil { display: block; } }
+
+  .vs-top { display: none; }
+  .vt { grid-template-columns: minmax(0,1fr); }
+  .vt-ses > .vt-term { flex: 1; min-width: 0; }
+  .vt-ses > .vk { min-width: 0; width: 100%; }
+  .vk-fila, .vk-pista { min-width: 0; }
+  .vk { display: none; }
+  @media (pointer: coarse) {
+    .vt-ses .vt-tactil { display: none; }
+    .vt-term { padding-bottom: 6px; }
+    .vk { display: flex; flex-direction: column; background: #16131f; border-top: 1px solid var(--borde); }
+    .vk-filas { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px; }
+    .vk-fila { position: relative; }
+    .vk-fila::after { content: ""; position: absolute; top: 0; right: 0; bottom: 8px; width: 34px; background: linear-gradient(90deg, transparent, #16131f); pointer-events: none; }
+    .vk-fila.al-final::after { display: none; }
+    .vk-pista { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 0 8px; scroll-padding: 0 8px; }
+    .vk-pista::-webkit-scrollbar { display: none; }
+    .vk-pista .k { scroll-snap-align: start; }
+    .k { flex: none; min-width: 44px; height: 40px; padding: 0 11px; border-radius: 10px; border: 0; background: #262134; color: var(--texto); font: 500 13px var(--mono); display: inline-grid; place-items: center; box-shadow: 0 1px 0 rgba(0,0,0,.5); white-space: nowrap; }
+    .k.mod { color: var(--acento); }
+    .k.on { background: var(--acento); color: #15121f; }
+    .k.sim { min-width: 38px; font-size: 15px; }
+    .k.fn { color: #7cb7ff; }
+    .k .ic { width: 17px; height: 17px; }
+    .vk-puntos { display: flex; justify-content: center; gap: 5px; height: 8px; align-items: center; }
+    .vk-puntos i { width: 5px; height: 5px; border-radius: 50%; background: var(--borde-fuerte); }
+    .vk-puntos i.on { width: 14px; border-radius: 3px; background: var(--acento); }
+    .vk-barra { display: flex; align-items: center; justify-content: space-around; height: 48px; border-top: 1px solid var(--borde); padding: 0 6px; }
+    .vk-barra button { width: 46px; height: 38px; border: 0; border-radius: 11px; background: transparent; color: var(--tenue); display: grid; place-items: center; }
+    .vk-barra button.on { background: var(--acento-suave); color: var(--acento); }
+    .vk-barra .ic { width: 20px; height: 20px; }
+    .vk-panel { display: none; height: 300px; overflow-y: auto; padding: 4px 10px 12px; }
+    .vk.abierto .vk-panel { display: block; }
+    .vk.abierto .vk-filas { display: none; }
+    .vk-cab { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px 10px; position: sticky; top: 0; background: #16131f; z-index: 1; }
+    .vk-cab b { font-size: 14px; }
+    .vk-cab .btn { height: 34px; }
+    .vk-sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--apagado); margin: 10px 2px 6px; }
+    .vk-rejilla { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; }
+    .vk-rejilla.seis { grid-template-columns: repeat(6, minmax(0,1fr)); }
+    .vk-rejilla .k { min-width: 0; width: 100%; padding: 0 4px; font-size: 12.5px; }
+    .vk-dos { display: grid; grid-template-columns: 132px minmax(0,1fr); gap: 10px; align-items: start; }
+    .vk-flechas { display: grid; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(2, 40px); gap: 6px; }
+    .vk-flechas .k { min-width: 0; width: 40px; padding: 0; }
+    .vk-flechas .arr { grid-column: 2; }
+    .vk-teclado { display: none; background: #0f0d15; padding: 8px 4px 14px; }
+    .vk.con-teclado .vk-teclado { display: block; }
+    .vk-teclado .fila { display: flex; gap: 5px; justify-content: center; margin-bottom: 9px; }
+    .vk-teclado .fila span { flex: 1; max-width: 34px; height: 42px; border-radius: 7px; background: #2a2733; display: grid; place-items: center; font-size: 17px; color: #d9d6e6; }
+    .vk-teclado .fila span.an { max-width: 52px; flex: 1.5; font-size: 12px; }
+    .vk-teclado .fila span.esp { max-width: none; flex: 5; }
+    .vk-teclado .nota { text-align: center; font-size: 10px; color: var(--apagado); margin-top: -2px; }
+  }
+  @container vt (max-width: 600px) {
+    .vt.en-ses { grid-template-rows: auto minmax(0,1fr); }
+    .vt.en-ses .vt-tabs, .vt.en-ses .vt-bottom { display: none; }
+    .vt.en-ses .vs-top { display: flex; align-items: center; gap: 6px; padding: 6px 8px; padding-top: max(6px, env(safe-area-inset-top)); background: #16131f; border-bottom: 1px solid var(--borde); }
+    .vs-top .b { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: var(--tenue); flex: none; }
+    .vs-top .ses { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+    .vs-top .s { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 10px; background: #262134; color: var(--tenue); white-space: nowrap; flex: none; font-weight: 600; }
+    .vs-top .s.sel { background: rgba(61,220,132,.12); color: var(--ok); box-shadow: inset 0 0 0 1px rgba(61,220,132,.3); }
+  }
+  @media (max-width: 640px) { .app.en-pleno.en-ses-cel { grid-template-rows: 0 minmax(0,1fr); } .app.en-pleno.en-ses-cel .superior { display: none; } }
+  @container vt (min-width: 601px) { .vk-barra { justify-content: flex-start; gap: 6px; padding: 0 10px; } }
+  @media (max-height: 500px) and (pointer: coarse) {
+    .app.en-ses-cel, .app.en-ses-cel.compacto { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+    .app.en-ses-cel .superior, .app.en-ses-cel .marca, .app.en-ses-cel .menu, .app.en-ses-cel .flotante { display: none; }
+    .app.en-ses-cel .contenido { grid-row: 1; grid-column: 1; }
+    .vk-filas .vk-fila:nth-child(n+3), .vk-filas .vk-puntos { display: none; }
+    .vk-filas { flex-direction: row; padding: 6px 0; flex: 1; min-width: 0; }
+    .vk-barra button { width: 40px; }
+    .vk-filas .vk-fila { flex: 1; min-width: 0; }
+    .vk { flex-direction: row; align-items: center; }
+    .vk-barra { border-top: 0; border-left: 1px solid var(--borde); height: auto; gap: 2px; }
+    .vk-panel { height: 200px; flex: 1; }
+    .vk-teclado { display: none !important; }
+  }
+  .ini { container-type: inline-size; container-name: ini; }
+  .ini h1 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+  .ini .sub { color: var(--tenue); margin: 2px 0 0; }
+  .vid { background: color-mix(in srgb, var(--panel) 78%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--borde); border-radius: 18px; padding: 16px; min-width: 0; }
+  .vid h3 { margin: 0 0 12px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .vid h3 .ver { margin-left: auto; color: var(--acento); font-size: 12px; font-weight: 600; }
+  .fila { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--borde); min-width: 0; }
+  .fila:last-child { border-bottom: 0; }
+  .fila .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fila small { color: var(--tenue); white-space: nowrap; }
+  .anillo { --v: 40; width: 84px; height: 84px; border-radius: 50%; background: conic-gradient(var(--c, var(--acento)) calc(var(--v) * 1%), rgba(255,255,255,.08) 0); display: grid; place-items: center; flex: none; }
+  .anillo span { width: 66px; height: 66px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-weight: 800; font-size: 17px; }
+  .medir { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+  .medir .vid { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .medir small { color: var(--tenue); }
+  .acc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 8px; }
+  .acc-grid .acceso { justify-content: flex-start; }
+  .chip-e { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tenue); }
+  .i1 { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 14px; margin-top: 16px; }
+  .i1 .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .equipo { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
+  .equipo:last-child { border-bottom: 0; }
+  .equipo .ico { width: 38px; height: 38px; border-radius: 11px; background: var(--panel-3); display: grid; place-items: center; color: var(--acento); flex: none; }
+  .equipo .t { flex: 1; min-width: 0; }
+  .equipo b { display: block; }
+  .equipo small { color: var(--tenue); }
+  .bento { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); grid-auto-rows: minmax(120px, auto); gap: 14px; margin-top: 16px; }
+  .b-2 { grid-column: span 2; } .b-r2 { grid-row: span 2; } .b-4 { grid-column: span 4; }
+  .hora { font-size: 54px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+  .grande-n { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 54px; margin-top: 10px; }
+  .spark i { flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(var(--acento), rgba(180,151,255,.25)); }
+  .estado-s { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 11px; background: var(--panel-2); margin-bottom: 6px; }
+  .estado-s .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lanz-top { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr); gap: 14px; margin: 16px 0 20px; }
+  .busca-g { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-radius: 16px; background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1px solid var(--borde-fuerte); color: var(--tenue); font-size: 15px; margin-top: 16px; }
+  .apps-cat { margin-bottom: 18px; }
+  .apps-cat h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--apagado); }
+  .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px,1fr)); gap: 12px; }
+  .app-i { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 6px; border-radius: 16px; text-align: center; font-size: 12px; font-weight: 500; }
+  .app-i:hover { background: rgba(255,255,255,.05); }
+  .app-i .ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; color: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.3); }
+  .app-i .ico .ic { width: 24px; height: 24px; }
+  .app-i span { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr); gap: 14px; margin-top: 16px; }
+  .cc .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .linea-t { position: relative; padding-left: 22px; }
+  .linea-t::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--borde-fuerte); }
+  .ev { position: relative; padding: 8px 0 12px; }
+  .ev::before { content: ""; position: absolute; left: -20px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--acento)); box-shadow: 0 0 0 3px var(--panel); }
+  .ev b { display: block; }
+  .ev small { color: var(--tenue); }
+  .ev.ahora { padding: 10px 12px; margin: 4px 0 12px; border-radius: 12px; background: var(--acento-suave); }
+  .ev.ahora::before { top: 16px; }
+  .alerta { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--borde); }
+  .alerta:last-child { border-bottom: 0; }
+  .alerta .ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+  .alerta b { display: block; font-weight: 600; }
+  .alerta small { color: var(--tenue); }
+  @container ini (max-width: 1000px) {
+    .i1 { grid-template-columns: 1fr; }
+    .bento { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .b-4 { grid-column: span 2; }
+    .lanz-top { grid-template-columns: 1fr 1fr; }
+    .lanz-top > :first-child { grid-column: span 2; }
+    .cc { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+    .cc .col:nth-child(2) { grid-column: span 2; order: -1; }
+  }
+  @container ini (max-width: 560px) {
+    .medir { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .bento { grid-template-columns: 1fr; }
+    .b-2, .b-4 { grid-column: span 1; }
+    .b-r2 { grid-row: span 1; }
+    .lanz-top { grid-template-columns: 1fr; }
+    .lanz-top > :first-child { grid-column: span 1; }
+    .apps { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; }
+    .app-i .ico { width: 50px; height: 50px; }
+    .cc { grid-template-columns: 1fr; }
+    .cc .col:nth-child(2) { grid-column: span 1; }
+    .hora { font-size: 44px; }
+  }
+  .app.pleno-total, .app.pleno-total.compacto { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+  .app.pleno-total .superior, .app.pleno-total .marca, .app.pleno-total .menu, .app.pleno-total .flotante { display: none; }
+  .app.pleno-total .contenido { grid-row: 1; grid-column: 1; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/></symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></symbol>
+<symbol id="i-sliders-horizontal" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-text-cursor-input" viewBox="0 0 24 24"><path d="M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1"/><path d="M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5"/><path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"/><path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"/><path d="M9 7v10"/></symbol>
+<symbol id="i-ellipsis-vertical" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+<symbol id="i-delete" viewBox="0 0 24 24"><path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/></symbol>
+<symbol id="i-message-circle" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+<symbol id="i-tv" viewBox="0 0 24 24"><rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="i-notebook-pen" viewBox="0 0 24 24"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-calendar-days" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></symbol>
+<symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-bell-ring" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+<symbol id="i-folder-tree" viewBox="0 0 24 24"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M3 5a2 2 0 0 0 2 2h3"/><path d="M3 3v13a2 2 0 0 0 2 2h3"/></symbol>
+<symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-gamepad-2" viewBox="0 0 24 24"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></symbol>
+<symbol id="i-briefcase" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></symbol>
+<symbol id="i-key-round" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-radar" viewBox="0 0 24 24"><path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/></symbol>
+<symbol id="i-scroll-text" viewBox="0 0 24 24"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></symbol>
+<symbol id="i-user-cog" viewBox="0 0 24 24"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4-.9-.3"/><path d="m15.2 13.9-.9-.3"/><path d="m16.6 18.7.3-.9"/><path d="m19.1 12.2.3-.9"/><path d="m19.6 18.7-.4-1"/><path d="m16.8 12.3-.4-1"/><path d="m14.3 16.6 1-.4"/><path d="m20.7 13.8 1-.4"/></symbol>
+<symbol id="i-radio" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
+<symbol id="i-at-sign" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-arrow-left-right" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-share-2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></symbol>
+<symbol id="i-code-2" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+<symbol id="i-graduation-cap" viewBox="0 0 24 24"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></symbol>
+<symbol id="i-boxes" viewBox="0 0 24 24"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3"/><path d="m17 16.5 4.74-2.85"/><path d="M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15"/><path d="m12 8 4.74-2.85"/><path d="M12 13.5V8"/></symbol>
+<symbol id="i-globe-2" viewBox="0 0 24 24"><path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"/><path d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17"/><path d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05"/><circle cx="12" cy="12" r="10"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+<symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+<symbol id="i-clapperboard" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+<symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+<symbol id="i-house" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-monitor-up" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></symbol>
+<symbol id="i-wand-sparkles" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+<symbol id="i-clipboard-paste" viewBox="0 0 24 24"><path d="M15 2H9a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2M11 14h10"/><path d="m17 10 4 4-4 4"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+<symbol id="i-panel-right" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
+<symbol id="i-columns-2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
+<symbol id="i-maximize-2" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+<symbol id="i-memory-stick" viewBox="0 0 24 24"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></symbol>
+<symbol id="i-hard-drive" viewBox="0 0 24 24"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-layout-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-refresh-cw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></symbol>
+<symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></symbol>
+<symbol id="i-chevrons-left" viewBox="0 0 24 24"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/></symbol>
+<symbol id="i-skip-back" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></symbol>
+<symbol id="i-skip-forward" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+<symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
+<symbol id="i-list-music" viewBox="0 0 24 24"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+<symbol id="i-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+<symbol id="i-volume-2" viewBox="0 0 24 24"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></symbol>
+<symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+<symbol id="i-disc-3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M6 12c0-1.7.7-3.2 1.8-4.2"/><circle cx="12" cy="12" r="2"/><path d="M18 12c0 1.7-.7 3.2-1.8 4.2"/></symbol>
+<symbol id="i-audio-lines" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+<symbol id="i-file-audio" viewBox="0 0 24 24"><path d="M17.5 22h.5a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 19a2 2 0 1 1 4 0v1a2 2 0 1 1-4 0v-4a6 6 0 0 1 12 0v4a2 2 0 1 1-4 0v-1a2 2 0 1 1 4 0"/></symbol>
+<symbol id="i-file-video" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 11 5 3-5 3v-6Z"/></symbol>
+<symbol id="i-mic-vocal" viewBox="0 0 24 24"><path d="m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12"/><path d="M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5"/><circle cx="16" cy="7" r="5"/></symbol>
+<symbol id="i-radio-tower" viewBox="0 0 24 24"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/></symbol>
+
+<symbol id="i-cloud-sun" viewBox="0 0 24 24"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></symbol>
+<symbol id="i-trending-up" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+<symbol id="i-trending-down" viewBox="0 0 24 24"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></symbol>
+<symbol id="i-battery-charging" viewBox="0 0 24 24"><path d="M15 7h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M6 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1"/><path d="m11 7-3 5h4l-3 5"/><line x1="22" x2="22" y1="11" y2="13"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-sticky-note" viewBox="0 0 24 24"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+<symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-layout-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+<symbol id="i-thermometer" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></symbol>
+<symbol id="i-calendar-clock" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></symbol>
+</defs></svg>
+
+<div class="app" id="app">
+  <div class="marca"><span class="logo">M</span><span class="nombre-app">Sala de control</span></div>
+  <header class="superior">
+    <button class="btn icono" id="btn-menu" onclick="alternarMenu()" aria-label="Abrir menú" style="display:none"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <span class="titulo-movil" id="titulo-movil">Inicio</span>
+    <span class="espacio solo-pc-sup"></span>
+    <button class="btn borde solo-pc-sup" onclick="avisar('Buscador de toda la app (Ctrl+K)')"><svg class="ic"><use href="#i-search"/></svg> Buscar <span class="kbd">Ctrl K</span></button>
+    <span class="conectado"><span class="punto ok"></span><span class="solo-pc-sup">Conectado</span></span>
+    <button class="btn icono solo-cel-sup" onclick="avisar('Buscador de toda la app')" aria-label="Buscar" style="display:none"><svg class="ic"><use href="#i-search"/></svg></button>
+    <span class="usuario solo-pc-sup"><span class="avatar">YA</span> Yahir Antonio Reyes Lara</span>
+  </header>
+
+  <aside class="menu" id="menu" aria-label="Menú">
+    <nav id="nav"></nav>
+    <div class="pie-menu">
+      <button class="item-menu" onclick="alternarCompacto()"><svg class="ic"><use href="#i-chevrons-left"/></svg><span>Solo íconos</span></button>
+    </div>
+  </aside>
+  <div class="velo" id="velo" onclick="cerrarMenu()"></div>
+
+  <main class="contenido" id="contenido"></main>
+  <button class="flotante" onclick="avisar('IA asistente: solo propone, nada se ejecuta sin «Aprobar».')" aria-label="IA asistente"><svg class="ic"><use href="#i-sparkles"/></svg></button>
+</div>
+
+<div class="fondo-modal" id="modal"><div class="modal">
+  <h3><svg class="ic" style="color:var(--peligro)"><use href="#i-triangle-alert"/></svg> Comando peligroso</h3>
+  <p>Este comando puede borrar datos o apagar el servidor. Revisa que sea lo que quieres.</p>
+  <pre id="modal-comando"></pre>
+  <div class="fila-btn"><button class="btn borde" onclick="cerrarModal()">Cancelar</button><button class="btn peligro" onclick="confirmarPeligroso()">Ejecutar de todas formas</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================================ datos
+const MENU = [
+  ["Menú principal", [["inicio", "Inicio", "home"], ["recordatorios", "Recordatorios", "bell"], ["notas", "Bloc de notas", "notebook-pen"], ["equipos", "Equipos", "users"], ["chat", "Chat", "message-square"], ["calendario", "Calendario", "calendar-days"], ["finanzas", "Mis finanzas", "wallet"], ["portapapeles", "Portapapeles", "clipboard"]]],
+  ["VPS", [["terminal", "Terminal", "terminal"], ["rendimiento", "Rendimiento", "activity"], ["alertas", "Alertas de caída", "bell-ring"], ["comandos", "Comandos guardados", "list-checks"], ["archivos", "Archivos", "folder-tree"], ["seguridad", "Seguridad del servidor", "shield-check"], ["respaldos", "Respaldos", "archive"], ["agentes", "Agentes de IA", "bot"]]],
+  ["Panel", [["pterodactyl", "Pterodactyl", "gamepad-2"], ["negocio", "Negocio y cobros", "briefcase"]]],
+  ["Seguridad", [["contrasenas", "Contraseñas y 2FA", "key-round"], ["navegador", "Navegador privado", "globe"], ["ciber", "Ciberseguridad", "radar"], ["registro", "Registro de actividad", "scroll-text"], ["cuentas", "Cuentas y permisos", "user-cog"]]],
+  ["Redes y streams", [["streams", "Streams", "radio"], ["x", "X (Twitter)", "at-sign"], ["discord", "Discord", "message-circle"], ["streamer", "Modo streamer", "tv"], ["bots", "Bots de Discord", "bot"]]],
+  ["Novedades", [["novedades", "Novedades", "newspaper"]]],
+  ["Herramientas", [["herramientas", "Herramientas", "wrench"], ["documentos", "Documentos y PDF", "file-text"], ["convertidor", "Convertidor", "arrow-left-right"], ["enlaces", "Enlaces cortos", "link"], ["compartir", "Compartir archivos", "share-2"]]],
+  ["Programación", [["codigo", "Código (editor)", "code-2"], ["ejercicios", "Ejercicios de código", "graduation-cap"]]],
+  ["Host local", [["host", "Servidores en mi PC", "boxes"]]],
+  ["Sitios web", [["sitios", "Sitios y apps", "globe-2"]]],
+  ["Estudio creativo", [["fotos", "Editor de fotos", "image"], ["video", "Editor de video", "scissors"]]],
+  ["Entretenimiento", [["peliculas", "Películas y series", "clapperboard"], ["musica", "Música", "music"], ["videos", "Mis videos", "video"]]],
+  ["Casa", [["casa", "Mi casa", "house"]]],
+  ["Control remoto", [["remoto", "Control remoto", "monitor-up"]]],
+  ["IA", [["ia", "IA asistente", "sparkles"], ["ia-creativa", "IA creativa", "wand-sparkles"]]],
+  ["Ajustes", [["ajustes", "Ajustes", "settings"]]],
+];
+const NOMBRES = Object.fromEntries(MENU.flatMap(([, l]) => l.map(([id, n, ic]) => [id, { n, ic }])));
+
+const HOSTS = [
+  { id: "pwsh7", grupo: "Esta PC", nombre: "PowerShell 7", det: "Windows · pwsh", tipo: "pc", prompt: "PS C:\\Users\\jokee>" },
+  { id: "pwsh", grupo: "Esta PC", nombre: "PowerShell", det: "Windows · powershell.exe", tipo: "pc", prompt: "PS C:\\Users\\jokee>" },
+  { id: "cmd", grupo: "Esta PC", nombre: "CMD", det: "Windows · cmd.exe", tipo: "pc", prompt: "C:\\Users\\jokee>" },
+  { id: "vps", grupo: "Servidores", nombre: "vps", det: "root@203.0.113.10:22", tipo: "ssh", usuario: "root@vps", lat: 23, etiq: "Producción", cpu: 12, ram: 27, disco: 33 },
+  { id: "panel", grupo: "Servidores", nombre: "panel", det: "root@203.0.113.20:22", tipo: "ssh", usuario: "root@panel", lat: 88, etiq: "Pterodactyl", cpu: 41, ram: 63, disco: 58 },
+];
+const TEMAS = {
+  "mi-setup": { n: "Mi Setup", f: "#121212", t: "#F2F2F7", c: "#E5E5EA" },
+  termius: { n: "Termius Dark", f: "#141729", t: "#21D07A", c: "#21D07A" },
+  dracula: { n: "Dracula", f: "#282A36", t: "#F8F8F2", c: "#BD93F9" },
+  monokai: { n: "Monokai", f: "#272822", t: "#F8F8F2", c: "#F8F8F0" },
+  nord: { n: "Nord", f: "#2E3440", t: "#D8DEE9", c: "#88C0D0" },
+  solarized: { n: "Solarized Dark", f: "#002B36", t: "#839496", c: "#93A1A1" },
+  "hacker-verde": { n: "Hacker Green", f: "#0A0F0A", t: "#33FF66", c: "#33FF66" },
+  "hacker-azul": { n: "Hacker Blue", f: "#050B18", t: "#4FC3F7", c: "#4FC3F7" },
+  claro: { n: "Claro", f: "#FAFAFA", t: "#1C1C1E", c: "#1C1C1E" },
+};
+const FUENTES = { jetbrains: ["JetBrains Mono", "'JetBrains Mono', ui-monospace, monospace"], fira: ["Fira Code", "'Fira Code', ui-monospace, monospace"], cascadia: ["Cascadia / Consolas", "'Cascadia Mono', Consolas, ui-monospace, monospace"], sistema: ["Monoespaciada del sistema", "ui-monospace, SFMono-Regular, Menlo, monospace"] };
+const ARCHIVOS = {
+  "/root": [["mi-setup", "dir"], [".ssh", "dir"], ["notas.txt", "1.2 KB"], ["instalar.sh", "4.8 KB"]],
+  "/root/mi-setup": [["app", "dir"], ["descargas", "dir"], ["backups", "dir"], [".env", "2.1 KB"]],
+  "/root/mi-setup/app": [["deploy", "dir"], ["apps", "dir"], ["docker-compose.yml", "6.4 KB"], ["README.md", "5.0 KB"]],
+  "/root/mi-setup/descargas": [["MiSetup-0.11.3.exe", "79.6 MB"], ["MiSetup-0.11.3b.apk", "17.9 MB"], ["latest.yml", "0.4 KB"]],
+  "/root/mi-setup/backups": [["misetup-2026-10-22.sql.gz", "18 MB"]],
+  "/root/.ssh": [["authorized_keys", "0.6 KB"]],
+};
+
+// ============================================================================ estado (compartido entre apartados)
+const leer = (k, d) => { try { return JSON.parse(localStorage.getItem("maqueta." + k)) ?? d; } catch { return d; } };
+const guardar = (k, v) => { try { localStorage.setItem("maqueta." + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } };
+const est = {
+  ajustesTerm: leer("ajustesTerm", { tema: "mi-setup", fuente: "jetbrains", tamano: 14 }),
+  lectura: leer("lectura", { contraste: "normal" }),
+  snippets: leer("snippets", [
+    { nombre: "reiniciar-panel", desc: "Pone el panel en línea y limpia la caché", cmd: "cd /var/www/pterodactyl && php artisan up && php artisan optimize:clear" },
+    { nombre: "permisos-panel", desc: "Arregla los permisos del panel", cmd: "chown -R www-data:www-data /var/www/pterodactyl/*" },
+    { nombre: "espacio", desc: "Cuánto disco queda", cmd: "df -h /" },
+    { nombre: "contenedores", desc: "Contenedores de Docker", cmd: "docker ps" },
+  ]),
+  pestanas: [], activa: null, dividida: false, panelT: "comandos", panelVisible: true, historial: [], posHist: -1, ctrl: false, pendiente: null, sugSel: 0,
+  ruta: "/root", tabAjustes: "terminal",
+};
+let cont = 0;
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const ic = (n, extra = "") => `<svg class="ic" ${extra}><use href="#i-${n}"/></svg>`;
+let tToast;
+function avisar(t) { const el = $("toast"); el.textContent = t; el.classList.add("ver"); clearTimeout(tToast); tToast = setTimeout(() => el.classList.remove("ver"), 2600); }
+
+function aplicarAjustesTerminal() {
+  const a = est.ajustesTerm, t = TEMAS[a.tema], r = document.documentElement.style;
+  r.setProperty("--term-fondo", t.f); r.setProperty("--term-texto", t.t); r.setProperty("--term-cursor", t.c);
+  r.setProperty("--term-fuente", FUENTES[a.fuente][1]); r.setProperty("--term-letra", a.tamano + "px");
+  guardar("ajustesTerm", a);
+}
+function aplicarLectura() {
+  const m = { normal: "#9a96b0", alto: "#c9c6da", maximo: "#ecebf5" }[est.lectura.contraste];
+  document.documentElement.style.setProperty("--tenue", m);
+  guardar("lectura", est.lectura);
+}
+
+// ============================================================================ menú y navegación
+function pintarMenu() {
+  const p = rutaActual().pag, actual = p.startsWith("termius") ? "terminal" : p.replace(/-\d+$/, "");
+  $("nav").innerHTML = MENU.map(([cat, items]) => `<div class="cat">${cat}</div>` + items.map(([id, n, i]) => `<button class="item-menu ${actual === id ? "activo" : ""}" onclick="ir('${id}')" title="${esc(n)}">${ic(i)}<span>${esc(n)}</span></button>`).join("")).join("");
+}
+const esCel = () => matchMedia("(max-width: 640px)").matches;
+const esTablet = () => matchMedia("(max-width: 999px), (max-width: 1199px) and (pointer: coarse)").matches;
+function alternarMenu() { $("app").classList.toggle("menu-abierto"); $("velo").classList.toggle("ver", $("app").classList.contains("menu-abierto")); }
+function cerrarMenu() { $("app").classList.remove("menu-abierto"); $("velo").classList.remove("ver"); }
+function alternarCompacto() { if (esTablet()) { alternarMenu(); return; } $("app").classList.toggle("compacto"); }
+function rutaActual() { const [pag = "inicio", sub = ""] = location.hash.replace(/^#\/?/, "").split("/"); return { pag, sub }; }
+function ir(pag, sub) { location.hash = "/" + pag + (sub ? "/" + sub : ""); cerrarMenu(); }
+function ajustarBarra() {
+  const cel = esCel();
+  $("btn-menu").style.display = cel ? "" : "none";
+  document.querySelectorAll(".solo-cel-sup").forEach((b) => (b.style.display = cel ? "" : "none"));
+}
+
+// ============================================================================ páginas
+function encabezado(titulo, desc, der = "") {
+  return `<button class="ayuda" onclick="avisar('Pasos cortos de cómo se usa este apartado')">${ic("circle-help")} ¿Cómo se usa?</button>
+    <div class="encabezado"><div><h1>${titulo}</h1><p>${desc}</p></div><div class="der">${der}</div></div>`;
+}
+const PAGINAS = {
+  inicio() {
+    const accesos = ["terminal", "rendimiento", "archivos", "comandos", "notas", "finanzas", "ia", "ajustes"];
+    return `<div class="pagina">${encabezado("Hola, Yahir Antonio Reyes Lara", "Todo tu setup en un solo lugar.")}
+      <div class="rejilla">
+        <div class="tarjeta"><h3>${ic("server")} Mis servidores</h3>
+          ${HOSTS.filter((h) => h.tipo === "ssh").map((h) => `<div class="fila-dato"><span class="izq"><span class="punto ${h.lat > 60 ? "aviso" : "ok"}"></span>${h.nombre}</span><span class="der">${h.lat} ms</span></div>
+            <button class="btn borde chico" style="width:100%;margin-bottom:10px" onclick="abrirEnTerminal('${h.id}')">${ic("terminal")} Abrir terminal en ${h.nombre}</button>`).join("")}
+        </div>
+        <div class="tarjeta"><h3>${ic("monitor")} Este equipo</h3>
+          <div class="fila-dato"><span class="izq">${ic("cpu")} Procesador</span><span class="der">8 núcleos</span></div>
+          <div class="fila-dato"><span class="izq">${ic("memory-stick")} Memoria</span><span class="der">16 GB</span></div>
+          <div class="fila-dato"><span class="izq">${ic("hard-drive")} Disco</span><span class="der">38 % usado</span></div>
+        </div>
+        <div class="tarjeta"><h3>${ic("layout-dashboard")} Apartados</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${accesos.map((id) => `<button class="acceso" onclick="ir('${id}')">${ic(NOMBRES[id].ic)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${NOMBRES[id].n}</span></button>`).join("")}</div>
+        </div>
+      </div></div>`;
+  },
+  rendimiento() {
+    return `<div class="pagina">${encabezado("Rendimiento", "CPU, memoria y disco de tus servidores en vivo.")}
+      <div class="rejilla">${HOSTS.filter((h) => h.tipo === "ssh").map((h) => `
+        <div class="tarjeta"><h3><span class="punto ${h.lat > 60 ? "aviso" : "ok"}"></span> ${h.nombre} <span class="etiqueta">${h.etiq}</span></h3>
+          ${[["CPU", h.cpu], ["Memoria", h.ram], ["Disco", h.disco]].map(([n, v]) => `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><span>${n}</span><b>${v}%</b></div><div class="medidor"><i style="width:${v}%;${v > 60 ? "background:var(--aviso)" : ""}"></i></div></div>`).join("")}
+          <div class="barras">${Array.from({ length: 24 }, (_, i) => `<i style="height:${Math.round(15 + Math.abs(Math.sin(i / 2 + h.cpu)) * 70)}%"></i>`).join("")}</div>
+          <p style="color:var(--tenue);font-size:11px;margin:6px 0 10px">CPU en las últimas 2 horas</p>
+          <button class="btn borde chico" onclick="abrirEnTerminal('${h.id}')">${ic("terminal")} Abrir terminal</button>
+        </div>`).join("")}</div></div>`;
+  },
+  comandos() {
+    return `<div class="pagina">${encabezado("Comandos guardados", "Los que guardes aquí se usan en la terminal escribiendo /nombre.", `<button class="btn primario" onclick="ir('terminal')">${ic("terminal")} Ir a la terminal</button>`)}
+      <div class="dos-col">
+        <div class="tarjeta"><h3>${ic("list-checks")} Tus comandos (${est.snippets.length})</h3>
+          ${est.snippets.map((s, i) => `<div class="t-item"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-family:var(--mono)">/${esc(s.nombre)}</b><button class="btn icono chico" aria-label="Borrar" onclick="borrarSnippet(${i})">${ic("x")}</button></div><div style="color:var(--tenue);font-size:12px">${esc(s.desc)}</div><code>${esc(s.cmd)}</code><div class="acc"><button class="btn borde chico" onclick="usarSnippetEnTerminal(${i})">${ic("play")} Usar en la terminal</button></div></div>`).join("")}
+        </div>
+        <div class="tarjeta"><h3>${ic("plus")} Nuevo comando</h3>
+          <form onsubmit="event.preventDefault();nuevoSnippet(this)">
+            <label class="campo"><span>Nombre (se escribe /nombre)</span><input class="entrada" name="nombre" required pattern="[a-z0-9-]{2,30}" placeholder="ej. reiniciar-bot"></label>
+            <label class="campo"><span>¿Qué hace?</span><input class="entrada" name="desc" placeholder="ej. Reinicia el bot de Discord"></label>
+            <label class="campo"><span>Comando</span><input class="entrada" name="cmd" required style="font-family:var(--mono)" placeholder="ej. pm2 restart bot"></label>
+            <button class="btn primario">${ic("plus")} Guardar</button>
+          </form>
+          <p style="color:var(--tenue);font-size:12px;margin-top:12px">Aparece al momento en la terminal: en la caja escribe «/» y elige.</p>
+        </div>
+      </div></div>`;
+  },
+  archivos() {
+    const partes = est.ruta.split("/").filter(Boolean);
+    const lista = ARCHIVOS[est.ruta] || [];
+    return `<div class="pagina">${encabezado("Archivos", "Explora y sube archivos de tus servidores (SFTP).", `<button class="btn borde">${ic("upload")} Subir</button><button class="btn primario" onclick="abrirEnTerminal('vps', 'cd ${est.ruta}')">${ic("terminal")} Abrir terminal aquí</button>`)}
+      <div class="tarjeta">
+        <div class="ruta">${["/", ...partes].map((p, i) => `<button onclick="irRuta('${"/" + partes.slice(0, i).join("/")}')">${i === 0 ? "vps:/" : esc(p)}</button>`).join('<span style="color:var(--apagado)">›</span>')}</div>
+        <div class="desliza-x"><table class="tabla"><thead><tr><th>Nombre</th><th>Tamaño</th><th></th></tr></thead><tbody>
+          ${est.ruta !== "/root" ? `<tr><td colspan="3"><button class="btn chico" onclick="irRuta('${est.ruta.split("/").slice(0, -1).join("/") || "/root"}')">${ic("chevron-left")} Subir un nivel</button></td></tr>` : ""}
+          ${lista.map(([n, t]) => `<tr><td><span class="nom">${ic(t === "dir" ? "folder" : "file", t === "dir" ? 'style="color:var(--acento)"' : "")}${t === "dir" ? `<a href="javascript:irRuta('${est.ruta}/${n}')">${esc(n)}</a>` : esc(n)}</span></td><td style="color:var(--tenue)">${t === "dir" ? "—" : t}</td><td style="text-align:right">${t === "dir" ? `<button class="btn chico" onclick="abrirEnTerminal('vps','cd ${est.ruta}/${n}')">${ic("terminal")} Terminal aquí</button>` : `<button class="btn icono chico" aria-label="Descargar">${ic("download")}</button>`}</td></tr>`).join("")}
+        </tbody></table></div>
+      </div></div>`;
+  },
+  ajustes() {
+    const tabs = [["cuenta", "Cuenta"], ["apariencia", "Apariencia"], ["terminal", "Terminal"], ["voz", "Voz e IA"], ["seguridad", "Seguridad"], ["descargas", "Descargar apps"], ["claves", "Mis claves"], ["servicios", "Servicios y claves"]];
+    const sub = rutaActual().sub || est.tabAjustes;
+    let cuerpo = `<div class="tarjeta vacio">${ic("settings")}<p>Esta pestaña ya existe en la app.</p></div>`;
+    if (sub === "terminal") {
+      const a = est.ajustesTerm;
+      cuerpo = `<div class="dos-col">
+        <div class="tarjeta"><h3>Terminal SSH</h3>
+          <div class="campo"><span>Tema</span><div class="temas">${Object.entries(TEMAS).map(([id, t]) => `<button class="tema ${a.tema === id ? "sel" : ""}" onclick="cambiarTerm('tema','${id}')"><div class="mini" style="background:${t.f};color:${t.t}">root@vps:~$ ls</div><b>${t.n}</b></button>`).join("")}</div></div>
+          <label class="campo"><span>Fuente</span><select class="entrada" onchange="cambiarTerm('fuente', this.value)">${Object.entries(FUENTES).map(([id, [n]]) => `<option value="${id}" ${a.fuente === id ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <label class="campo"><span>Tamaño de letra: <b id="tam-txt">${a.tamano}px</b></span><input type="range" min="10" max="24" value="${a.tamano}" oninput="cambiarTerm('tamano', +this.value, true)"></label>
+        </div>
+        <div class="tarjeta"><h3>Vista previa</h3>
+          <div class="previa">root@vps:~$ docker ps\nmisetup-core   Up 2 hours\nmisetup-db     Up 2 hours (healthy)\n<span class="c-rojo">error: ejemplo de color</span>\nroot@vps:~$ <span class="cursor"></span></div>
+          <p style="color:var(--tenue);font-size:12px">Se aplica al momento en VPS → Terminal (pruébalo y regresa).</p>
+          <button class="btn borde chico" onclick="ir('terminal')">${ic("terminal")} Ver en la terminal</button>
+        </div></div>`;
+    } else if (sub === "apariencia") {
+      cuerpo = `<div class="dos-col"><div class="tarjeta"><h3>Letras más legibles</h3>
+        <label class="campo"><span>Contraste de las explicaciones</span><select class="entrada" onchange="est.lectura.contraste=this.value;aplicarLectura()">${[["normal", "Normal"], ["alto", "Alto (recomendado con fondo de pantalla)"], ["maximo", "Máximo"]].map(([v, n]) => `<option value="${v}" ${est.lectura.contraste === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <p style="color:var(--tenue)">Este texto gris cambia al momento en toda la app.</p></div>
+        <div class="tarjeta"><h3>Tema de la app</h3><p style="color:var(--tenue)">Oscuro, gris, AMOLED, océano, violeta, bosque… (ya existe en la app).</p></div></div>`;
+    }
+    return `<div class="pagina">${encabezado("Ajustes", "Tus cambios se guardan en tu cuenta y se aplican en la PC y el celular.")}
+      <div class="pestanas-pag">${tabs.map(([id, n]) => `<button class="${sub === id ? "activo" : ""}" onclick="ir('ajustes','${id}')">${n}</button>`).join("")}</div>${cuerpo}</div>`;
+  },
+  terminal() {
+    return `<div class="pagina completa">
+      <div class="term"><div class="term-caja ${est.panelVisible ? "" : "sin-panel"}" id="term-caja">
+        <aside class="t-hosts">
+          <label class="t-buscar">${ic("search")}<input id="t-filtro" placeholder="Buscar host, IP o etiqueta" oninput="pintarHosts()"></label>
+          <div class="t-lista" id="t-lista"></div>
+          <div class="t-pie"><button class="btn borde chico" onclick="avisar('Nuevo servidor: nombre, host, puerto, usuario, llave o contraseña')">${ic("plus")} Servidor</button><button class="btn borde chico" onclick="avisar('Probando… 23 ms, huella SSH correcta')">${ic("network")} Probar</button></div>
+        </aside>
+        <section class="t-centro">
+          <div class="t-chips" id="t-chips"></div>
+          <div class="t-pestanas" id="t-pestanas"></div>
+          <div class="t-barra">
+            <button class="btn chico" onclick="sftp()" title="Archivos del servidor (VPS → Archivos)">${ic("folder")}<span class="txt">SFTP</span></button>
+            <button class="btn chico" onclick="abrirPanelT('comandos')" title="Comandos guardados">${ic("list-checks")}<span class="txt">Comandos</span></button>
+            <button class="btn chico" onclick="abrirPanelT('historial')" title="Historial">${ic("clock")}<span class="txt">Historial</span></button>
+            <span class="sep"></span>
+            <button class="btn chico" onclick="codigo2fa()" title="Escribir un código 2FA">${ic("key")}<span class="txt">2FA</span></button>
+            <button class="btn chico" onclick="pegar()" title="Pegar">${ic("clipboard-paste")}<span class="txt">Pegar</span></button>
+            <button class="btn chico" onclick="copiarSalida()" title="Copiar toda la salida">${ic("copy")}<span class="txt">Copiar</span></button>
+            <span class="sep"></span>
+            <button class="btn icono chico" onclick="abrirBusqueda()" title="Buscar en la terminal (Ctrl+F)" aria-label="Buscar">${ic("search")}</button>
+            <button class="btn icono chico solo-ancho ${est.dividida ? "activo" : ""}" onclick="dividir()" title="Dividir pantalla" aria-label="Dividir">${ic("columns-2")}</button>
+            <button class="btn chico" onclick="ir('ajustes','terminal')" title="Tema, letra y tamaño (Ajustes → Terminal)">${ic("settings")}<span class="txt">Apariencia</span></button>
+            <span class="sep"></span>
+            <button class="btn chico" onclick="avisar('La IA revisa la salida y propone comandos; nada se ejecuta sin «Aprobar».')" title="Pedir ayuda a la IA con lo que salió en la terminal">${ic("sparkles")}<span class="txt">IA</span></button>
+            <button class="btn icono chico ${est.panelVisible ? "activo" : ""}" onclick="alternarPanelT()" title="Panel de comandos e historial" aria-label="Panel">${ic("panel-right")}</button>
+          </div>
+          <div class="t-zona" id="t-zona">
+            <div class="t-busqueda" id="t-busqueda"><input id="t-texto-busqueda" placeholder="Buscar en la salida" oninput="buscar()" onkeydown="if(event.key==='Escape')cerrarBusqueda()"><span id="t-cuenta" style="font:11px var(--mono);color:var(--tenue);min-width:40px;text-align:center">0</span><button class="btn icono chico" onclick="cerrarBusqueda()" aria-label="Cerrar">${ic("x")}</button></div>
+            <div class="t-vista" id="t-vista" onclick="$('t-entrada').focus()"></div>
+          </div>
+          <div class="t-estado" id="t-estado"></div>
+          <div class="t-comando">
+            <div class="t-sug" id="t-sug"></div>
+            <div class="t-teclas" id="t-teclas"></div>
+            <form class="t-entrada" onsubmit="event.preventDefault();enviar()"><span class="p" id="t-p">$</span><input id="t-entrada" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Escribe un comando o /nombre de un comando guardado" oninput="sugerir()" onkeydown="teclaEntrada(event)"><button class="btn primario icono chico" type="submit" aria-label="Enviar">${ic("send")}</button></form>
+          </div>
+        </section>
+        <div class="t-velo" id="t-velo" onclick="cerrarPanelT()"></div>
+        <aside class="t-lateral" id="t-lateral">
+          <div class="tabs">
+            <button class="btn chico" data-p="comandos" onclick="abrirPanelT('comandos')">${ic("list-checks")} Comandos</button>
+            <button class="btn chico" data-p="historial" onclick="abrirPanelT('historial')">${ic("clock")} Historial</button>
+            <button class="btn icono chico solo-compacto" onclick="cerrarPanelT()" aria-label="Cerrar">${ic("x")}</button>
+          </div>
+          <div class="cont" id="t-cont"></div>
+        </aside>
+      </div></div></div>`;
+  },
+};
+const ACCIONES = [["refresh-cw", "Reiniciar Mi Setup", "Pide PIN o huella"], ["refresh-cw", "Reiniciar Docker", "Pide PIN o huella"], ["folder", "Abrir archivos (SFTP)", "VPS → Archivos"], ["settings", "Apariencia de la terminal", "Ajustes → Terminal"]];
+let hostFicha = "vps";
+function opcionesPaleta(q) {
+  q = q.toLowerCase();
+  const ok = (t) => !q || t.toLowerCase().includes(q);
+  const s = est.snippets.filter((x) => ok(x.nombre + " " + x.cmd)).map((x) => ({ i: "list-checks", b: "/" + x.nombre, s: x.cmd, der: "Enter", hacer: () => { $("t-entrada").value = x.cmd; enviar(); } }));
+  const a = ACCIONES.filter(([, b]) => ok(b)).map(([i, b, s2]) => ({ i, b, s: s2, hacer: () => (b.startsWith("Apariencia") ? ir("ajustes", "terminal") : b.startsWith("Abrir") ? ir("archivos") : avisar(b + ": pediría PIN o huella")) }));
+  const h = HOSTS.filter((x) => ok(x.nombre + " " + x.det)).map((x) => ({ i: x.tipo === "pc" ? "monitor" : "server", b: x.nombre, s: x.det + (x.lat ? " · " + x.lat + " ms" : ""), der: "Abrir", hacer: () => abrirPestana(x.id) }));
+  return [["Comandos guardados", s], ["Acciones", a], ["Hosts", h]].filter(([, l]) => l.length);
+}
+let paletaSel = 0, paletaLista = [];
+function abrirPaleta() {
+  $("paleta").classList.add("ver"); $("paleta-velo").classList.add("ver");
+  $("paleta-q").value = ""; paletaSel = 0; pintarPaleta(); setTimeout(() => $("paleta-q").focus(), 10);
+}
+function cerrarPaleta() { $("paleta")?.classList.remove("ver"); $("paleta-velo")?.classList.remove("ver"); }
+function pintarPaleta() {
+  const grupos = opcionesPaleta($("paleta-q").value);
+  paletaLista = grupos.flatMap(([, l]) => l);
+  paletaSel = Math.max(0, Math.min(paletaSel, paletaLista.length - 1));
+  let n = 0;
+  $("paleta-lista").innerHTML = grupos.map(([t, l]) => `<div class="p-sec">${t}</div>` + l.map((o) => { const k = n++; return `<button class="p-op ${k === paletaSel ? "sel" : ""}" onclick="elegirPaleta(${k})"><span class="ico">${ic(o.i)}</span><div><b>${esc(o.b)}</b><small>${esc(o.s)}</small></div>${o.der ? `<span class="der kbd">${o.der}</span>` : ""}</button>`; }).join("")).join("") || `<p style="padding:16px;color:var(--tenue)">Nada coincide.</p>`;
+}
+function elegirPaleta(k) { const o = paletaLista[k]; cerrarPaleta(); o?.hacer(); }
+function teclaPaleta(e) {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); paletaSel += e.key === "ArrowDown" ? 1 : -1; pintarPaleta(); }
+  if (e.key === "Enter") { e.preventDefault(); elegirPaleta(paletaSel); }
+  if (e.key === "Tab") { e.preventDefault(); const o = paletaLista[paletaSel]; if (o) { cerrarPaleta(); $("t-entrada").value = o.b.startsWith("/") ? o.b : $("t-entrada").value; $("t-entrada").focus(); } }
+  if (e.key === "Escape") cerrarPaleta();
+}
+document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.key.toLowerCase() === "k" && rutaActual().pag === "terminal") { e.preventDefault(); abrirPaleta(); } });
+const COLOR_HOST = { vps: "#3a7bd5", panel: "#e95420", pwsh7: "#5c6bc0", pwsh: "#3949ab", cmd: "#455a64" };
+function verFicha(id) { hostFicha = id; est.panelT = "servidor"; if ($("t-cont")) { abrirPanelT("servidor"); pintarHosts(); } }
+function fichaHtml() {
+  const h = HOSTS.find((x) => x.id === hostFicha) || HOSTS[3];
+  const ssh = h.tipo === "ssh";
+  return `<div class="ficha"><div class="cab"><div class="av" style="background:${COLOR_HOST[h.id]}">${h.nombre[0].toUpperCase()}</div><div><b style="font-size:15px">${esc(h.nombre)}</b><div style="color:var(--tenue)">${ssh ? "Ubuntu 22.04 · " + (h.etiq || "") : "Esta PC · Windows"}</div></div></div>
+    ${ssh ? `<div class="campo-f"><span>Dirección</span><div>${esc(h.det.split("@")[1].replace(":", " : "))}</div></div><div class="campo-f"><span>Usuario</span><div>root</div></div><div class="campo-f"><span>Llave</span><div>id_ed25519 · llavero</div></div><div class="campo-f"><span>Huella SSH</span><div>SHA256:x9F…k2Q ✓</div></div>
+    <div class="stats"><div><b>${h.cpu}%</b><small>CPU</small></div><div><b>${h.ram}%</b><small>RAM</small></div><div><b>${h.disco}%</b><small>Disco</small></div></div>` : `<div class="campo-f"><span>Programa</span><div>${esc(h.det.split("· ")[1])}</div></div>`}
+    <div class="acc"><button class="btn primario" onclick="abrirPestana('${h.id}')">${ic("terminal")}Conectar</button>${ssh ? `<button class="btn borde" onclick="ir('archivos')">${ic("folder")}SFTP</button><button class="btn borde" onclick="avisar('Túnel: abre un puerto del servidor en tu PC')">${ic("network")}Túnel</button>` : ""}<button class="btn borde" onclick="avisar('Editar servidor')">${ic("pencil")}Editar</button><button class="btn borde" onclick="avisar('Servidor duplicado')">${ic("copy")}Duplicar</button></div></div>`;
+}
+
+const PLAYLISTS = [["Corridos Tumbados", 42, "#7b2ff7,#f107a3"], ["Para Programar", 18, "#11998e,#38ef7d"], ["Gym", 31, "#f12711,#f5af19"], ["Chill", 25, "#4568dc,#b06ab3"]];
+const CANCIONES = [["Tal Como Eres", "Gerardo Ortiz, Kevin Ortiz"], ["Aerolínea Carrillo", "T3R Elemento"], ["El Azul", "Junior H, Peso Pluma"], ["Ella Baila Sola", "Eslabon Armado, Peso Pluma"], ["La Bebé", "Yng Lvcas, Peso Pluma"], ["Lady Gaga", "Peso Pluma, Gabito Ballesteros"]];
+const LOCALES = [["MEXICANLAND_INTRO", "4 MB", "mp4"], ["Beats_Programacion", "8 MB", "mp3"], ["Podcast_Ep1", "22 MB", "mp3"], ["Video_Fondo_Menu", "15 MB", "mp4"], ["Audio_Prueba_1", "2 MB", "mp3"], ["Efectos_Sonido", "1 MB", "mp3"], ["Cancion_Extra_7", "5 MB", "mp3"], ["Clip_Servidor", "12 MB", "mp4"]];
+const POR_PAGINA = 6;
+const mus = { pagina: 1, gusta: false, sonando: true, disp: "SM-A566E", verDisp: false, pl: null };
+const portada = (txt, grad, tam) => `<span class="portada" style="width:${tam}px;height:${tam}px;background:linear-gradient(135deg,${grad});font-size:${Math.round(tam / 2.6)}px">${txt}</span>`;
+function pintarLocales() {
+  const total = Math.ceil(LOCALES.length / POR_PAGINA);
+  const lista = LOCALES.slice((mus.pagina - 1) * POR_PAGINA, mus.pagina * POR_PAGINA);
+  $("m-locales").innerHTML = lista.map(([n, t, x]) => `<button class="pista" onclick="avisar('Reproduciendo ${n}.${x}')">${portada(ic(x === "mp4" ? "file-video" : "file-audio"), x === "mp4" ? "#3a1c71,#d76d77" : "#232526,#5b5f97", 42)}<span class="info"><b>${n}</b><small>${t}</small></span><span class="tipo">${x.toUpperCase()}</span></button>`).join("");
+  const nav = $("m-pag");
+  if (LOCALES.length <= POR_PAGINA) { nav.innerHTML = ""; return; }
+  const antes = nav.getBoundingClientRect().top;
+  nav.innerHTML = Array.from({ length: total }, (_, i) => `<button class="${i + 1 === mus.pagina ? "sel" : ""}" onclick="mus.pagina=${i + 1};pintarLocales()">${i + 1}</button>`).join("");
+  requestAnimationFrame(() => { const d = nav.getBoundingClientRect().top - antes; if (d && antes) $("contenido").scrollBy({ top: d }); });
+}
+function alternarGusta() { mus.gusta = !mus.gusta; $("m-corazon").classList.toggle("on", mus.gusta); avisar(mus.gusta ? "Guardada en tu biblioteca" : "Quitada de tu biblioteca"); }
+function alternarPlay() { mus.sonando = !mus.sonando; document.querySelectorAll(".m-play-ic").forEach((u) => u.setAttribute("href", mus.sonando ? "#i-pause" : "#i-play")); }
+function verDispositivos() { mus.verDisp = !mus.verDisp; $("m-disp").classList.toggle("ver", mus.verDisp); }
+function ponerDisp(d) { mus.disp = d; pintarPagina(); avisar("Ahora suena en " + d); }
+function abrirPlaylist(i) { mus.pl = i; pintarPagina(); }
+PAGINAS.musica = function () {
+  const disp = [["smartphone", "SM-A566E"], ["laptop", "PC de jokee"], ["gamepad-2", "PlayStation 5"]];
+  const ahora = `<div class="vidrio"><div class="m-cab"><span class="spotify">${ic("radio-tower")}Spotify</span><button class="btn icono" onclick="verDispositivos()" title="Elegir dónde suena" aria-label="Dispositivos">${ic("laptop")}</button></div>
+    <div class="reproduciendo">${portada("TC", "#ff9a3c,#ff3d77", 84)}<div class="info"><h2>Tal Como Eres</h2><p>Gerardo Ortiz, Kevin Ortiz</p><span class="disp">${ic(disp.find(([, n]) => n === mus.disp)[0])}En: ${mus.disp}</span></div><button id="m-corazon" class="corazon ${mus.gusta ? "on" : ""}" onclick="alternarGusta()" aria-label="Me gusta">${ic("heart")}</button></div>
+    <div class="progreso"><i></i></div><div class="tiempos"><span>1:12</span><span>3:28</span></div>
+    <div class="controles"><button aria-label="Aleatorio">${ic("shuffle")}</button><button aria-label="Anterior">${ic("skip-back")}</button><button class="play" onclick="alternarPlay()" aria-label="Reproducir o pausar"><svg class="ic"><use class="m-play-ic" href="#i-${mus.sonando ? "pause" : "play"}"/></svg></button><button aria-label="Siguiente">${ic("skip-forward")}</button><button class="varita" onclick="avisar('Agregué 10 canciones parecidas a la cola')" aria-label="Recomendar parecidas">${ic("wand-sparkles")}</button></div>
+    <div class="dispositivos ${mus.verDisp ? "ver" : ""}" id="m-disp"><div class="p-sec" style="padding:4px 10px 6px">Dónde suena</div>${disp.map(([i, n]) => `<button class="disp-op ${n === mus.disp ? "sel" : ""}" onclick="ponerDisp('${n}')">${ic(i)}${n}</button>`).join("")}</div></div>`;
+  const locales = `<div class="vidrio"><div class="m-cab"><h3>${ic("music")}Tu música</h3><button class="btn primario chico">${ic("upload")}Subir</button></div><div id="m-locales"></div><div class="pag-m" id="m-pag"></div></div>`;
+  const pl = mus.pl === null ? `<div class="vidrio"><div class="m-cab"><h3>${ic("list-music")}Mis playlists</h3></div><div class="playlists">${PLAYLISTS.map(([n, c, g], i) => `<button class="playlist" onclick="abrirPlaylist(${i})">${portada(n.split(" ").map((w) => w[0]).join("").slice(0, 2), g, 0).replace("width:0px;height:0px;", "")}<b>${n}</b><small>${c} canciones</small></button>`).join("")}</div></div>`
+    : `<div class="vidrio"><div class="m-cab"><button class="btn chico" onclick="abrirPlaylist(null)">${ic("chevron-left")}Playlists</button></div><div class="reproduciendo">${portada(PLAYLISTS[mus.pl][0].split(" ").map((w) => w[0]).join("").slice(0, 2), PLAYLISTS[mus.pl][2], 96)}<div class="info"><h2>${PLAYLISTS[mus.pl][0]}</h2><p>${PLAYLISTS[mus.pl][1]} canciones</p><button class="btn primario" style="margin-top:10px" onclick="avisar('Reproduciendo toda la playlist')">${ic("play")}Reproducir todo</button></div></div>${CANCIONES.map(([t, a], i) => `<button class="pista"><span class="num">${i + 1}</span><span class="info"><b>${t}</b><small>${a}</small></span>${ic("heart", 'style="color:var(--tenue)"')}</button>`).join("")}</div>`;
+  const hist = `<div class="vidrio"><div class="m-cab"><h3>${ic("history")}Escuchado hace poco</h3></div>${CANCIONES.slice(1, 5).map(([t, a], i) => `<button class="pista">${portada(t[0], ["#ff512f,#dd2476", "#1d976c,#93f9b9", "#3a6186,#89253e", "#c94b4b,#4b134f"][i], 40)}<span class="info"><b>${t}</b><small>${a}</small></span></button>`).join("")}</div>`;
+  const top = `<div class="vidrio"><div class="m-cab"><h3>${ic("flame")}Tu Top 50</h3><span class="tipo">4 semanas</span></div>${[["Junior H", "Artista"], ["Peso Pluma", "Artista"], ["Gerardo Ortiz", "Artista"], ["T3R Elemento", "Artista"]].map(([n, t], i) => `<button class="pista"><span class="num">${i + 1}</span><span class="portada" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#654ea3,#eaafc8);font-size:15px">${n[0]}</span><span class="info"><b>${n}</b><small>${t}</small></span></button>`).join("")}</div>`;
+  setTimeout(pintarLocales);
+  return `<div class="pagina musica">${encabezado("Música", "Tu Spotify y tu música en un solo lugar.")}
+    <div class="m-grid"><div class="m-col">${ahora}${locales}</div><div class="m-col">${pl}<div class="dos">${hist}${top}</div></div></div>
+    <div class="mini">${portada("TC", "#ff9a3c,#ff3d77", 44)}<span class="info"><b>Tal Como Eres</b><small>En: ${mus.disp}</small></span><button onclick="alternarGusta()" aria-label="Me gusta">${ic("heart")}</button><button class="play" onclick="alternarPlay()" aria-label="Reproducir o pausar"><svg class="ic"><use class="m-play-ic" href="#i-${mus.sonando ? "pause" : "play"}"/></svg></button></div></div>`;
+};
+const termLinea = (u, c) => `<span class="c-verde c-b">${u}</span>:<span class="c-azul c-b">~</span># ${c}`;
+const RIEL_B = (sel) => `<nav class="vb-riel">${[["server", "Hosts"], ["key", "Llaves"], ["network", "Túneles"], ["list-checks", "Comandos"], ["folder", "SFTP"], ["clock", "Historial"]].map(([i, n], k) => `<span class="${n === sel ? "sel" : ""} ${k === 4 ? "pc" : ""}">${ic(i)}${n}</span>`).join("")}<span class="abajo">${ic("settings")}Apariencia</span></nav>`;
+const TABS_B = (casa) => `<div class="vb-tabs"><span class="vb-tab casa ${casa ? "sel" : ""}">${ic("house")}Hosts</span><span class="vb-tab ${casa ? "" : "sel"}"><span class="punto ok"></span>vps ${ic("x")}</span><span class="vb-tab"><span class="punto aviso"></span>panel ${ic("x")}</span><span class="vb-tab">${ic("plus")}</span><span class="vb-k">${ic("search")}<span class="txt">Comandos, hosts y acciones</span><span class="kbd">Ctrl K</span></span></div>`;
+const VT_NAV = [["server", "Hosts"], ["key", "Llavero"], ["network", "Túneles"], ["list-checks", "Comandos"], ["shield-check", "Hosts conocidos"], ["scroll-text", "Registros"]];
+function vtTabs(enSesion) {
+  return `<div class="vt-tabs"><a class="vt-tab ${enSesion ? "" : "sel"}" href="#/terminal" style="color:inherit">${ic("server")}<span class="txt">Hosts</span></a><span class="vt-tab">${ic("folder")}<span class="txt">SFTP</span></span><span class="vt-sep"></span>
+    <a class="vt-tab ses ${enSesion ? "sel" : ""}" href="#/termius-sesion"><span class="punto ok"></span>vps ${ic("x")}</a><span class="vt-tab ses"><span class="punto aviso"></span>panel ${ic("x")}</span><span class="vt-tab ses">${ic("monitor")}<span class="txt">PowerShell</span></span><span class="vt-tab">${ic("plus")}</span>
+    <span class="vt-der"><button class="t-k">${ic("search")}<span class="txt">Buscar</span><span class="kbd txt">Ctrl K</span></button>${enSesion ? `<span class="btn icono chico">${ic("columns-2")}</span><span class="btn icono chico">${ic("sparkles")}</span>` : ""}<span class="btn icono chico">${ic("panel-right")}</span></span></div>`;
+}
+const vtBottom = (sel) => `<div class="vt-bottom">${[["server", "Hosts"], ["key", "Llavero"], ["network", "Túneles"], ["list-checks", "Comandos"], ["folder", "SFTP"]].map(([i, n]) => `<span class="${n === sel ? "sel" : ""}">${ic(i)}${n}</span>`).join("")}</div>`;
+
+const VK1 = [["shift+tab","mod"],["ctrl","mod on"],["esc","mod"],["i:arrow-left",""],["i:arrow-up",""],["i:arrow-down",""],["i:arrow-right",""],["alt","mod"],["tab","mod"],["ins",""],["del",""],["home",""],["end",""],["pgUp",""],["pgDn",""],["ctrl+C","mod"],["ctrl+D","mod"],["ctrl+Z","mod"],["ctrl+L","mod"]];
+const VK2 = [..."|\\/-~:;!@$*^%=`<>(){}[]\"'".split("").map((x) => [x, "sim"]), ...Array.from({ length: 12 }, (_, i) => ["F" + (i + 1), "fn"])];
+const kHtml = ([t, c]) => `<span class="k ${c}">${t.startsWith("i:") ? ic(t.slice(2)) : esc(t)}</span>`;
+const vkFila = (lista, pag) => `<div class="vk-fila"><div class="vk-pista">${lista.map(kHtml).join("")}</div></div>`;
+const vkPuntos = (n, on) => `<div class="vk-puntos">${Array.from({ length: n }, (_, i) => `<i class="${i === on ? "on" : ""}"></i>`).join("")}</div>`;
+function vkPanel() {
+  const r = (l, seis) => `<div class="vk-rejilla ${seis ? "seis" : ""}">${l.map(kHtml).join("")}</div>`;
+  return `<div class="vk-panel"><div class="vk-cab"><b>Todas las teclas</b><span class="btn chico borde">${ic("sliders-horizontal")}Personalizar</span></div>
+    <div class="vk-sec">Teclas especiales</div>${r([["shift+tab","mod"],["ctrl","mod"],["esc","mod"],["alt","mod"],["tab","mod"],["ins",""],["del",""],["ctrl+C","mod"]])}
+    <div class="vk-sec">Flechas y moverse</div><div class="vk-dos"><div class="vk-flechas"><span class="k" style="grid-area:1/2">${ic("arrow-up")}</span><span class="k" style="grid-area:2/1">${ic("arrow-left")}</span><span class="k" style="grid-area:2/2">${ic("arrow-down")}</span><span class="k" style="grid-area:2/3">${ic("arrow-right")}</span></div>${r([["home",""],["pgUp",""],["pgDn",""],["end",""]].map((x) => x)).replace("vk-rejilla", "vk-rejilla\" style=\"grid-template-columns:repeat(2,minmax(0,1fr))")}</div>
+    <div class="vk-sec">Ventanas (tmux)</div>${r([["ctrl+B %","mod"],["ctrl+B \"","mod"],["ctrl+B O","mod"],["ctrl+B X","mod"]])}
+    <div class="vk-sec">Símbolos</div>${r(VK2.filter(([, c]) => c === "sim"), true)}
+    <div class="vk-sec">Funciones</div>${r(VK2.filter(([, c]) => c === "fn"), true)}</div>`;
+}
+const vkTeclado = () => `<div class="vk-teclado">${["qwertyuiop", "asdfghjklñ"].map((f) => `<div class="fila">${[...f].map((x) => `<span>${x}</span>`).join("")}</div>`).join("")}<div class="fila"><span class="an">⇧</span>${[..."zxcvbnm"].map((x) => `<span>${x}</span>`).join("")}<span class="an">⌫</span></div><div class="fila"><span class="an">?123</span><span class="an">,</span><span class="esp"></span><span class="an">.</span><span class="an">↵</span></div><div class="nota">Teclado del celular</div></div>`;
+function vkHtml(modo) {
+  const abierto = modo === "panel";
+  return `<div class="vk ${abierto ? "abierto" : ""} ${modo === "teclado" ? "con-teclado" : ""}">
+    <div class="vk-filas">${vkFila(VK1)}${vkPuntos(3, 0)}${vkFila(VK2)}${vkPuntos(3, 0)}</div>${vkPanel()}
+    <div class="vk-barra"><button class="${abierto ? "on" : ""}" aria-label="Todas las teclas">${ic("layout-grid")}</button><button aria-label="Comandos guardados">${ic("braces")}</button><button aria-label="Historial">${ic("history")}</button><button aria-label="Pegar">${ic("clipboard-paste")}</button><button aria-label="Caja de comando">${ic("text-cursor-input")}</button><button class="${modo === "teclado" ? "on" : ""}" aria-label="Teclado">${ic("keyboard")}</button></div>
+    ${vkTeclado()}</div>`;
+}
+function vkMover() {
+  const modo = new URLSearchParams(location.search).get("k");
+  document.querySelectorAll(".vk-pista").forEach((p, i) => {
+    const marcar = () => {
+      const fila = p.parentElement, max = p.scrollWidth - p.clientWidth;
+      fila.classList.toggle("al-final", p.scrollLeft >= max - 2);
+      const pts = fila.nextElementSibling?.querySelectorAll("i") || [];
+      const on = max <= 0 ? 0 : Math.round((p.scrollLeft / max) * (pts.length - 1));
+      pts.forEach((x, j) => x.classList.toggle("on", j === on));
+    };
+    p.addEventListener("scroll", marcar, { passive: true });
+    if (modo === "movido") p.scrollLeft = i === 0 ? p.scrollWidth * 0.5 : p.scrollWidth;
+    marcar();
+  });
+  document.querySelectorAll(".vk-barra button:first-child").forEach((b) => b.addEventListener("click", () => { b.closest(".vk").classList.toggle("abierto"); b.classList.toggle("on"); }));
+}
+Object.assign(PAGINAS, {
+  "termius-hosts"() {
+    const host = (n, d, c, sel) => `<div class="vt-host ${sel ? "sel" : ""}"><span class="av" style="background:${c}">${ic("server")}</span><div style="min-width:0"><b>${n}</b><small>${d}</small></div></div>`;
+    return `<div class="pagina pleno"><div class="vt">${vtTabs(false)}<div class="vt-cuerpo">
+      <nav class="vt-nav">${VT_NAV.map(([i, n], k) => `<span class="${k === 0 ? "sel" : ""}">${ic(i)}<span class="txt">${n}</span></span>`).join("")}</nav>
+      <section class="vt-centro">
+        <div class="vt-busca">${ic("search")}<span class="t">Busca un host o escribe usuario@servidor…</span><a class="btn chico borde" href="#/termius-sesion">Conectar</a></div>
+        <div class="vt-acciones"><span class="btn borde">${ic("plus")}Nuevo host</span><span class="btn borde">${ic("terminal")}Terminal de esta PC</span></div>
+        <div class="vt-h">Grupos</div><div class="vt-grid"><div class="vt-host"><span class="av" style="background:#1c4f8a">${ic("layout-dashboard")}</span><div><b>Mexicanland Network</b><small>2 hosts</small></div></div></div>
+        <div class="vt-h">Hosts</div><div class="vt-grid">${host("Panel EU (VPS 6 Contabo)", "ssh, ubuntu", "#e95420", true)}${host("Node US (VPS 12 PLUS)", "ssh, root", "#e95420")}${host("PowerShell 7", "esta PC", "#3949ab")}</div>
+      </section>
+      <aside class="vt-det"><div class="cab">Datos del host <span class="btn icono chico">${ic("x")}</span></div><div class="cuerpo">
+        <div class="vt-caja"><h4>Dirección</h4><div class="vt-in mono">203.0.113.10</div></div>
+        <div class="vt-caja"><h4>General</h4><div class="vt-in">Panel EU (VPS 6 Contabo)</div><div class="vt-in">${ic("layout-dashboard")}Mexicanland Network</div><div class="vt-in" style="color:var(--apagado)">Etiquetas</div></div>
+        <div class="vt-caja"><h4>SSH en el puerto <span class="kbd">22</span></h4><div class="vt-in">${ic("users")}ubuntu</div><div class="vt-in">${ic("key")}id_ed25519 · llavero</div><div class="vt-in mono">SHA256:x9F…k2Q ✓</div></div>
+        <div class="vt-caja" style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:6px"><div><b>12%</b><br><small style="color:var(--tenue)">CPU</small></div><div><b>27%</b><br><small style="color:var(--tenue)">RAM</small></div><div><b>33%</b><br><small style="color:var(--tenue)">Disco</small></div></div>
+      </div><div class="pie"><a class="btn primario" href="#/termius-sesion">${ic("terminal")}Conectar</a></div></aside>
+    </div>${vtBottom("Hosts")}</div></div>`;
+  },
+  "termius-sesion"() {
+    const salida = `<span class="c-gris">Último acceso: hoy 00:17 · huella verificada · 23 ms</span>\n\nWelcome to <span class="c-b">Ubuntu 22.04.5 LTS</span>\n\n${termLinea("root@vps", "docker ps --format '{{.Names}}  {{.Status}}'")}\nmisetup-core     <span class="c-verde">Up 2 hours (healthy)</span>\nmisetup-db       <span class="c-verde">Up 2 hours (healthy)</span>\nmisetup-caddy    <span class="c-verde">Up 2 hours</span>\nmisetup-clamav   <span class="c-verde">Up 2 hours (healthy)</span>\n\n${termLinea("root@vps", "df -h /")}\n/dev/sda1   97G   18G   79G  <span class="c-amarillo">19%</span> /\n\n${termLinea("root@vps", '<span class="cursor"></span>')}`;
+    const modo = new URLSearchParams(location.search).get("k");
+    const top = `<div class="vs-top"><a class="b" href="#/terminal">${ic("chevron-left")}</a><div class="ses"><span class="s sel"><span class="punto ok"></span>vps</span><span class="s"><span class="punto aviso"></span>panel</span></div><span class="b">${ic("plus")}</span><span class="b">${ic("sparkles")}</span></div>`;
+    return `<div class="pagina pleno"><div class="vt en-ses">${top}${vtTabs(true)}<div class="vt-ses" style="display:flex;flex-direction:column">
+      <div class="vt-term"><div class="salida">${salida}</div>
+        <div class="vt-tactil"><div class="t-teclas">${TECLAS.map(([x]) => `<span class="tecla" style="display:inline-grid;place-items:center">${x}</span>`).join("")}</div><div class="t-entrada"><span class="p">$</span><input placeholder="Escribe un comando o /nombre…"><span class="btn primario icono chico">${ic("send")}</span></div></div>
+      </div>${vkHtml(modo)}</div>${vtBottom("")}</div></div>`;
+  },
+});
+
+const REC = [["Pagar el internet", "hoy, 10:30 a.m.", "#f5c451"], ["Renovar el dominio", "mañana, 9:00 a.m.", "#7cb7ff"], ["Cumpleaños de mamá", "sáb 25 oct", "#ff6b81"]];
+const anillo = (v, t, sub, c) => `<div class="vid"><div class="anillo" style="--v:${v};--c:${c}"><span>${v}%</span></div><b>${t}</b><small>${sub}</small></div>`;
+const equiposHtml = () => [["monitor", "PC de jokee", "Conectada · Windows 11", "ok"], ["smartphone", "A56 de jokee", "Hace un momento · Android 16", ""], ["server", "vps", "Servidor · 23 ms · todo en orden", "ok"]].map(([i, n, s, e]) => `<div class="equipo"><span class="ico">${ic(i)}</span><span class="t"><b>${n}</b><small>${s}</small></span><span class="punto ${e}"></span></div>`).join("");
+const recHtml = () => REC.map(([t, f, c]) => `<div class="fila"><span class="punto" style="background:${c}"></span><span class="t">${t}</span><small>${f}</small></div>`).join("");
+const FAV = ["terminal", "notas", "finanzas", "musica", "rendimiento", "ia", "sitios", "calendario"];
+const COLOR_APP = { principal: "#7c5cff", vps: "#2e9e6b", panel: "#e95420", seguridad: "#3a7bd5", redes: "#e0457b", novedades: "#f59e0b", herramientas: "#0ea5e9", programacion: "#64748b", host: "#14b8a6", sitios: "#8b5cf6", estudio: "#ec4899", entretenimiento: "#ef4444", casa: "#22c55e", remoto: "#6366f1", ia: "#a855f7", ajustes: "#475569" };
+Object.assign(PAGINAS, {
+  "inicio-1"() {
+    return `<div class="pagina ini"><h1>Hola, Yahir</h1><p class="sub">Todo tu setup en un solo lugar · jueves 22 de octubre</p>
+      <div class="i1"><div class="col">
+        <div class="medir">${anillo(26, "Procesador", "Ryzen 5 5600", "#b497ff")}${anillo(14, "Tarjeta de video", "RTX 3060", "#7cb7ff")}${anillo(51, "Memoria", "16.2 de 31.9 GB", "#3ddc84")}${anillo(66, "Disco", "328 GB libres", "#f5c451")}</div>
+        <div class="vid"><h3>${ic("layout-grid")}Tus favoritos<span class="ver">Editar</span></h3><div class="acc-grid">${FAV.map((id) => `<button class="acceso" onclick="ir('${id}')">${ic(NOMBRES[id].ic)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${NOMBRES[id].n}</span></button>`).join("")}</div></div>
+      </div><div class="col">
+        <div class="vid"><h3>${ic("monitor")}Mis equipos<span class="ver">Ver</span></h3>${equiposHtml()}</div>
+        <div class="vid"><h3>${ic("bell")}Próximos recordatorios<span class="ver">Ver</span></h3>${recHtml()}</div>
+      </div></div></div>`;
+  },
+  "inicio-2"() {
+    return `<div class="pagina ini"><h1>Hola, Yahir</h1><p class="sub">Tu día de un vistazo</p>
+      <div class="bento">
+        <div class="vid b-2"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><div class="hora">10:24</div><p class="sub" style="margin-top:6px">jueves 22 de octubre</p></div><div style="text-align:right"><span class="grande-n">${ic("cloud-sun", 'style="width:30px;height:30px;color:#f5c451"')} 24°</span><p class="sub">Monterrey · nublado</p></div></div></div>
+        <div class="vid b-2 b-r2"><h3>${ic("server")}Servidores<span class="ver">Rendimiento</span></h3><div class="estado-s"><span class="punto ok"></span><span class="t"><b>vps</b> · 6 contenedores sanos</span><small>23 ms</small></div><div class="estado-s"><span class="punto aviso"></span><span class="t"><b>panel</b> · RAM al 63 %</span><small>88 ms</small></div><p class="sub" style="margin:10px 0 0">CPU de vps · últimas 2 horas</p><div class="spark">${Array.from({ length: 30 }, (_, i) => `<i style="height:${15 + Math.round(Math.abs(Math.sin(i / 3)) * 80)}%"></i>`).join("")}</div></div>
+        <div class="vid"><h3>${ic("wallet")}Este mes</h3><div class="grande-n">$4,009</div><small style="color:var(--peligro)">${ic("trending-up", 'style="width:13px;height:13px"')} 12 % más que el mes pasado</small></div>
+        <div class="vid"><h3>${ic("cpu")}Esta PC</h3><div class="grande-n">26%</div><small style="color:var(--tenue)">Memoria 51 % · Disco 66 %</small></div>
+        <div class="vid b-2"><h3>${ic("bell")}Recordatorios<span class="ver">Ver</span></h3>${recHtml()}</div>
+        <div class="vid b-2"><h3>${ic("sticky-note")}Notas recientes<span class="ver">Ver</span></h3><div class="fila"><span class="t">🧁 Ideas para la pastelería</span><small>hace 2 h</small></div><div class="fila"><span class="t">🛒 Lista del súper</span><small>ayer</small></div><div class="fila"><span class="t">✈️ Viaje a Oaxaca</span><small>lun</small></div></div>
+        <div class="vid b-4"><h3>${ic("zap")}Atajos</h3><div class="acc-grid">${FAV.map((id) => `<button class="acceso" onclick="ir('${id}')">${ic(NOMBRES[id].ic)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${NOMBRES[id].n}</span></button>`).join("")}</div></div>
+      </div></div>`;
+  },
+  "inicio-3"() {
+    const cats = MENU.filter(([c]) => !["Ajustes"].includes(c)).slice(0, 9);
+    const clave = (c) => ({ "Menú principal": "principal", VPS: "vps", Panel: "panel", Seguridad: "seguridad", "Redes y streams": "redes", Novedades: "novedades", Herramientas: "herramientas", Programación: "programacion", "Host local": "host" })[c] || "ajustes";
+    return `<div class="pagina ini"><h1>Hola, Yahir</h1><p class="sub">¿Qué quieres abrir?</p>
+      <div class="busca-g">${ic("search")}Busca un apartado, una nota, un servidor…<span class="kbd" style="margin-left:auto">Ctrl K</span></div>
+      <div class="lanz-top"><div class="vid" style="display:flex;align-items:center;gap:16px"><div class="hora" style="font-size:44px">10:24</div><div><b>jueves 22 de octubre</b><p class="sub">${ic("cloud-sun", 'style="width:14px;height:14px"')} 24° nublado</p></div></div><div class="vid"><b>${ic("server", 'style="width:14px;height:14px"')} vps</b><p class="sub">Todo en orden · 23 ms</p></div><div class="vid"><b>${ic("bell", 'style="width:14px;height:14px"')} Pagar el internet</b><p class="sub">hoy, 10:30 a.m.</p></div></div>
+      ${cats.map(([c, items]) => `<div class="apps-cat"><h4>${c}</h4><div class="apps">${items.map(([id, n, i]) => `<button class="app-i" style="border:0;background:transparent" onclick="ir('${id}')"><span class="ico" style="background:linear-gradient(145deg,${COLOR_APP[clave(c)]},color-mix(in srgb,${COLOR_APP[clave(c)]} 55%,#000))">${ic(i)}</span><span>${n}</span></button>`).join("")}</div></div>`).join("")}</div>`;
+  },
+  "inicio-4"() {
+    return `<div class="pagina ini"><h1>Centro de control</h1><p class="sub">Lo de hoy, tus equipos y lo que pasó</p>
+      <div class="cc">
+        <div class="col"><div class="vid"><h3>${ic("monitor")}Equipos</h3>${equiposHtml()}</div>
+          <div class="vid"><h3>${ic("activity")}Esta PC</h3>${[["Procesador", 26, "#b497ff"], ["Memoria", 51, "#3ddc84"], ["Disco", 66, "#f5c451"]].map(([n, v, c]) => `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><span>${n}</span><b>${v}%</b></div><div class="medidor"><i style="width:${v}%;background:${c}"></i></div></div>`).join("")}</div></div>
+        <div class="col"><div class="vid"><h3>${ic("calendar-clock")}Hoy<span class="ver">Calendario</span></h3><div class="linea-t">
+          <div class="ev" style="--c:#3ddc84"><b>Respaldo automático de la base</b><small>4:15 a.m. · listo</small></div>
+          <div class="ev ahora"><b>Pagar el internet</b><small>10:30 a.m. · en 6 minutos</small></div>
+          <div class="ev" style="--c:#7cb7ff"><b>Junta con proveedores</b><small>1:00 p.m. · Calendario</small></div>
+          <div class="ev" style="--c:#f5c451"><b>Cobro: Netflix</b><small>6:00 p.m. · $299 · Suscripciones</small></div>
+          <div class="ev" style="--c:#ff6b81"><b>Vence el dominio de un cliente</b><small>11:59 p.m. · Vencimientos</small></div></div></div></div>
+        <div class="col"><div class="vid"><h3>${ic("bell-ring")}Lo que pasó</h3>
+          <div class="alerta"><span class="ico" style="background:rgba(61,220,132,.12);color:var(--ok)">${ic("circle-check")}</span><div><b>Mi Setup se actualizó a 0.11.4b</b><small>hace 1 h</small></div></div>
+          <div class="alerta"><span class="ico" style="background:rgba(245,196,81,.12);color:var(--aviso)">${ic("triangle-alert")}</span><div><b>panel usa 63 % de RAM</b><small>hace 2 h · Alertas</small></div></div>
+          <div class="alerta"><span class="ico" style="background:rgba(124,183,255,.12);color:#7cb7ff">${ic("shield-check")}</span><div><b>Entraste desde un celular nuevo</b><small>ayer · Seguridad</small></div></div>
+          <div class="alerta"><span class="ico" style="background:var(--acento-suave);color:var(--acento)">${ic("globe-2")}</span><div><b>Nuevo mensaje en tu sitio</b><small>ayer · Sitios y apps</small></div></div></div></div>
+      </div></div>`;
+  },
+});
+
+function generica(id) {
+  const n = NOMBRES[id] || { n: "Apartado", ic: "layout-dashboard" };
+  return `<div class="pagina">${encabezado(n.n, "Este apartado ya existe en la app; aquí solo se ve cómo encaja con el diseño.")}
+    <div class="tarjeta vacio">${ic(n.ic)}<p>Contenido de «${esc(n.n)}».</p><p><button class="btn borde" onclick="ir('terminal')">${ic("terminal")} Ir a la terminal nueva</button></p></div></div>`;
+}
+
+function pintarPagina() {
+  const { pag } = rutaActual();
+  if (pag === "ajustes" && rutaActual().sub) est.tabAjustes = rutaActual().sub;
+  $("contenido").innerHTML = (PAGINAS[pag] || (() => generica(pag)))();
+  $("contenido").scrollTop = 0;
+  $("titulo-movil").textContent = pag === "inicio" ? "Inicio" : NOMBRES[pag.startsWith("termius") ? "terminal" : pag.replace(/-\d+$/, "")]?.n || "Mi Setup";
+  $("app").classList.toggle("pleno-total", rutaActual().sub.startsWith("abierta"));
+  $("app").classList.toggle("en-terminal", pag === "terminal");
+  $("app").classList.toggle("en-musica", pag === "musica");
+  $("app").classList.toggle("en-pleno", pag.startsWith("termius"));
+  if (pag.startsWith("termius") && !esTablet()) $("app").classList.add("compacto");
+  $("app").classList.toggle("en-ses-cel", pag === "termius-sesion");
+  if (pag === "termius-sesion") vkMover();
+  pintarMenu();
+  if (pag === "terminal") iniciarTerminal();
+}
+
+// ============================================================================ conexiones entre apartados
+function abrirEnTerminal(hostId, comando) {
+  ir("terminal");
+  setTimeout(() => {
+    abrirPestana(hostId);
+    if (comando) setTimeout(() => { const p = activa(); if (p) ejecutar(p, comando); }, 750);
+  }, 30);
+}
+function sftp() { const p = activa(); if (p?.host.tipo !== "ssh") return avisar("SFTP es para servidores: abre una sesión SSH."); ir("archivos"); avisar("Archivos de " + p.host.nombre); }
+function irRuta(r) { est.ruta = ARCHIVOS[r] ? r : "/root"; pintarPagina(); }
+function nuevoSnippet(f) {
+  const d = Object.fromEntries(new FormData(f));
+  if (est.snippets.some((s) => s.nombre === d.nombre)) return avisar("Ya hay uno con ese nombre.");
+  est.snippets.push({ nombre: d.nombre, desc: d.desc || "", cmd: d.cmd });
+  guardar("snippets", est.snippets);
+  avisar(`Guardado: ya puedes escribir /${d.nombre} en la terminal`);
+  pintarPagina();
+}
+function borrarSnippet(i) { est.snippets.splice(i, 1); guardar("snippets", est.snippets); pintarPagina(); }
+function usarSnippetEnTerminal(i) { ir("terminal"); setTimeout(() => { if (!activa()) abrirPestana("vps"); $("t-entrada").value = "/" + est.snippets[i].nombre; $("t-entrada").focus(); }, 60); }
+function cambiarTerm(clave, valor, sinRepintar) {
+  est.ajustesTerm[clave] = valor;
+  aplicarAjustesTerminal();
+  if (sinRepintar) { $("tam-txt").textContent = valor + "px"; return; }
+  pintarPagina();
+}
+
+// ============================================================================ terminal
+function iniciarTerminal() {
+  if (!est.pestanas.length) { abrirPestana("pwsh", true); abrirPestana("vps", true); setTimeout(() => ejecutar(est.pestanas[1], "docker ps"), 800); }
+  pintarTeclas(); pintarTerm(); pintarPanelT();
+  if (matchMedia("(max-width: 1199px)").matches) cerrarPanelT();
+}
+const activa = () => est.pestanas.find((p) => p.clave === est.activa) || null;
+function promptDe(h) { return h.tipo === "ssh" ? `<span class="c-verde negrita">${h.usuario}</span>:<span class="c-azul negrita">~</span># ` : `<span class="c-lila">${esc(h.prompt)}</span> `; }
+function abrirPestana(id, silencioso) {
+  const host = HOSTS.find((h) => h.id === id);
+  const p = { clave: "p" + ++cont, host, lineas: [], conectado: host.tipo !== "ssh" };
+  if (host.tipo === "ssh") {
+    p.lineas.push(`<span class="c-gris">Conectando a ${esc(host.det)}…</span>`);
+    setTimeout(() => {
+      p.conectado = true;
+      p.lineas.push(`<span class="c-gris">Huella ED25519 verificada · cifrado chacha20-poly1305</span>`, "", `Welcome to <span class="negrita">Ubuntu 22.04.5 LTS</span>`, `  Carga: <span class="c-verde">0.02</span>   Disco: <span class="c-amarillo">${host.disco}%</span>   Memoria: <span class="c-verde">${host.ram}%</span>`, "");
+      if (rutaActual().pag === "terminal") pintarTerm();
+    }, 600);
+  } else p.lineas.push("Windows PowerShell", "Copyright (C) Microsoft Corporation. All rights reserved.", "");
+  est.pestanas.push(p); est.activa = p.clave;
+  if (!silencioso && rutaActual().pag === "terminal") pintarTerm();
+}
+function cerrarPestana(clave, e) {
+  e?.stopPropagation();
+  const i = est.pestanas.findIndex((p) => p.clave === clave);
+  est.pestanas.splice(i, 1);
+  if (est.activa === clave) est.activa = est.pestanas[Math.max(0, i - 1)]?.clave ?? null;
+  pintarTerm();
+}
+function pintarHosts() {
+  const q = ($("t-filtro")?.value || "").toLowerCase();
+  const lista = HOSTS.filter((h) => !q || (h.nombre + h.det + (h.etiq || "")).toLowerCase().includes(q));
+  const a = activa();
+  $("t-lista").innerHTML = [...new Set(lista.map((h) => h.grupo))].map((g) => `<div class="t-grupo"><span>${g}</span><span>${lista.filter((h) => h.grupo === g).length}</span></div>` + lista.filter((h) => h.grupo === g).map((h) => `
+    <div class="t-host ${a?.host.id === h.id ? "sel" : ""}" ondblclick="abrirPestana('${h.id}')">
+      <div class="av">${ic(h.tipo === "pc" ? "monitor" : "server")}</div>
+      <div style="min-width:0"><div class="nom"><span class="punto ${h.lat > 60 ? "aviso" : "ok"}"></span>${esc(h.nombre)}${h.etiq ? `<span class="etiqueta">${h.etiq}</span>` : ""}</div><div class="det">${esc(h.det)}${h.lat ? ` · ${h.lat} ms` : ""}</div></div>
+      <button class="btn icono chico" aria-label="Abrir ${esc(h.nombre)}" onclick="abrirPestana('${h.id}')">${ic("play")}</button>
+    </div>`).join("")).join("");
+  $("t-chips").innerHTML = HOSTS.map((h) => `<button class="chip ${a?.host.id === h.id ? "sel" : ""}" onclick="abrirPestana('${h.id}')"><span class="punto ${h.lat > 60 ? "aviso" : "ok"}"></span>${esc(h.nombre)}</button>`).join("");
+}
+function pintarTerm() {
+  if (!$("t-vista")) return;
+  pintarHosts();
+  $("t-pestanas").innerHTML = est.pestanas.map((p) => `<div class="t-pestana ${p.clave === est.activa ? "activa" : ""}" onclick="est.activa='${p.clave}';pintarTerm()" title="${esc(p.host.det)}"><span class="punto ${p.conectado ? "ok" : "aviso"}"></span><span class="t">${esc(p.host.nombre)}</span><button class="x" aria-label="Cerrar pestaña" onclick="cerrarPestana('${p.clave}', event)">${ic("x", 'style="width:12px;height:12px"')}</button></div>`).join("") + `<button class="t-nueva" aria-label="Nueva pestaña" onclick="abrirPestana(activa()?.host.id || 'pwsh7')">${ic("plus")}</button>`;
+  const zona = $("t-zona"), v = $("t-vista"), p = activa();
+  zona.querySelectorAll(".t-vista").forEach((x, i) => i > 0 && x.remove());
+  zona.classList.toggle("dividida", est.dividida && est.pestanas.length > 1);
+  if (!p) { v.innerHTML = `<div class="vacio" style="font-family:var(--ui)">${ic("terminal")}<h3 style="color:var(--texto)">Sin sesiones abiertas</h3><p>Elige un host (doble clic) o tócalo arriba.</p></div>`; }
+  else {
+    v.innerHTML = lineas(p, true); v.scrollTop = v.scrollHeight;
+    const otra = est.dividida && est.pestanas.find((x) => x.clave !== p.clave);
+    if (otra) { const v2 = document.createElement("div"); v2.className = "t-vista"; v2.innerHTML = lineas(otra, false); zona.appendChild(v2); v2.scrollTop = v2.scrollHeight; }
+  }
+  const ssh = p?.host.tipo === "ssh";
+  $("t-estado").innerHTML = !p ? "<span>Sin conexión</span>" : `<span><span class="punto ${p.conectado ? "ok" : "aviso"}"></span> ${p.conectado ? "Conectado" : "Conectando…"}</span><span>${esc(p.host.det.split(":")[0])}</span>${ssh ? `<span style="color:${p.host.lat > 60 ? "var(--aviso)" : "var(--ok)"}">${p.host.lat} ms</span>` : ""}<span class="der">${ssh ? `<span class="ocultable">CPU ${p.host.cpu}%</span><span class="ocultable">RAM ${p.host.ram}%</span>` : ""}<span class="ocultable">UTF-8</span><span>${TEMAS[est.ajustesTerm.tema].n} · ${est.ajustesTerm.tamano}px</span></span>`;
+  $("t-p").textContent = ssh ? "$" : ">";
+}
+function lineas(p, cursor) { return p.lineas.map((l) => `<div class="linea">${l}</div>`).join("") + (p.conectado ? `<div class="linea">${promptDe(p.host)}${cursor ? '<span class="cursor"></span>' : ""}</div>` : ""); }
+
+const PELIGROSOS = /\b(rm\s+-rf?|mkfs|dd\s+if=|reboot|shutdown|poweroff|halt|docker\s+system\s+prune|drop\s+database)\b/i;
+function enviar(forzar) {
+  const caja = $("t-entrada"); let cmd = caja.value.trim(); const p = activa();
+  if (!p) return avisar("Primero abre una sesión.");
+  if (!cmd) return;
+  if (cmd.startsWith("/")) { const s = est.snippets.find((x) => x.nombre === cmd.slice(1)); if (!s) return avisar("No hay un comando guardado con ese nombre."); cmd = s.cmd; }
+  if (!forzar && PELIGROSOS.test(cmd)) { est.pendiente = cmd; $("modal-comando").textContent = cmd; $("modal").classList.add("ver"); return; }
+  ejecutar(p, cmd); caja.value = ""; cerrarSug();
+}
+function ejecutar(p, cmd) {
+  p.lineas.push(promptDe(p.host) + esc(cmd));
+  const r = respuesta(p, cmd);
+  if (r === null) p.lineas = []; else p.lineas.push(...r);
+  est.historial.unshift({ cmd, host: p.host.nombre, hora: new Date(), ok: !(r || []).some((l) => l.includes("c-rojo")) });
+  est.posHist = -1;
+  if (rutaActual().pag === "terminal") { pintarTerm(); if (est.panelT === "historial") pintarPanelT(); }
+}
+function respuesta(p, c) {
+  c = c.trim();
+  if (c === "clear" || c === "cls") return null;
+  if (c === "help" || c === "ayuda") return ['Prueba: <span class="c-cian">ls, df -h /, docker ps, uptime, whoami, cd /ruta, clear</span>'];
+  if (c.startsWith("cd ")) return [];
+  if (c.startsWith("ls")) return ['<span class="c-azul negrita">mi-setup</span>  <span class="c-azul negrita">backups</span>  <span class="c-verde">instalar.sh</span>  notas.txt'];
+  if (c.startsWith("df")) return ["Filesystem  Size  Used Avail Use% Mounted on", `/dev/sda1    97G   32G   65G  <span class="c-amarillo">${p.host.disco || 33}%</span> /`];
+  if (c.startsWith("docker ps")) return ["NAMES            STATUS", 'misetup-core     <span class="c-verde">Up 2 hours (healthy)</span>', 'misetup-db       <span class="c-verde">Up 2 hours (healthy)</span>', 'misetup-caddy    <span class="c-verde">Up 2 hours</span>'];
+  if (c === "uptime") return [" 04:41:07 up 12 days, load average: 0.02, 0.05, 0.01"];
+  if (c === "whoami") return [p.host.tipo === "ssh" ? "root" : "desktop\\jokee"];
+  if (/^(php|chown)/.test(c)) return ['<span class="c-verde">  INFO  </span> Listo.'];
+  return [`<span class="c-rojo">${esc(c.split(" ")[0])}: command not found</span> <span class="c-gris">(maqueta; prueba «help»)</span>`];
+}
+function confirmarPeligroso() { const c = est.pendiente; cerrarModal(); $("t-entrada").value = c; enviar(true); }
+function cerrarModal() { $("modal").classList.remove("ver"); est.pendiente = null; }
+
+const TECLAS = [["Esc", "esc"], ["Tab", "tab"], ["Ctrl", "ctrl"], ["↑", "arriba"], ["↓", "abajo"], ["←", "izq"], ["→", "der"], ["Ctrl+C", "ctrlc"], ["|", "|"], ["/", "/"], ["~", "~"], ["-", "-"]];
+function pintarTeclas() { $("t-teclas").innerHTML = TECLAS.map(([t, k]) => `<button class="tecla ${k === "ctrl" && est.ctrl ? "activa" : ""}" onclick="tecla('${k}')">${esc(t)}</button>`).join(""); }
+function tecla(k) {
+  const c = $("t-entrada");
+  if (k === "ctrl") { est.ctrl = !est.ctrl; return pintarTeclas(); }
+  if (k === "ctrlc") { const p = activa(); if (p) { p.lineas.push("^C"); pintarTerm(); } c.value = ""; return; }
+  if (k === "arriba" || k === "abajo") return moverHist(k === "arriba" ? 1 : -1);
+  if (k === "esc") { c.value = ""; return cerrarSug(); }
+  if (k === "tab") return autocompletar();
+  if (k === "izq" || k === "der") { const pos = c.selectionStart + (k === "izq" ? -1 : 1); c.setSelectionRange(pos, pos); return c.focus(); }
+  c.value += k; c.focus(); sugerir();
+}
+function moverHist(d) { const h = est.historial; if (!h.length) return; est.posHist = Math.max(-1, Math.min(h.length - 1, est.posHist + d)); $("t-entrada").value = est.posHist < 0 ? "" : h[est.posHist].cmd; }
+function teclaEntrada(e) {
+  const abierta = $("t-sug").classList.contains("ver");
+  if (abierta && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); est.sugSel += e.key === "ArrowDown" ? 1 : -1; return sugerir(); }
+  if (abierta && e.key === "Tab") { e.preventDefault(); return autocompletar(); }
+  if (e.key === "ArrowUp") { e.preventDefault(); moverHist(1); }
+  if (e.key === "ArrowDown") { e.preventDefault(); moverHist(-1); }
+  if (e.key === "Escape") cerrarSug();
+}
+const coinc = () => { const v = $("t-entrada").value; return v.startsWith("/") ? est.snippets.filter((s) => s.nombre.startsWith(v.slice(1))) : []; };
+function sugerir() {
+  const l = coinc(); if (!l.length) return cerrarSug();
+  est.sugSel = (est.sugSel + l.length) % l.length;
+  $("t-sug").innerHTML = l.map((s, i) => `<button class="sug ${i === est.sugSel ? "sel" : ""}" onmousedown="event.preventDefault();$('t-entrada').value='/${s.nombre}';cerrarSug()"><b>/${esc(s.nombre)}</b><span>${esc(s.desc)}</span><code>${esc(s.cmd)}</code></button>`).join("") + `<button class="sug" onmousedown="event.preventDefault();ir('comandos')"><b>＋</b><span>Guardar un comando nuevo (VPS → Comandos guardados)</span></button>`;
+  $("t-sug").classList.add("ver");
+}
+function autocompletar() { const l = coinc(); if (l.length) { $("t-entrada").value = "/" + l[est.sugSel % l.length].nombre; cerrarSug(); } }
+function cerrarSug() { $("t-sug")?.classList.remove("ver"); est.sugSel = 0; }
+
+function abrirPanelT(cual) {
+  est.panelT = cual;
+  if (!est.panelVisible) { est.panelVisible = true; $("term-caja").classList.remove("sin-panel"); }
+  $("t-lateral").classList.add("abierto"); $("t-velo").classList.add("ver");
+  pintarPanelT();
+}
+function cerrarPanelT() { $("t-lateral")?.classList.remove("abierto"); $("t-velo")?.classList.remove("ver"); }
+function alternarPanelT() {
+  if (matchMedia("(max-width: 1199px)").matches || $("term-caja").offsetWidth < 1050) { $("t-lateral").classList.contains("abierto") ? cerrarPanelT() : abrirPanelT(est.panelT); return; }
+  est.panelVisible = !est.panelVisible; $("term-caja").classList.toggle("sin-panel", !est.panelVisible);
+}
+function usarEnCaja(cmd, correr) { $("t-entrada").value = cmd; if ($("term-caja").offsetWidth < 1050) cerrarPanelT(); correr ? enviar() : $("t-entrada").focus(); }
+function pintarPanelT() {
+  if (!$("t-cont")) return;
+  document.querySelectorAll("#t-lateral [data-p]").forEach((b) => b.classList.toggle("activo", b.dataset.p === est.panelT));
+  if (est.panelT === "comandos") {
+    $("t-cont").innerHTML = `<div class="t-sec"><span>Escribe /nombre</span><a href="#/comandos">Administrar</a></div>` + est.snippets.map((s, i) => `<div class="t-item"><b style="font-family:var(--mono)">/${esc(s.nombre)}</b><div style="color:var(--tenue);font-size:12px">${esc(s.desc)}</div><code>${esc(s.cmd)}</code><div class="acc"><button class="btn borde chico" onclick="usarEnCaja(est.snippets[${i}].cmd, true)">${ic("play")} Ejecutar</button><button class="btn chico" onclick="usarEnCaja(est.snippets[${i}].cmd)">Poner en la caja</button></div></div>`).join("");
+  } else {
+    const h = est.historial;
+    $("t-cont").innerHTML = `<div class="t-sec"><span>Historial de esta sesión</span></div>` + (h.length ? h.map((x, i) => `<button class="t-item" onclick="usarEnCaja(est.historial[${i}].cmd)"><code style="margin:0;color:var(--texto)">${esc(x.cmd)}</code><div class="meta"><span style="color:${x.ok ? "var(--ok)" : "var(--peligro)"}">${x.ok ? "✓ terminó bien" : "✗ falló"}</span><span>${esc(x.host)}</span><span>${x.hora.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span></div></button>`).join("") : `<p style="color:var(--tenue)">Aquí salen los comandos que ejecutes.</p>`);
+  }
+}
+function abrirBusqueda() { $("t-busqueda").classList.add("ver"); $("t-texto-busqueda").focus(); }
+function cerrarBusqueda() { $("t-busqueda").classList.remove("ver"); $("t-texto-busqueda").value = ""; pintarTerm(); }
+function buscar() {
+  const q = $("t-texto-busqueda").value, p = activa(), v = $("t-vista");
+  if (!p) return;
+  v.innerHTML = lineas(p, true);
+  if (!q) return ($("t-cuenta").textContent = "0");
+  let n = 0;
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const caminar = (nodo) => {
+    if (nodo.nodeType === 3) { if (!re.test(nodo.textContent)) return; re.lastIndex = 0; const s = document.createElement("span"); s.innerHTML = esc(nodo.textContent).replace(re, (m) => (n++, `<mark>${m}</mark>`)); nodo.replaceWith(s); }
+    else [...nodo.childNodes].forEach(caminar);
+  };
+  [...v.childNodes].forEach(caminar);
+  $("t-cuenta").textContent = n;
+  v.querySelector("mark")?.scrollIntoView({ block: "center" });
+}
+function dividir() { if (est.pestanas.length < 2) return avisar("Abre dos sesiones para verlas lado a lado."); est.dividida = !est.dividida; pintarPagina(); }
+function codigo2fa() { const p = activa(); if (!p) return avisar("Primero abre una sesión."); p.lineas.push('<span class="c-gris">[código 2FA enviado: ••••••]</span>'); pintarTerm(); }
+async function pegar() { try { $("t-entrada").value += await navigator.clipboard.readText(); $("t-entrada").focus(); } catch { avisar("Usa Ctrl+V en la caja."); } }
+function copiarSalida() { const p = activa(); if (!p) return; const d = document.createElement("div"); d.innerHTML = p.lineas.join("\n"); navigator.clipboard?.writeText(d.textContent).then(() => avisar("Salida copiada"), () => avisar("No se pudo copiar")); }
+
+// ============================================================================ arranque
+document.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey && k === "f" && rutaActual().pag === "terminal") { e.preventDefault(); abrirBusqueda(); }
+  if (e.key === "Escape") { cerrarModal(); cerrarMenu(); cerrarPanelT(); }
+});
+if (window.visualViewport) visualViewport.addEventListener("resize", () => { $("app").style.height = visualViewport.height + "px"; });
+matchMedia("(max-width: 640px)").addEventListener("change", () => { ajustarBarra(); cerrarMenu(); });
+window.addEventListener("hashchange", pintarPagina);
+window.addEventListener("load", () => {
+  aplicarAjustesTerminal(); aplicarLectura(); ajustarBarra();
+  if (!location.hash) location.hash = "/terminal";
+  pintarPagina();
+});
+const iconosExtra = (txt) => document.querySelector("svg defs").insertAdjacentHTML("beforeend", txt);
+</script>
+<link rel="stylesheet" href="sec/recordatorios.css">
+<script src="sec/recordatorios.js"></script>
+<link rel="stylesheet" href="sec/notas.css">
+<script src="sec/notas.js"></script>
+<link rel="stylesheet" href="sec/equipos.css">
+<script src="sec/equipos.js"></script>
+<link rel="stylesheet" href="sec/chat.css">
+<script src="sec/chat.js"></script>
+<link rel="stylesheet" href="sec/calendario.css">
+<script src="sec/calendario.js"></script>
+<link rel="stylesheet" href="sec/finanzas.css">
+<script src="sec/finanzas.js"></script>
+<link rel="stylesheet" href="sec/portapapeles.css">
+<script src="sec/portapapeles.js"></script>
+<link rel="stylesheet" href="sec/rendimiento.css">
+<script src="sec/rendimiento.js"></script>
+<link rel="stylesheet" href="sec/alertas.css">
+<script src="sec/alertas.js"></script>
+<link rel="stylesheet" href="sec/comandos.css">
+<script src="sec/comandos.js"></script>
+<link rel="stylesheet" href="sec/archivos.css">
+<script src="sec/archivos.js"></script>
+<link rel="stylesheet" href="sec/seguridad.css">
+<script src="sec/seguridad.js"></script>
+<link rel="stylesheet" href="sec/respaldos.css">
+<script src="sec/respaldos.js"></script>
+<link rel="stylesheet" href="sec/agentes.css">
+<script src="sec/agentes.js"></script>
+<link rel="stylesheet" href="sec/pterodactyl.css">
+<script src="sec/pterodactyl.js"></script>
+<link rel="stylesheet" href="sec/negocio.css">
+<script src="sec/negocio.js"></script>
+<link rel="stylesheet" href="sec/contrasenas.css">
+<script src="sec/contrasenas.js"></script>
+<link rel="stylesheet" href="sec/navegador.css">
+<script src="sec/navegador.js"></script>
+<link rel="stylesheet" href="sec/ciber.css">
+<script src="sec/ciber.js"></script>
+<link rel="stylesheet" href="sec/registro.css">
+<script src="sec/registro.js"></script>
+<link rel="stylesheet" href="sec/cuentas.css">
+<script src="sec/cuentas.js"></script>
+<link rel="stylesheet" href="sec/streams.css">
+<script src="sec/streams.js"></script>
+<link rel="stylesheet" href="sec/streamer.css">
+<script src="sec/streamer.js"></script>
+<link rel="stylesheet" href="sec/x.css">
+<script src="sec/x.js"></script>
+<link rel="stylesheet" href="sec/discord.css">
+<script src="sec/discord.js"></script>
+<link rel="stylesheet" href="sec/bots.css">
+<script src="sec/bots.js"></script>
+<link rel="stylesheet" href="sec/novedades.css">
+<script src="sec/novedades.js"></script>
+<link rel="stylesheet" href="sec/herramientas.css">
+<script src="sec/herramientas.js"></script>
+<link rel="stylesheet" href="sec/documentos.css">
+<script src="sec/documentos.js"></script>
+<link rel="stylesheet" href="sec/convertidor.css">
+<script src="sec/convertidor.js"></script>
+<link rel="stylesheet" href="sec/enlaces.css">
+<script src="sec/enlaces.js"></script>
+<link rel="stylesheet" href="sec/compartir.css">
+<script src="sec/compartir.js"></script>
+<link rel="stylesheet" href="sec/codigo.css">
+<script src="sec/codigo.js"></script>
+<link rel="stylesheet" href="sec/ejercicios.css">
+<script src="sec/ejercicios.js"></script>
+<link rel="stylesheet" href="sec/host.css">
+<script src="sec/host.js"></script>
+<link rel="stylesheet" href="sec/sitios.css">
+<script src="sec/sitios.js"></script>
+<link rel="stylesheet" href="sec/fotos.css">
+<script src="sec/fotos.js"></script>
+<link rel="stylesheet" href="sec/video.css">
+<script src="sec/video.js"></script>
+<link rel="stylesheet" href="sec/peliculas.css">
+<script src="sec/peliculas.js"></script>
+<link rel="stylesheet" href="sec/videos.css">
+<script src="sec/videos.js"></script>
+<link rel="stylesheet" href="sec/casa.css">
+<script src="sec/casa.js"></script>
+<link rel="stylesheet" href="sec/remoto.css">
+<script src="sec/remoto.js"></script>
+<link rel="stylesheet" href="sec/ia.css">
+<script src="sec/ia.js"></script>
+<link rel="stylesheet" href="sec/iacreativa.css">
+<script src="sec/iacreativa.js"></script>
+<link rel="stylesheet" href="sec/ajustes.css">
+<script src="sec/ajustes.js"></script>
+</body>
+</html>

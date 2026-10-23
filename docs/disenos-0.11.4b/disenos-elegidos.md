@@ -1,0 +1,52 @@
+# Diseños elegidos (0.11.4b)
+- Inicio: opción 1 (anillos)
+- Terminal: Termius pantalla completa + barra de teclas que se desliza (celular)
+- Música: aprobado
+- Recordatorios: opción 4 (+ editor abierto completo)
+- Bloc de notas: opción 3 (abierta completa, el texto empieza pegado a la orilla como el Bloc de notas de Windows)
+- Equipos: opción 1
+- Chat: opción 3
+- Calendario: opción 1
+- Mis finanzas: opción 1
+- Portapapeles: opción 4
+- Rendimiento: opción 1
+- Alertas de caída: opción 1
+- Comandos guardados: opción 2 (+ abierta completa)
+- Archivos: opción 1 (+ abierta completa)
+- Seguridad del servidor: opción 1, con páginas 1, 2, 3… en la lista de puertos
+- Respaldos: opción 1
+- Agentes de IA: opción 1 (+ abierta completa)
+- Nota: Pterodactyl solo para el dueño (y roles que él asigne). Negocio y cobros: para el dueño se queda en Panel; para el público se mueve después a Sitios web.
+- Pterodactyl: opción 2 (+ abierta completa)
+- Negocio y cobros: opción 1 (+ abierta completa)
+- Contraseñas y 2FA: opción 3
+- Navegador privado: opción 1
+- Ciberseguridad: opción 2
+- Registro de actividad: opción 4
+- Cuentas y permisos: (falta el número; en el HTML final puse la opción 1, lista y detalle)
+- Streams: opción 3 (+ abierta completa)
+- X (Twitter): opción 2
+- Discord: opción 2
+- Modo streamer: opción 4
+- Bots de Discord: opción 3
+- Novedades: opción 1
+- Herramientas: opción 3
+- Documentos y PDF: opción 2
+- Convertidor: opción 1
+- Enlaces cortos: opción 3
+- Compartir archivos: opción 3
+- Al final: un HTML con todas las interfaces elegidas.
+- Código (editor): opción 2 (+ abierta completa). La vista previa en vivo solo aparece si el proyecto es HTML; con código normal se quita y el editor ocupa ese espacio.
+- Ejercicios de código: pantalla normal = opción 4 (tablero con «Reto del día», la de la foto). Abierta = opción 1 abierta; si el ejercicio es de HTML, se usa la abierta de la opción 3 (con «Tu página» en vivo).
+- Servidores en mi PC: opción 3
+- Sitios y apps: opción 1 (+ abierta completa)
+- Editor de fotos: opción 1 (+ abierta completa)
+- Editor de video: pantalla normal = opción 1; abierta = la de la opción 2.
+- Películas y series: opción 1 (+ abierta completa)
+- Música: aprobada
+- Mis videos: opción 1 (+ abierta)
+- Mi casa: pantalla normal = opción 1; la cámara abierta completa = la de la opción 2.
+- Control remoto: opción 1
+- IA asistente: opción 1 (+ abierta completa). Todos los mensajes empiezan a la izquierda (tuyos y de la IA), como en los otros diseños.
+- IA creativa: opción 1 (+ abierta completa)
+- Ajustes: opción 2 (+ pantalla «Qué hay de nuevo»)
