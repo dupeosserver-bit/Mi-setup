@@ -111,8 +111,9 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
   };
 
   /** Crea los cobros que ya tocan (y los de la próxima semana, para avisar antes). */
-  async function generarCobros(userId: string): Promise<void> {
-    const limite = new Date(deps.now().getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+  async function generarCobros(userId: string, hasta?: string): Promise<void> {
+    const semana = new Date(deps.now().getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const limite = hasta && hasta > semana ? hasta : semana;
     const pagos = await db.select().from(financeSplits).where(and(eq(financeSplits.userId, userId), eq(financeSplits.active, true), lte(financeSplits.nextDue, limite)));
     for (const p of pagos) {
       const dia = Number(p.nextDue.slice(8, 10));
@@ -273,8 +274,12 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
       const nombrePersona = new Map(personas.map((p) => [p.id, p.name]));
       const nombrePago = new Map(pagos.map((p) => [p.id, p.name]));
       const h = hoy();
+      const activos = pagos.filter((p) => p.active);
+      const alMes = (total: number, ciclo: string) => (ciclo === "semanal" ? (total * 52) / 12 : ciclo === "anual" ? total / 12 : total);
       return {
         hoy: h,
+        totalPagos: Math.round(activos.reduce((t, p) => t + Number(p.total), 0) * 100) / 100,
+        totalPagosMes: Math.round(activos.filter((p) => p.cycle !== "unico").reduce((t, p) => t + alMes(Number(p.total), p.cycle), 0) * 100) / 100,
         pagos: pagos.map((p) => ({
           id: p.id,
           nombre: p.name,
@@ -302,6 +307,58 @@ export function finanzasExtraRoutes(deps: ModuleDeps, ia: IaSimple) {
             });
           return { id: p.id, nombre: p.name, contacto: p.contact, debe: suma("debe"), pendiente: suma("pendiente"), cobros: lista.slice(-36), comparte, enlace: Boolean(p.shareTokenHash) };
         }),
+      };
+    });
+
+    app.get("/api/finanzas-personales/divididos/mes", leer, async (request) => {
+      const user = currentUser(request);
+      const { mes } = z.object({ mes: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(request.query);
+      const h = hoy();
+      const elegido = mes ?? h.slice(0, 7);
+      const [a, m] = elegido.split("-").map(Number) as [number, number];
+      const inicio = `${elegido}-01`;
+      const fin = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+      if (elegido <= h.slice(0, 7)) await generarCobros(user.id, fin);
+      const inicioFecha = new Date(`${inicio}T00:00:00`);
+      const filas = await db
+        .select({ cobro: financeSplitCharges, pago: financeSplits, persona: financePeople })
+        .from(financeSplitCharges)
+        .innerJoin(financeSplits, eq(financeSplits.id, financeSplitCharges.splitId))
+        .innerJoin(financePeople, eq(financePeople.id, financeSplitCharges.personId))
+        .where(
+          and(
+            eq(financeSplits.userId, user.id),
+            lte(financeSplitCharges.dueOn, fin),
+            sql`(${financeSplitCharges.dueOn} >= ${inicio} or ${financeSplitCharges.paidAt} is null or ${financeSplitCharges.paidAt} >= ${inicioFecha})`,
+          ),
+        )
+        .orderBy(asc(financeSplitCharges.dueOn));
+      const cobros = filas.map(({ cobro, pago, persona }) => ({
+        id: cobro.id,
+        pagoId: pago.id,
+        pago: pago.name,
+        personaId: persona.id,
+        persona: persona.name,
+        fecha: cobro.dueOn,
+        monto: Number(cobro.amount),
+        moneda: pago.currency,
+        pagado: cobro.paidAt !== null,
+        vieneDe: cobro.dueOn < inicio ? cobro.dueOn.slice(0, 7) : null,
+      }));
+      const redondo = (n: number) => Math.round(n * 100) / 100;
+      const suma = (l: typeof cobros) => redondo(l.reduce((t, c) => t + c.monto, 0));
+      const pagos = await db.select().from(financeSplits).where(and(eq(financeSplits.userId, user.id), eq(financeSplits.active, true)));
+      const alMes = (total: number, ciclo: string) => (ciclo === "semanal" ? (total * 52) / 12 : ciclo === "anual" ? total / 12 : total);
+      return {
+        mes: elegido,
+        cobros,
+        total: suma(cobros),
+        cobrado: suma(cobros.filter((c) => c.pagado)),
+        falta: suma(cobros.filter((c) => !c.pagado)),
+        deAntes: suma(cobros.filter((c) => !c.pagado && c.vieneDe)),
+        totalPagos: redondo(pagos.reduce((t, p) => t + Number(p.total), 0)),
+        totalPagosMes: redondo(pagos.filter((p) => p.cycle !== "unico").reduce((t, p) => t + alMes(Number(p.total), p.cycle), 0)),
+        pagosActivos: pagos.length,
       };
     });
 

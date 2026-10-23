@@ -466,7 +466,7 @@ function EditarPersona({ p, alCerrar }: { p: Persona; alCerrar: () => void }) {
 
 export function PagosDivididos() {
   const puede = usePuede("finanzas_personales", "escritura");
-  const q = useQuery({ queryKey: ["finanzas-personales", "divididos"], queryFn: () => api<{ hoy: string; pagos: PagoDividido[]; personas: Persona[] }>("/api/finanzas-personales/divididos") });
+  const q = useQuery({ queryKey: ["finanzas-personales", "divididos"], queryFn: () => api<{ hoy: string; totalPagos?: number; totalPagosMes?: number; pagos: PagoDividido[]; personas: Persona[] }>("/api/finanzas-personales/divididos") });
   const [nuevo, setNuevo] = useState(false);
   const [editarPago, setEditarPago] = useState<PagoDividido | null>(null);
   const [editarPersona, setEditarPersona] = useState<Persona | null>(null);
@@ -537,8 +537,13 @@ export function PagosDivididos() {
           ]}
         />
       </div>
-      {d.personas.length ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {d.pagos.length ? (
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-[color-mix(in_srgb,var(--acento)_40%,transparent)] bg-[color-mix(in_srgb,var(--acento)_8%,var(--superficie))] p-3">
+            <p className="text-xs text-tenue">Total de tus pagos</p>
+            <p className="text-lg font-bold">{dinero(d.totalPagos ?? d.pagos.filter((p) => p.activo).reduce((a, p) => a + p.total, 0))}</p>
+            {d.totalPagosMes ? <p className="text-xs text-tenue">{`${dinero(d.totalPagosMes)} al mes`}</p> : null}
+          </div>
           <div className="rounded-xl border border-borde bg-superficie p-3">
             <p className="text-xs text-tenue">Te deben (vencido)</p>
             <p className={cx("text-lg font-bold", totalDeben > 0 ? "text-peligro" : "")}>{dinero(totalDeben)}</p>
@@ -547,7 +552,7 @@ export function PagosDivididos() {
             <p className="text-xs text-tenue">Por cobrar pronto</p>
             <p className="text-lg font-bold">{dinero(totalPorCobrar)}</p>
           </div>
-          <div className="col-span-2 rounded-xl border border-borde bg-superficie p-3 sm:col-span-1">
+          <div className="rounded-xl border border-borde bg-superficie p-3">
             <p className="text-xs text-tenue">Pagos compartidos</p>
             <p className="text-lg font-bold">{d.pagos.filter((p) => p.activo).length}</p>
           </div>
