@@ -1,10 +1,10 @@
-/** Películas y series: buscar, dónde verlas en México, siguiente capítulo y tu lista "por ver". */
 import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bookmark, BookmarkCheck, CalendarClock, Check, Clapperboard, ExternalLink, Film, Play, Radio, Search, Star, Trash2, Tv } from "lucide-react";
+import { Bookmark, BookmarkCheck, CalendarClock, Check, ChevronLeft, Clapperboard, ExternalLink, Film, Info, Play, Radio, Search, Star, Trash2, Tv } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Pestanas, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Pestanas, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { useModoPagina } from "../lib/marco";
 import { api } from "../lib/api";
 import { queryClient, usePuede } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
@@ -42,7 +42,6 @@ interface PorVer {
   vista: boolean;
 }
 
-/** Servicios gratis y legales con anuncios (México). */
 const CANALES_GRATIS = [
   { nombre: "Pluto TV (canales en vivo)", url: "https://pluto.tv/latam/live-tv" },
   { nombre: "Tubi", url: "https://tubitv.com/" },
@@ -79,16 +78,82 @@ function Poster({ r, alAbrir }: { r: { titulo: string; poster: string | null; fe
 }
 
 function Rejilla({ elementos, alAbrir }: { elementos: Resumen[]; alAbrir: (r: Resumen) => void }) {
-  const pag861 = usePaginado(elementos , 18);
+  const pagina = usePaginado(elementos, 18);
   return (
     <>
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-      {pag861.visibles.map((r) => (
-        <Poster key={`${r.tipo}-${r.id}`} r={r} alAbrir={() => alAbrir(r)} />
-      ))}
-    </div>
-    {pag861.paginas}
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        {pagina.visibles.map((r) => (
+          <Poster key={`${r.tipo}-${r.id}`} r={r} alAbrir={() => alAbrir(r)} />
+        ))}
+      </div>
+      {pagina.paginas}
     </>
+  );
+}
+
+function Fila({ titulo, icono: Icono, elementos, alAbrir }: { titulo: string; icono: typeof Tv; elementos: Resumen[]; alAbrir: (r: Resumen) => void }) {
+  const pagina = usePaginado(elementos, 12);
+  if (!elementos.length) return null;
+  return (
+    <section className="min-w-0 space-y-2">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <Icono className="h-4 w-4 text-tenue" />
+        {titulo}
+      </h2>
+      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+        {pagina.visibles.map((r) => (
+          <div key={`${r.tipo}-${r.id}`} className="w-28 shrink-0 snap-start sm:w-36 xl:w-40">
+            <Poster r={r} alAbrir={() => alAbrir(r)} />
+          </div>
+        ))}
+      </div>
+      {pagina.paginas}
+    </section>
+  );
+}
+
+function Portada({ r, enLista, alAbrir }: { r: Resumen; enLista: boolean; alAbrir: () => void }) {
+  const puede = usePuede("peliculas", "escritura");
+  const agregar = useMutation({
+    mutationFn: () => api("/api/peliculas/por-ver", { metodo: "POST", cuerpo: { tmdbId: r.id, tipo: r.tipo, titulo: r.titulo, poster: r.poster } }),
+    onSuccess: () => {
+      avisar("Agregada a tu lista");
+      void queryClient.invalidateQueries({ queryKey: ["peliculas", "por-ver"] });
+    },
+    onError: avisarError,
+  });
+  return (
+    <section className="relative min-w-0 overflow-hidden rounded-tarjeta border border-borde bg-superficie">
+      {r.poster ? <img src={r.poster} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl" /> : null}
+      <div className="absolute inset-0 bg-gradient-to-r from-[var(--superficie)] via-[color-mix(in_srgb,var(--superficie)_70%,transparent)] to-transparent" />
+      <div className="relative flex min-w-0 gap-4 p-4 sm:p-6">
+        {r.poster ? <img src={r.poster} alt={r.titulo} className="hidden w-32 shrink-0 self-start rounded-xl shadow-2xl sm:block lg:w-40" /> : null}
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Insignia>{r.tipo === "tv" ? "Serie del momento" : "Película del momento"}</Insignia>
+            {r.calificacion ? (
+              <span className="flex items-center gap-1 text-tenue">
+                <Star className="h-3.5 w-3.5 fill-current text-yellow-400" />
+                {r.calificacion}
+              </span>
+            ) : null}
+            {r.fecha ? <span className="text-tenue">{r.fecha.slice(0, 4)}</span> : null}
+          </div>
+          <h2 className="text-2xl font-bold leading-tight md:text-4xl">{r.titulo}</h2>
+          <p className="line-clamp-3 max-w-2xl text-sm text-tenue">{r.sinopsis || "Sin descripción en español."}</p>
+          <div className="flex flex-wrap gap-2">
+            <Boton variante="primario" icono={Info} onClick={alAbrir}>
+              Ver tráiler y dónde verla
+            </Boton>
+            {puede ? (
+              <Boton icono={enLista ? BookmarkCheck : Bookmark} disabled={enLista || agregar.isPending} onClick={() => agregar.mutate()}>
+                {enLista ? "Ya está en tu lista" : "Agregar a por ver"}
+              </Boton>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -121,19 +186,28 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
     onError: avisarError,
   });
   const d = q.data;
+  useModoPagina("completa");
   const navegar = useNavigate();
   const [verTrailer, setVerTrailer] = useState(false);
-  // ¿La tienes en Mis videos? (mismo título, sin importar mayúsculas ni acentos)
   const misVideos = useQuery({ queryKey: ["media", "videos"], queryFn: () => api<{ id: string; titulo: string }[]>("/api/media/videos"), retry: false, enabled: usePuede("videos") });
   const normal = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const laTienes = d ? (misVideos.data ?? []).find((v) => normal(v.titulo).includes(normal(d.titulo)) && normal(d.titulo).length >= 3) : undefined;
   const sinDonde = d && !d.dondeVer.suscripcion.length && !d.dondeVer.renta.length && !d.dondeVer.compra.length && !d.dondeVer.gratis?.length;
   return (
-    <Modal abierto titulo={d?.titulo ?? "Cargando…"} alCerrar={alCerrar}>
-      {q.isLoading ? <Cargando /> : null}
-      <ErrorCaja error={q.error} />
-      {d ? (
-        <div className="space-y-4">
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-fondo" style={{ height: "var(--alto-app, 100dvh)" }}>
+      {d?.poster ? <img src={d.poster} alt="" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full scale-110 object-cover opacity-25 blur-3xl" /> : null}
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-borde bg-[color-mix(in_srgb,var(--fondo)_80%,transparent)] px-3 py-2 backdrop-blur" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
+        <Boton tamano="icono" variante="fantasma" icono={ChevronLeft} aria-label="Volver" onClick={alCerrar} />
+        <b className="min-w-0 truncate">{d?.titulo ?? "Cargando…"}</b>
+      </header>
+      <div className="relative mx-auto w-full max-w-6xl p-4 sm:p-6">
+        {q.isLoading ? <Cargando /> : null}
+        <ErrorCaja error={q.error} />
+        {d ? (
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+            {d.poster ? <img src={d.poster} alt={d.titulo} className="hidden w-64 self-start rounded-2xl shadow-2xl lg:block" /> : null}
+            <div className="min-w-0 space-y-4">
+              <h1 className="text-2xl font-bold md:text-4xl">{d.titulo}</h1>
           {verTrailer && d.trailer ? (
             <div className="aspect-video overflow-hidden rounded-xl bg-black">
               <iframe
@@ -158,7 +232,7 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
             ) : null}
           </div>
           <div className="flex gap-3">
-            {d.poster ? <img src={d.poster} alt="" className="w-24 shrink-0 self-start rounded-xl sm:w-32" /> : null}
+            {d.poster ? <img src={d.poster} alt="" className="w-24 shrink-0 self-start rounded-xl sm:w-32 lg:hidden" /> : null}
             <div className="min-w-0 space-y-2 text-sm">
               <div className="flex flex-wrap gap-1">
                 <Insignia>{d.tipo === "tv" ? "Serie" : "Película"}</Insignia>
@@ -176,7 +250,7 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
             </div>
           </div>
           {d.siguienteCapitulo ? (
-            <div className="flex items-start gap-2 rounded-xl border border-acento/40 bg-acento/10 p-3 text-sm">
+            <div className="flex items-start gap-2 rounded-xl border border-[color-mix(in_srgb,var(--acento)_40%,transparent)] bg-[color-mix(in_srgb,var(--acento)_10%,transparent)] p-3 text-sm">
               <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-acento" />
               <span>
                 Siguiente capítulo: T{d.siguienteCapitulo.temporada} E{d.siguienteCapitulo.capitulo}
@@ -205,14 +279,16 @@ function Ficha({ tipo, id, alCerrar, enLista }: { tipo: TipoTmdb; id: number; al
             </Boton>
           ) : null}
           <p className="text-[11px] text-tenue">Datos de TMDB y JustWatch.</p>
-        </div>
-      ) : null}
-    </Modal>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
 function Lista({ elementos, alAbrir }: { elementos: PorVer[]; alAbrir: (p: PorVer) => void }) {
-  const pag453 = usePaginado(elementos , 18);
+  const pagina = usePaginado(elementos, 18);
   const puede = usePuede("peliculas", "escritura");
   const invalidar = () => void queryClient.invalidateQueries({ queryKey: ["peliculas", "por-ver"] });
   const marcar = useMutation({ mutationFn: (p: PorVer) => api(`/api/peliculas/por-ver/${p.id}`, { metodo: "PATCH", cuerpo: { vista: !p.vista } }), onSuccess: invalidar, onError: avisarError });
@@ -221,7 +297,7 @@ function Lista({ elementos, alAbrir }: { elementos: PorVer[]; alAbrir: (p: PorVe
   return (
     <>
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-      {pag453.visibles.map((p) => (
+      {pagina.visibles.map((p) => (
         <div key={p.id} className={cx("min-w-0", p.vista && "opacity-50")}>
           <Poster r={p} alAbrir={() => alAbrir(p)} />
           {puede ? (
@@ -233,7 +309,7 @@ function Lista({ elementos, alAbrir }: { elementos: PorVer[]; alAbrir: (p: PorVe
         </div>
       ))}
     </div>
-    {pag453.paginas}
+    {pagina.paginas}
     </>
   );
 }
@@ -258,6 +334,9 @@ export default function Peliculas() {
   const enLista = new Set((lista.data ?? []).map((p) => `${p.tipo}-${p.tmdbId}`));
   const abrir = (r: Resumen) => setAbierta({ tipo: r.tipo, id: r.id });
   const pendientes = (lista.data ?? []).filter((p) => !p.vista).length;
+  const destacada = novedades.data?.series[0] ?? novedades.data?.peliculas[0];
+
+  if (abierta) return <Ficha tipo={abierta.tipo} id={abierta.id} enLista={enLista.has(`${abierta.tipo}-${abierta.id}`)} alCerrar={() => setAbierta(null)} />;
 
   return (
     <div className="space-y-4">
@@ -298,31 +377,31 @@ export default function Peliculas() {
           {novedades.isLoading ? <Cargando /> : null}
           {novedades.data ? (
             <>
-              <Tarjeta titulo="Películas populares esta semana" icono={Clapperboard}>
-                <Rejilla elementos={novedades.data.peliculas} alAbrir={abrir} />
-              </Tarjeta>
-              <Tarjeta titulo="Series populares esta semana" icono={Tv}>
-                <Rejilla elementos={novedades.data.series} alAbrir={abrir} />
-              </Tarjeta>
-              <Tarjeta titulo="Próximos estrenos en cines" icono={CalendarClock}>
-                <Rejilla elementos={novedades.data.proximas} alAbrir={abrir} />
-              </Tarjeta>
+              {destacada ? <Portada r={destacada} enLista={enLista.has(`${destacada.tipo}-${destacada.id}`)} alAbrir={() => abrir(destacada)} /> : null}
+              <Fila titulo="Películas populares esta semana" icono={Clapperboard} elementos={novedades.data.peliculas} alAbrir={abrir} />
+              <Fila titulo="Series populares esta semana" icono={Tv} elementos={novedades.data.series} alAbrir={abrir} />
+              <Fila titulo="Próximos estrenos en cines" icono={CalendarClock} elementos={novedades.data.proximas} alAbrir={abrir} />
             </>
           ) : null}
           <Tarjeta titulo="Ver gratis y legal" icono={Radio}>
             <p className="mb-3 text-sm text-tenue">Canales y películas gratis (con anuncios) disponibles en México. Se abren en su página o app.</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               {CANALES_GRATIS.map((c) => (
-                <Boton key={c.nombre} tamano="sm" icono={ExternalLink} onClick={() => abrirExterno(c.url)}>
-                  {c.nombre}
-                </Boton>
+                <button
+                  key={c.nombre}
+                  type="button"
+                  onClick={() => abrirExterno(c.url)}
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-borde bg-fondo p-3 text-left text-sm hover:border-acento"
+                >
+                  <ExternalLink className="h-4 w-4 shrink-0 text-acento" />
+                  <span className="min-w-0 truncate">{c.nombre}</span>
+                </button>
               ))}
             </div>
             <p className="mt-3 text-xs text-tenue">Tus propias películas: súbelas en Mis videos y aparece "Ver ahora" al abrir su ficha.</p>
           </Tarjeta>
         </div>
       )}
-      {abierta ? <Ficha tipo={abierta.tipo} id={abierta.id} enLista={enLista.has(`${abierta.tipo}-${abierta.id}`)} alCerrar={() => setAbierta(null)} /> : null}
     </div>
   );
 }

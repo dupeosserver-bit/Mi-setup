@@ -1,13 +1,11 @@
-/**
- * Host local: crea y maneja servidores de juego en tu PC (app de Windows).
- * Minecraft Paper/Fabric/Forge/Vanilla con Java automático, consola, ajustes,
- * mods y plugins (Modrinth/CurseForge), playit.gg y pasar a tu VPS.
- */
-import { Paginas } from "../components/Paginas";
+import { Paginas, usePaginado } from "../components/Paginas";
 import { Semillas } from "../components/Semillas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Boxes,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   CloudUpload,
   Code2,
   Download,
@@ -15,6 +13,7 @@ import {
   FolderOpen,
   FolderPlus,
   Globe,
+  Lock,
   Package,
   Play,
   Plus,
@@ -52,7 +51,6 @@ const TIPOS: Record<TipoServidor, { nombre: string; detalle: string; grupo: stri
 };
 const GRUPOS = ["Plugins", "Mods", "Mods y plugins", "Otros"];
 const CARGADOR: Record<string, string> = { forge: "Forge", neoforge: "NeoForge", fabric: "Fabric" };
-/** "1.21.1-neoforge" → "1.21.1 (NeoForge)". */
 const textoVersion = (v: string) => v.replace(/-(forge|neoforge|fabric)$/, (_, c: string) => ` (${CARGADOR[c]})`);
 const clasesDe = (s: ServidorLocal): ClaseAddon[] => s.clases ?? (s.tipo === "paper" ? ["plugins"] : s.tipo === "fabric" || s.tipo === "forge" ? ["mods"] : []);
 const mcDe = (s: ServidorLocal) => s.mc ?? s.version;
@@ -66,7 +64,12 @@ function useProgreso(srv: ServidoresLocales) {
   return [texto, setTexto] as const;
 }
 
-function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s: ServidorLocal) => void; alCerrar: () => void }) {
+const PASOS = ["Juego y cargador", "Versión y mundo", "Mods y plugins", "Listo"];
+const COLOR_GRUPO: Record<string, string> = { Plugins: "#3ddc84", Mods: "#7cb7ff", "Mods y plugins": "#b497ff", Otros: "#f5c451" };
+const suave = (color: string) => ({ background: `color-mix(in srgb, ${color} 16%, transparent)`, color });
+
+function Crear({ srv, alCrear, alCerrar, alModpack }: { srv: ServidoresLocales; alCrear: (s: ServidorLocal) => void; alCerrar?: () => void; alModpack?: () => void }) {
+  const [paso, setPaso] = useState(0);
   const [tipo, setTipo] = useState<TipoServidor>("paper");
   const [version, setVersion] = useState("");
   const [nombre, setNombre] = useState("Survival");
@@ -88,76 +91,177 @@ function Crear({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s
   });
   const esMc = tipo !== "personalizado";
   const pideEula = esMc && tipo !== "velocity";
+  const grupo = TIPOS[tipo].grupo;
+  const datosListos = Boolean(nombre.trim()) && (esMc ? Boolean(version) : Boolean(comando.trim()));
+  const puedeCrear = datosListos && (!pideEula || eula);
+  const extras = grupo === "Plugins" ? "plugins" : grupo === "Mods" ? "mods" : grupo === "Mods y plugins" ? "mods y plugins" : null;
+  const resumen: [string, string][] = [
+    ["Juego", esMc ? `Minecraft · ${TIPOS[tipo].nombre}` : TIPOS[tipo].nombre],
+    ["Nombre", nombre || "—"],
+    ...(esMc ? ([["Versión", version ? textoVersion(version) : "—"]] as [string, string][]) : ([["Comando", comando || "—"]] as [string, string][])),
+    ["Memoria", `${(ram / 1024).toFixed(1)} GB`],
+    ["Puerto", String(puerto)],
+  ];
   return (
-    <Modal abierto titulo="Crear servidor" alCerrar={alCerrar}>
-      <div className="space-y-3">
-        <Campo etiqueta="Tipo">
-          <Selector value={tipo} onChange={(e) => setTipo(e.target.value as TipoServidor)}>
-            {GRUPOS.map((g) => (
-              <optgroup key={g} label={g}>
-                {(Object.keys(TIPOS) as TipoServidor[])
-                  .filter((t) => TIPOS[t].grupo === g)
-                  .map((t) => (
-                    <option key={t} value={t}>
-                      {TIPOS[t].nombre}
-                    </option>
-                  ))}
-              </optgroup>
-            ))}
-          </Selector>
-        </Campo>
-        <p className="text-xs text-tenue">{TIPOS[tipo].detalle}</p>
-        <Campo etiqueta="Nombre">
-          <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={40} />
-        </Campo>
-        {esMc ? (
-          <Campo etiqueta={tipo === "velocity" ? "Versión de Velocity" : "Versión de Minecraft"}>
-            {versiones.isLoading ? (
-              <Cargando texto="Buscando versiones…" />
-            ) : (
-              <Selector value={version} onChange={(e) => setVersion(e.target.value)}>
-                {(versiones.data ?? []).map((v) => (
-                  <option key={v} value={v}>
-                    {textoVersion(v)}
-                  </option>
-                ))}
-              </Selector>
-            )}
-          </Campo>
-        ) : (
-          <Campo etiqueta="Comando que lo enciende (dentro de su carpeta)">
-            <Entrada value={comando} onChange={(e) => setComando(e.target.value)} placeholder="Ej. TerrariaServer.exe -config serverconfig.txt" />
-          </Campo>
-        )}
-        <ErrorCaja error={versiones.error} />
-        <Campo etiqueta={`Memoria RAM: ${(ram / 1024).toFixed(1)} GB`}>
-          <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
-        </Campo>
-        <Campo etiqueta="Puerto">
-          <Entrada type="number" min={1024} max={65535} value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
-        </Campo>
-        {pideEula ? (
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={eula} onChange={(e) => setEula(e.target.checked)} className="mt-1" />
-            <span>
-              Acepto la{" "}
-              <button type="button" className="underline" onClick={() => abrirExterno("https://aka.ms/MinecraftEULA")}>
-                EULA de Minecraft
-              </button>{" "}
-              (obligatoria para cualquier servidor).
+    <section className="min-w-0 rounded-tarjeta border border-borde bg-superficie">
+      <header className="flex flex-wrap items-center gap-3 border-b border-borde p-4">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={suave("var(--acento)")}>
+          <Plus className="h-5 w-5" />
+        </span>
+        <div className="min-w-[10rem] flex-1">
+          <h3 className="text-sm font-semibold">Crear servidor</h3>
+          <p className="text-xs text-tenue">{`Paso ${paso + 1} de 4 · ${PASOS[paso]}`}</p>
+        </div>
+        {alModpack ? (
+          <div className="flex w-full rounded-xl border border-borde bg-fondo p-1 text-xs sm:w-auto" role="tablist" aria-label="Cómo crearlo">
+            <span className="flex-1 rounded-lg px-3 py-1.5 text-center font-medium text-acento sm:flex-none" style={suave("var(--acento)")} role="tab" aria-selected="true">
+              Desde cero
             </span>
-          </label>
+            <button type="button" role="tab" aria-selected="false" className="flex-1 rounded-lg px-3 py-1.5 text-tenue hover:text-texto sm:flex-none" onClick={alModpack}>
+              Desde un modpack
+            </button>
+          </div>
         ) : null}
-        <Boton variante="primario" className="w-full" cargando={crear.isPending} disabled={!nombre.trim() || (esMc ? (pideEula && !eula) || !version : !comando.trim())} onClick={() => crear.mutate()}>
-          {crear.isPending ? (progreso ?? "Preparando…") : esMc ? "Crear y descargar" : "Elegir carpeta y crear"}
-        </Boton>
-        {esMc ? <p className="text-xs text-tenue">La primera vez baja Java (unos 200 MB) y el servidor. Queda en Documentos\MiSetup Servidores.</p> : null}
+        {alCerrar ? <Boton tamano="sm" variante="fantasma" onClick={alCerrar}>Cancelar</Boton> : null}
+      </header>
+      <ol className="grid grid-cols-4 gap-1 border-b border-borde px-4 py-3" aria-label="Pasos">
+        {PASOS.map((t, i) => (
+          <li key={t} className="min-w-0">
+            <button type="button" disabled={i > paso && !datosListos} onClick={() => setPaso(i)} className="flex w-full min-w-0 flex-col items-center gap-1 text-center disabled:opacity-50">
+              <span className={cx("grid h-7 w-7 place-items-center rounded-full text-xs font-bold", i < paso ? "bg-ok text-black" : i === paso ? "bg-acento text-black" : "bg-tarjeta text-tenue")}>
+                {i < paso ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              </span>
+              <span className={cx("hidden w-full truncate text-[11px] sm:block", i === paso ? "text-texto" : "text-tenue")}>{t}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="grid min-w-0 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="min-w-0 space-y-3">
+          {paso === 0 ? (
+            GRUPOS.map((g) => (
+              <div key={g} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-tenue">{g}</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                  {(Object.keys(TIPOS) as TipoServidor[])
+                    .filter((t) => TIPOS[t].grupo === g)
+                    .map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTipo(t)}
+                        aria-pressed={tipo === t}
+                        className={cx("flex min-w-0 items-start gap-3 rounded-xl border p-3 text-left", tipo === t ? "border-acento" : "border-borde bg-fondo hover:border-[color-mix(in_srgb,var(--acento)_50%,transparent)]")}
+                        style={tipo === t ? { background: "color-mix(in srgb, var(--acento) 10%, transparent)" } : undefined}
+                      >
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-bold" style={suave(COLOR_GRUPO[g] ?? "#b497ff")}>
+                          {TIPOS[t].nombre.slice(0, 2)}
+                        </span>
+                        <span className="min-w-0">
+                          <b className="block text-sm">{TIPOS[t].nombre}</b>
+                          <small className="block text-xs text-tenue">{TIPOS[t].detalle}</small>
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ))
+          ) : null}
+          {paso === 1 ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Campo etiqueta="Nombre">
+                <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={40} />
+              </Campo>
+              {esMc ? (
+                <Campo etiqueta={tipo === "velocity" ? "Versión de Velocity" : "Versión de Minecraft"}>
+                  {versiones.isLoading ? (
+                    <Cargando texto="Buscando versiones…" />
+                  ) : (
+                    <Selector value={version} onChange={(e) => setVersion(e.target.value)}>
+                      {(versiones.data ?? []).map((v) => (
+                        <option key={v} value={v}>
+                          {textoVersion(v)}
+                        </option>
+                      ))}
+                    </Selector>
+                  )}
+                </Campo>
+              ) : (
+                <Campo etiqueta="Comando que lo enciende (dentro de su carpeta)">
+                  <Entrada value={comando} onChange={(e) => setComando(e.target.value)} placeholder="Ej. TerrariaServer.exe -config serverconfig.txt" />
+                </Campo>
+              )}
+              <Campo etiqueta={`Memoria RAM: ${(ram / 1024).toFixed(1)} GB`}>
+                <input type="range" min={1024} max={16384} step={512} value={ram} onChange={(e) => setRam(Number(e.target.value))} className="w-full accent-acento" />
+              </Campo>
+              <Campo etiqueta="Puerto">
+                <Entrada type="number" min={1024} max={65535} value={puerto} onChange={(e) => setPuerto(Number(e.target.value))} />
+              </Campo>
+              <div className="md:col-span-2">
+                <ErrorCaja error={versiones.error} />
+              </div>
+            </div>
+          ) : null}
+          {paso === 2 ? (
+            <div className="space-y-3 rounded-xl border border-borde bg-fondo p-4 text-sm">
+              {extras ? (
+                <>
+                  <p>{`${TIPOS[tipo].nombre} acepta ${extras}. Cuando el servidor esté creado, ábrelo y en la pestaña «${extras === "plugins" ? "Plugins" : extras === "mods" ? "Mods" : "Mods y plugins"}» los buscas en Modrinth o CurseForge y se instalan con un botón.`}</p>
+                  <p className="text-xs text-tenue">¿Quieres un paquete ya armado? Usa «Desde un modpack» arriba.</p>
+                </>
+              ) : (
+                <p>{esMc ? `${TIPOS[tipo].nombre} no usa mods ni plugins: es el juego tal cual.` : "Los archivos extra de tu juego los pones en su carpeta (pestaña Archivos)."}</p>
+              )}
+            </div>
+          ) : null}
+          {paso === 3 ? (
+            <div className="space-y-3">
+              {pideEula ? (
+                <label className="flex items-start gap-2 rounded-xl border border-borde bg-fondo p-3 text-sm">
+                  <input type="checkbox" checked={eula} onChange={(e) => setEula(e.target.checked)} className="mt-1" />
+                  <span>
+                    Acepto la{" "}
+                    <button type="button" className="underline" onClick={() => abrirExterno("https://aka.ms/MinecraftEULA")}>
+                      EULA de Minecraft
+                    </button>{" "}
+                    (obligatoria para cualquier servidor).
+                  </span>
+                </label>
+              ) : null}
+              <Boton variante="primario" className="w-full" cargando={crear.isPending} disabled={!puedeCrear} onClick={() => crear.mutate()}>
+                {crear.isPending ? (progreso ?? "Preparando…") : esMc ? "Crear y descargar" : "Elegir carpeta y crear"}
+              </Boton>
+              {esMc ? <p className="text-xs text-tenue">La primera vez baja Java (unos 200 MB) y el servidor. Queda en Documentos\MiSetup Servidores.</p> : null}
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-2 pt-1">
+            <Boton tamano="sm" variante="fantasma" icono={ChevronLeft} disabled={paso === 0} onClick={() => setPaso(paso - 1)}>
+              Atrás
+            </Boton>
+            {paso < 3 ? (
+              <Boton tamano="sm" variante="primario" disabled={paso >= 1 && !datosListos} onClick={() => setPaso(paso + 1)}>
+                Siguiente
+                <ChevronRight className="h-4 w-4" />
+              </Boton>
+            ) : null}
+          </div>
+        </div>
+        <aside className="h-fit rounded-xl border border-borde bg-fondo p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-tenue">Lo que llevas</p>
+          <dl className="space-y-1.5 text-sm">
+            {resumen.map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-3">
+                <dt className="text-tenue">{k}</dt>
+                <dd className="min-w-0 truncate text-right font-medium">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </aside>
       </div>
-    </Modal>
+    </section>
   );
 }
 
-/** Servidor nuevo a partir de un modpack: eliges la versión y solo salen modpacks de esa versión. */
 function CrearDesdeModpack({ srv, alCrear, alCerrar }: { srv: ServidoresLocales; alCrear: (s: ServidorLocal) => void; alCerrar: () => void }) {
   const [mc, setMc] = useState("");
   const [texto, setTexto] = useState("");
@@ -168,7 +272,6 @@ function CrearDesdeModpack({ srv, alCrear, alCerrar }: { srv: ServidoresLocales;
   const [ram, setRam] = useState(6144);
   const [eula, setEula] = useState(false);
   const [progreso] = useProgreso(srv);
-  // Versiones de Minecraft (las de Fabric cubren todas las de los modpacks).
   const versiones = useQuery({ queryKey: ["host-local", "versiones", "fabric"], queryFn: () => srv.versiones("fabric"), staleTime: 30 * 60_000 });
   useEffect(() => {
     if (!mc && versiones.data?.length) setMc(versiones.data.find((v) => v === "1.20.1") ?? versiones.data[0]!);
@@ -505,7 +608,6 @@ function Mods({ srv, s }: { srv: ServidoresLocales; s: ServidorLocal }) {
     if (c === "modpacks") setFuente("modrinth");
   };
   const mc = mcDe(s);
-  // CurseForge: plugins de Bukkit, o mods del cargador del servidor (Folia y Velocity no están ahí).
   const cargador = s.cargadorMods ?? (["fabric", "quilt", "forge", "neoforge"].includes(s.tipo) ? s.tipo : null);
   const esPack = clase === "modpacks";
   const claseAddon: ClaseAddon = esPack ? "mods" : clase;
@@ -878,8 +980,6 @@ interface ServidorRemoto {
   propiedades?: Record<string, string>;
 }
 
-// ---------------------------------------------------------------- celular: ver y editar (no encender)
-
 function EditarRemoto({ s, pendientes }: { s: ServidorRemoto; pendientes: EdicionRemota[] }) {
   const [nombre, setNombre] = useState(s.nombre);
   const [ram, setRam] = useState(s.ramMb);
@@ -1004,7 +1104,6 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
     if (lista.data) setServidores(lista.data);
   }, [lista.data]);
   useEffect(() => srv.alEstado((s) => setServidores((l) => l.map((x) => (x.id === s.id ? s : x)))), [srv]);
-  // Sube la lista para verla desde el celular y aplica los cambios que se hicieron desde allá.
   useEffect(() => {
     let vivo = true;
     const sincronizar = async () => {
@@ -1033,7 +1132,7 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
         avisar(`Se aplicaron ${hechas.length} cambio(s) hechos desde el celular. Si el servidor está encendido, reinícialo.`);
         void lista.refetch();
       } catch {
-        /* sin conexión con Mi Setup: se reintenta */
+        return;
       }
     };
     void sincronizar();
@@ -1045,73 +1144,87 @@ function Panel({ srv }: { srv: ServidoresLocales }) {
   }, [srv]);
   const actual = servidores.find((x) => x.id === elegido) ?? servidores[0] ?? null;
   const cambiar = (s: ServidorLocal) => setServidores((l) => (l.some((x) => x.id === s.id) ? l.map((x) => (x.id === s.id ? s : x)) : [...l, s]));
+  const paginaLista = usePaginado(servidores, 8);
+  const creando = crear || (lista.data !== undefined && !servidores.length);
+  const listo = (s: ServidorLocal, texto: string) => {
+    cambiar(s);
+    setElegido(s.id);
+    avisar(texto);
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Boton variante="primario" icono={Plus} onClick={() => setCrear(true)}>
-          Crear servidor
-        </Boton>
-        {srv.modpacksBuscar && srv.modpackInstalar ? (
-          <Boton icono={Package} onClick={() => setDesdePack(true)}>
-            Crear desde un modpack
-          </Boton>
+    <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="order-2 min-w-0 space-y-4 xl:order-1">
+        <ErrorCaja error={lista.error} />
+        {lista.isLoading ? <Cargando /> : null}
+        {creando ? (
+          <Crear
+            srv={srv}
+            {...(servidores.length ? { alCerrar: () => setCrear(false) } : {})}
+            {...(srv.modpacksBuscar && srv.modpackInstalar ? { alModpack: () => setDesdePack(true) } : {})}
+            alCrear={(s) => {
+              setCrear(false);
+              listo(s, "Servidor listo. Tócale Encender.");
+            }}
+          />
+        ) : actual ? (
+          <Detalle
+            key={actual.id}
+            srv={srv}
+            s={actual}
+            alCambio={cambiar}
+            alBorrar={() => {
+              setServidores((l) => l.filter((x) => x.id !== actual.id));
+              setElegido(null);
+            }}
+          />
         ) : null}
       </div>
-      <ErrorCaja error={lista.error} />
-      {lista.isLoading ? <Cargando /> : null}
-      {lista.data && !servidores.length ? <Vacio icono={Boxes} texto="Crea tu primer servidor: Minecraft con plugins o mods en un par de minutos, sin instalar nada." /> : null}
-      {servidores.length ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-          <div className="space-y-1">
-            {servidores.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setElegido(s.id)}
-                className={cx("flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm", actual?.id === s.id ? "bg-tarjeta" : "hover:bg-tarjeta")}
-              >
-                <span className={cx("h-2 w-2 shrink-0 rounded-full", s.estado === "encendido" ? "bg-ok" : s.estado === "detenido" ? "bg-tenue" : "bg-aviso")} />
-                <span className="min-w-0 flex-1 truncate">{s.nombre}</span>
-                <span className="shrink-0 text-[11px] text-tenue">{s.tipo === "personalizado" ? "Otro" : `${TIPOS[s.tipo]?.nombre ?? s.tipo} ${textoVersion(s.version)}`}</span>
-              </button>
-            ))}
-          </div>
-          {actual ? (
-            <Detalle
-              key={actual.id}
-              srv={srv}
-              s={actual}
-              alCambio={cambiar}
-              alBorrar={() => {
-                setServidores((l) => l.filter((x) => x.id !== actual.id));
-                setElegido(null);
-              }}
-            />
+      <aside className="order-1 min-w-0 space-y-2 xl:order-2">
+        <div className="flex flex-wrap gap-2">
+          <Boton variante="primario" icono={Plus} className="flex-1" onClick={() => setCrear(true)}>
+            Crear servidor
+          </Boton>
+          {srv.modpacksBuscar && srv.modpackInstalar ? (
+            <Boton icono={Package} className="flex-1" onClick={() => setDesdePack(true)}>
+              Desde un modpack
+            </Boton>
           ) : null}
         </div>
-      ) : null}
+        {servidores.length ? (
+          <section className="rounded-tarjeta border border-borde bg-superficie p-2">
+            <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-tenue">Tus servidores</p>
+            <div className="flex gap-1 overflow-x-auto xl:flex-col xl:overflow-visible">
+              {paginaLista.visibles.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    setElegido(s.id);
+                    setCrear(false);
+                  }}
+                  className={cx("flex min-w-[12rem] items-center gap-2 rounded-xl px-3 py-2 text-left text-sm xl:min-w-0", !creando && actual?.id === s.id ? "bg-tarjeta" : "hover:bg-tarjeta")}
+                >
+                  <span className={cx("h-2 w-2 shrink-0 rounded-full", s.estado === "encendido" ? "bg-ok" : s.estado === "detenido" ? "bg-tenue" : "bg-aviso")} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{s.nombre}</span>
+                    <span className="block truncate text-[11px] text-tenue">{s.tipo === "personalizado" ? "Otro" : `${TIPOS[s.tipo]?.nombre ?? s.tipo} ${textoVersion(s.version)}`}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {paginaLista.paginas}
+          </section>
+        ) : null}
+      </aside>
       {desdePack ? (
         <CrearDesdeModpack
           srv={srv}
           alCerrar={() => setDesdePack(false)}
           alCrear={(s) => {
             setDesdePack(false);
-            cambiar(s);
-            setElegido(s.id);
-            avisar("Servidor con modpack listo. Tócale Encender.");
-          }}
-        />
-      ) : null}
-      {crear ? (
-        <Crear
-          srv={srv}
-          alCerrar={() => setCrear(false)}
-          alCrear={(s) => {
             setCrear(false);
-            cambiar(s);
-            setElegido(s.id);
-            avisar("Servidor listo. Tócale Encender.");
+            listo(s, "Servidor con modpack listo. Tócale Encender.");
           }}
         />
       ) : null}
@@ -1124,7 +1237,16 @@ export default function HostLocal() {
   const [vista, setVista] = useState<"servidores" | "semillas">("servidores");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Servidores en mi PC" descripcion="Crea servidores de Minecraft (y otros juegos) en tu computadora: consola, mods, plugins y amigos sin abrir puertos." />
+      <Encabezado
+        titulo="Servidores en mi PC"
+        descripcion="Crea servidores de Minecraft (y otros juegos) en tu computadora: consola, mods, plugins y amigos sin abrir puertos."
+        acciones={
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium" style={suave("var(--acento)")}>
+            <Lock className="h-3.5 w-3.5" />
+            Solo tú
+          </span>
+        }
+      />
       <Pestanas
         valor={vista}
         alCambiar={setVista}

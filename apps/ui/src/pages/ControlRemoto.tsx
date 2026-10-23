@@ -1,8 +1,8 @@
-/** Control remoto: equipos con RustDesk autoalojado; "Conectar" pide huella/contraseña, copia la contraseña y abre el cliente. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, MonitorUp, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Punto, Selector, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
+import { Copy, Globe, MonitorUp, Pencil, Plus, Server, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { usePaginado } from "../components/Paginas";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Punto, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { copiarSeguro } from "../lib/boveda/utilidades";
 import { confirmar } from "../lib/confirmar";
@@ -21,6 +21,56 @@ interface Datos {
   servidor: string;
   clavePublica: string | null;
   equipos: Equipo[];
+}
+
+const suave = (color: string) => ({ background: `color-mix(in srgb, ${color} 16%, transparent)`, color });
+
+function Paso({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <li className="flex min-w-0 gap-3 rounded-xl border border-borde bg-fondo p-3 text-sm">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold" style={suave("var(--acento)")}>
+        {n}
+      </span>
+      <span className="min-w-0">{children}</span>
+    </li>
+  );
+}
+
+function TarjetaEquipo({ e, puede, conectando, alConectar, alEditar, alBorrar }: { e: Equipo; puede: boolean; conectando: boolean; alConectar: () => void; alEditar: () => void; alBorrar: () => void }) {
+  const encendido = Boolean(e.dispositivo?.conectado);
+  return (
+    <section className={cx("flex min-w-0 flex-col gap-3 rounded-tarjeta border bg-superficie p-4", encendido ? "border-[color-mix(in_srgb,var(--ok)_45%,transparent)]" : "border-borde")}>
+      <header className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={suave(encendido ? "var(--ok)" : "var(--acento)")}>
+          <MonitorUp className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <b className="block truncate text-sm">{e.nombre}</b>
+          {e.dispositivo ? (
+            <span className="flex items-center gap-1.5 text-xs text-tenue">
+              <Punto conectado={e.dispositivo.conectado} />
+              {e.dispositivo.conectado ? "Encendida (app abierta)" : `Sin señal · visto ${haceCuanto(e.dispositivo.visto)}`}
+            </span>
+          ) : (
+            <span className="text-xs text-tenue">Sin dispositivo vinculado</span>
+          )}
+        </span>
+        {puede ? (
+          <span className="flex shrink-0">
+            <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Editar" onClick={alEditar} />
+            <Boton tamano="icono" variante="fantasma" icono={Trash2} aria-label="Borrar" onClick={alBorrar} />
+          </span>
+        ) : null}
+      </header>
+      <div className="rounded-xl border border-borde bg-fondo px-3 py-2">
+        <p className="text-[11px] uppercase tracking-wide text-tenue">ID de RustDesk</p>
+        <p className="truncate font-mono text-xl tabular-nums">{e.rustdeskId.replace(/(\d{3})(?=\d)/g, "$1 ")}</p>
+      </div>
+      <Boton variante="primario" icono={MonitorUp} cargando={conectando} onClick={alConectar}>
+        Conectar
+      </Boton>
+    </section>
+  );
 }
 
 function Formulario({ equipo, alCerrar }: { equipo: Equipo | null; alCerrar: () => void }) {
@@ -93,7 +143,6 @@ export default function ControlRemoto() {
     mutationFn: (id: string) => api<{ rustdeskId: string; contrasena: string | null }>(`/api/control-remoto/${id}/conectar`, { metodo: "POST" }),
     onSuccess: async (r) => {
       if (r.contrasena) await copiarSeguro(r.contrasena, "Contraseña copiada");
-      // Formato documentado de RustDesk (PC y Android); la contraseña ya quedó copiada.
       abrirExterno(`rustdesk://connection/new/${encodeURIComponent(r.rustdeskId)}`);
       setAyuda(true);
     },
@@ -104,6 +153,7 @@ export default function ControlRemoto() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["control-remoto"] }),
     onError: avisarError,
   });
+  const lista = usePaginado(datos.data?.equipos, 6);
 
   return (
     <div className="space-y-4">
@@ -118,11 +168,11 @@ export default function ControlRemoto() {
           ) : null
         }
       />
-      <Tarjeta titulo="La forma más fácil: Escritorio remoto de Chrome (oficial de Google, gratis)" icono={MonitorUp}>
-        <ol className="list-decimal space-y-1 pl-5 text-sm">
-          <li>En tu PC abre «Preparar esta PC», entra con tu cuenta de Google, instala lo que pide y elige un PIN de 6 números.</li>
-          <li>En el celular instala «Escritorio remoto de Chrome» y entra con la misma cuenta de Google.</li>
-          <li>Toca tu PC en la lista y escribe el PIN: ya la controlas desde el celular (también funciona desde otra PC en el navegador).</li>
+      <Tarjeta titulo="La forma más fácil: Escritorio remoto de Chrome (oficial de Google, gratis)" icono={Globe}>
+        <ol className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+          <Paso n={1}>En tu PC abre «Preparar esta PC», entra con tu cuenta de Google, instala lo que pide y elige un PIN de 6 números.</Paso>
+          <Paso n={2}>En el celular instala «Escritorio remoto de Chrome» y entra con la misma cuenta de Google.</Paso>
+          <Paso n={3}>Toca tu PC en la lista y escribe el PIN: ya la controlas desde el celular (también funciona desde otra PC en el navegador).</Paso>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
           <Boton variante="primario" onClick={() => abrirExterno("https://remotedesktop.google.com/access")}>
@@ -140,58 +190,38 @@ export default function ControlRemoto() {
       {datos.isLoading ? <Cargando /> : null}
       <ErrorCaja error={datos.error} />
       {datos.data?.equipos.length === 0 ? <Vacio icono={MonitorUp} texto="Agrega tu PC con su ID de RustDesk." /> : null}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {datos.data?.equipos.map((e) => (
-          <Tarjeta
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        {lista.visibles.map((e) => (
+          <TarjetaEquipo
             key={e.id}
-            titulo={e.nombre}
-            icono={MonitorUp}
-            acciones={
-              puede ? (
-                <>
-                  <Boton tamano="icono" variante="fantasma" icono={Pencil} aria-label="Editar" onClick={() => setEditar(e)} />
-                  <Boton
-                    tamano="icono"
-                    variante="fantasma"
-                    icono={Trash2}
-                    aria-label="Borrar"
-                    onClick={async () => {
-                      if (await confirmar({ titulo: "Quitar equipo", mensaje: e.nombre })) borrar.mutate(e.id);
-                    }}
-                  />
-                </>
-              ) : null
-            }
-          >
-            <p className="font-mono text-lg">{e.rustdeskId.replace(/(\d{3})(?=\d)/g, "$1 ")}</p>
-            {e.dispositivo ? (
-              <div className="mt-1 flex items-center gap-2 text-xs text-tenue">
-                <Punto conectado={e.dispositivo.conectado} />
-                {e.dispositivo.conectado ? "Encendida (app abierta)" : `Sin señal · visto ${haceCuanto(e.dispositivo.visto)}`}
-              </div>
-            ) : null}
-            <Boton className="mt-3" variante="primario" icono={MonitorUp} cargando={conectar.isPending && conectar.variables === e.id} onClick={() => conectar.mutate(e.id)}>
-              Conectar
-            </Boton>
-          </Tarjeta>
+            e={e}
+            puede={puede}
+            conectando={conectar.isPending && conectar.variables === e.id}
+            alConectar={() => conectar.mutate(e.id)}
+            alEditar={() => setEditar(e)}
+            alBorrar={async () => {
+              if (await confirmar({ titulo: "Quitar equipo", mensaje: e.nombre })) borrar.mutate(e.id);
+            }}
+          />
         ))}
       </div>
+      {lista.paginas}
 
-      <Tarjeta titulo="Configurar el cliente RustDesk (una vez por dispositivo)">
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-tenue">
-          <li>Instala RustDesk desde rustdesk.com (Windows) o la tienda de apps (Android).</li>
-          <li>Ajustes → Red → Servidor de ID/Relay: servidor de ID y de relay = {datos.data?.servidor ?? "rd.mexicanland.net"}.</li>
-          <li>
+      <Tarjeta titulo="Configurar el cliente RustDesk (una vez por dispositivo)" icono={Server}>
+        <ol className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <Paso n={1}>Instala RustDesk desde rustdesk.com (Windows) o la tienda de apps (Android).</Paso>
+          <Paso n={2}>Ajustes → Red → Servidor de ID/Relay: servidor de ID y de relay = {datos.data?.servidor ?? "rd.mexicanland.net"}.</Paso>
+          <Paso n={3}>
             Clave:{" "}
             {datos.data?.clavePublica ? (
               <button type="button" className="inline-flex items-center gap-1 font-mono text-texto underline" onClick={() => void copiarSeguro(datos.data!.clavePublica!, "Clave copiada")}>
                 {datos.data.clavePublica.slice(0, 16)}… <Copy className="h-3 w-3" />
               </button>
             ) : (
-              <span>la del archivo id_ed25519.pub del servidor (pon RD_PUBLIC_KEY en el .env para verla aquí).</span>
+              <span className="text-tenue">la del archivo id_ed25519.pub del servidor (pon RD_PUBLIC_KEY en el .env para verla aquí).</span>
             )}
-          </li>
-          <li>En la PC: pon una contraseña permanente en RustDesk y guárdala aquí junto con el ID.</li>
+          </Paso>
+          <Paso n={4}>En la PC: pon una contraseña permanente en RustDesk y guárdala aquí junto con el ID.</Paso>
         </ol>
       </Tarjeta>
 
