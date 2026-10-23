@@ -20,7 +20,7 @@ Rama: `version-0.11.4b`. Un commit por fase, en esta misma rama. Nunca push a `m
 | 14 | Música: Spotify (Web API + Connect, App Remote en Android) y tu música con páginas de 6 | Hecha |
 | 15 | IA asistente tipo Claude: proyectos con archivos de contexto (límite visible, solo lee las partes que sirven), memoria compartida por proyecto, instrucciones del proyecto, casos de deudas con seguimiento y adjuntos | Hecha |
 | 16 | Ajustes tipo iPhone (lista y detalle), descargas PC / Android / iPhone, actualizaciones solas con «Qué hay de nuevo» una vez por versión, rechazar actualizaciones solo sin VPS, cambiar de servidor conservando lo básico | Hecha |
-| **17** | **Rediseño del resto de pantallas y cierre** | **Sigue aquí** |
+| 17 | Rediseño del resto de pantallas y cierre | Hecha |
 
 ## Diseños aprobados
 
@@ -94,7 +94,7 @@ Varias opciones elegidas traen ideas que la app no tiene; agrégalas solo si son
 - `docs/USO.md`, `docs/CAMBIOS-0.11.4b.md` y SUPUESTOS.
 - Checks: `pnpm typecheck`, `pnpm lint`, tests, build y la prueba de carga del dist.
 
-**5.** Comandos para subir al VPS. Cada versión tiene su apartado en `/root/mi-setup/versiones/0.11.4b/`, con el paquete, la lista de cambios y un respaldo antes de instalar.
+**5.** Comandos para subir al VPS. Cada versión tiene su apartado en `/opt/mi-setup/versiones/0.11.4b/`, con el paquete, la lista de cambios y un respaldo antes de instalar.
 
 ## Reglas (siempre)
 

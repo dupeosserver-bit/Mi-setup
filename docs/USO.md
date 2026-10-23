@@ -650,3 +650,36 @@ Spotify no publica ese SDK en Maven, así que se agrega a mano antes de compilar
 3. Compila el APK como siempre (`pnpm --filter @mi-setup/mobile apk`).
 
 Si el archivo no está, el APK compila igual y la música se controla con Spotify Connect (el celular tiene que tener Spotify abierto).
+
+## Versión 0.11.4b
+
+Restauración completa con el diseño nuevo en toda la app. La lista de cambios por fase y lo que queda pendiente está en `docs/CAMBIOS-0.11.4b.md`.
+
+### Subirla al VPS (apartado por versión)
+
+Cada versión se guarda en `/opt/mi-setup/versiones/<versión>/` con el paquete, la lista de cambios y un respaldo de la base y de `/opt/mi-setup/.env` hecho antes de instalar.
+
+En tu PC, dentro de la carpeta del proyecto:
+
+```powershell
+git archive --format=tar -o mi-setup-0.11.4b.tar version-0.11.4b
+scp mi-setup-0.11.4b.tar root@TU-VPS:/root/
+```
+
+En el VPS:
+
+```bash
+tar -xOf /root/mi-setup-0.11.4b.tar deploy/instalar-version.sh > /root/instalar-version.sh
+bash /root/instalar-version.sh 0.11.4b /root/mi-setup-0.11.4b.tar
+```
+
+Si tu app vive en otra carpeta, ponla antes: `APP_DIR=/ruta/de/tu/app bash /root/instalar-version.sh …`.
+
+Para regresar la base al estado de antes, el script imprime el comando de `pg_restore` con la ruta del respaldo.
+
+### Quién ve qué
+
+- **Panel** (Pterodactyl, Negocio y cobros): el dueño y los roles a los que les des permiso.
+- **Host local**: solo el dueño.
+- **Redes y streams**: el dueño y quien tenga el rol «Invitado» (Ajustes → Cuentas y permisos).
+- **Negocio y cobros** para los demás usuarios aparece en Sitios web.

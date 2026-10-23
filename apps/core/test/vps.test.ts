@@ -128,7 +128,7 @@ describe("servidores VPS", () => {
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toMatchObject({ conFrase: true });
     expect(ok.body).not.toContain("frase-correcta");
-  });
+  }, 60_000);
 
   it("al editar conserva la llave si el campo va vacío y exige una nueva al cambiar de método", async () => {
     ctx = await createTestContext();

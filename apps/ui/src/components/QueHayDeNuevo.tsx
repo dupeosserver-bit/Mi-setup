@@ -37,6 +37,7 @@ export const NOVEDADES: readonly { modulo: ModuleId; icono: LucideIcon; titulo: 
   { modulo: "codigo", icono: Code2, titulo: "Programación", texto: "El editor se adapta al celular. Ejercicios nuevos de Java, HTML y CSS con videos para aprender." },
   { modulo: "pterodactyl", icono: ShieldCheck, titulo: "Pterodactyl", texto: "Ya acepta archivos .blueprint y la tienda gratis instala sola lo que se puede descargar." },
   { modulo: "vps_agentes", icono: Bot, titulo: "Agentes de IA", texto: "Ahora viven en la categoría IA." },
+  { modulo: "ciberseguridad", icono: ShieldCheck, titulo: "Seguridad más clara", texto: "Tus sesiones ahora están en Equipos y las entradas al servidor en VPS. Puedes vincular hasta 10 cuentas de Google." },
 ];
 
 export function QueHayDeNuevo({ puede, alTerminar }: { puede: (m: ModuleId) => boolean; alTerminar: () => void }) {

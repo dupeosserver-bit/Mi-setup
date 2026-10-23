@@ -1,19 +1,20 @@
-/** Tema oscuro gris de Mi Setup. Los colores viven como variables en styles.css. */
+const v = (n) => `color-mix(in srgb, var(--${n}) calc(<alpha-value> * 100%), transparent)`;
+
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        fondo: "var(--fondo)",
-        superficie: "var(--superficie)",
-        tarjeta: "var(--tarjeta)",
-        borde: "var(--borde)",
-        texto: "var(--texto)",
-        tenue: "var(--texto-2)",
-        acento: "var(--acento)",
-        ok: "var(--ok)",
-        aviso: "var(--aviso)",
-        peligro: "var(--error)",
+        fondo: v("fondo"),
+        superficie: v("superficie"),
+        tarjeta: v("tarjeta"),
+        borde: v("borde"),
+        texto: v("texto"),
+        tenue: v("texto-2"),
+        acento: v("acento"),
+        ok: v("ok"),
+        aviso: v("aviso"),
+        peligro: v("error"),
       },
       fontFamily: {
         sans: ["var(--fuente)"],

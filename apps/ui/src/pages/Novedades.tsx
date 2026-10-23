@@ -180,7 +180,7 @@ function HoraPorHora({ lat, lon }: { lat: number; lon: number }) {
               })}
             </div>
             <svg width={horas.length * ancho} height={alto} className="block">
-              <polyline points={puntos} fill="none" stroke="rgb(var(--acento))" strokeWidth="2" strokeLinejoin="round" />
+              <polyline points={puntos} fill="none" stroke="var(--acento)" strokeWidth="2" strokeLinejoin="round" />
               {horas.map((h, i) => (
                 <circle key={h.hora} cx={i * ancho + ancho / 2} cy={y(h.temp)} r="3" fill="currentColor" />
               ))}

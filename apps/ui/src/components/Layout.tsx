@@ -508,6 +508,7 @@ export function Layout() {
 export function GuardiaModulo({ modulo, children }: { modulo: ModuleId; children: ReactNode }) {
   const visibles = useVisibles();
   const { data } = useMe();
+  const completa = useMarco((s) => s.modo === "completa");
   if (!data) return <Cargando />;
   if (!visibles.has(modulo)) {
     return <p className="py-10 text-center text-sm text-tenue">No tienes permiso para ver este apartado.</p>;
@@ -516,7 +517,7 @@ export function GuardiaModulo({ modulo, children }: { modulo: ModuleId; children
   const hermanos = grupo?.miembros.filter((m) => visibles.has(m.id)) ?? [];
   return (
     <>
-      {hermanos.length > 1 ? (
+      {hermanos.length > 1 && !completa ? (
         <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-superficie p-1" role="tablist" aria-label={grupo?.titulo}>
           {hermanos.map((h) => (
             <NavLink

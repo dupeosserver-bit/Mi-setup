@@ -925,7 +925,7 @@ function Estadisticas({ sitio }: { sitio: Sitio }) {
               <XAxis dataKey="dia" tickFormatter={(d: string) => d.slice(5)} fontSize={11} />
               <YAxis allowDecimals={false} fontSize={11} width={30} />
               <Tooltip />
-              <Line type="monotone" dataKey="visitas" stroke="rgb(var(--acento))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="visitas" stroke="var(--acento)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
