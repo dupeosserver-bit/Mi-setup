@@ -102,16 +102,27 @@ export interface PlaylistSp {
   uri: string;
   name: string;
   images?: ImagenSp[] | null;
+  /** Desde 2026 se llama `items`; `tracks` es el nombre viejo. */
+  items?: { total: number } | null;
   tracks?: { total: number } | null;
   owner?: { display_name?: string | null };
 }
 
 export function mapearPlaylist(p: PlaylistSp) {
-  return { id: p.id, uri: p.uri, nombre: p.name, portada: grande(p.images ?? undefined), total: p.tracks?.total ?? 0, de: p.owner?.display_name ?? "" };
+  return { id: p.id, uri: p.uri, nombre: p.name, portada: grande(p.images ?? undefined), total: p.items?.total ?? p.tracks?.total ?? 0, de: p.owner?.display_name ?? "" };
 }
 
-export function pistasDePlaylist(items: { track: PistaSp | null }[]): Pista[] {
-  return items.map((i) => i.track).filter((t): t is PistaSp => Boolean(t?.id && t.uri.startsWith("spotify:track"))).map(mapearPista);
+/** Elemento de /playlists/{id}/items: `item` desde 2026, `track` antes. */
+export interface ElementoPlaylistSp {
+  item?: PistaSp | null;
+  track?: PistaSp | null;
+}
+
+export function pistasDePlaylist(items: ElementoPlaylistSp[]): Pista[] {
+  return items
+    .map((i) => i.item ?? i.track)
+    .filter((t): t is PistaSp => Boolean(t?.id && t.uri?.startsWith("spotify:track")))
+    .map(mapearPista);
 }
 
 export function parecidasSinRepetir(candidatas: Pista[], excluir: string[], cuantas = 10): Pista[] {

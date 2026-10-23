@@ -4960,5 +4960,6 @@
 "Pone la wiki, las capturas, el video, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.": "Bringt Wiki, Screenshots, Video, Logo und Version auf den Stand dieser Mi-Setup-Version. Ist sie schon veröffentlicht, wird das Neue auch veröffentlicht.",
 "Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Bei jeder Version selbst aktualisieren (die alte bleibt im Versionsverlauf)",
 "No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Keine Verbindung zu {0}. Prüfe die Adresse und ob dieses Mi Setup läuft.",
-"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Keine Verbindung zu {0}. Prüfe dein Internet und ob dieses Mi Setup läuft."
+"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Keine Verbindung zu {0}. Prüfe dein Internet und ob dieses Mi Setup läuft.",
+"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify zeigt nur die Songs deiner eigenen oder gemeinsamen Playlists. Diese kannst du trotzdem komplett abspielen."
 }

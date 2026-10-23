@@ -171,3 +171,14 @@ describe("0.11.5b · arreglos después de probarla", () => {
     expect((quieto!.published as { paginas: { html: string }[] }).paginas[0]!.html).toBe("<p>mío</p>");
   });
 });
+
+describe("0.11.5b · Spotify 2026", () => {
+  it("lee playlists con `items`/`item` (nuevo) y con `tracks`/`track` (viejo)", async () => {
+    const { mapearPlaylist, pistasDePlaylist } = await import("../src/modules/spotify.js");
+    const base = { id: "p1", uri: "spotify:playlist:p1", name: "Mía" };
+    expect(mapearPlaylist({ ...base, items: { total: 12 } }).total).toBe(12);
+    expect(mapearPlaylist({ ...base, tracks: { total: 7 } }).total).toBe(7);
+    const pista = (id: string) => ({ id, uri: `spotify:track:${id}`, name: id, artists: [{ name: "A" }] });
+    expect(pistasDePlaylist([{ item: pista("n1") }, { track: pista("v1") }, { item: null }]).map((p) => p.id)).toEqual(["n1", "v1"]);
+  });
+});

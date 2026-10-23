@@ -81,8 +81,8 @@ describe("0.11.4b música: Spotify con respuestas simuladas", () => {
       if (url.includes("/me/player/queue?uri=")) return respuesta(null, 204);
       if (url.includes("/me/player/queue")) return respuesta({ queue: [pista("q1")] });
       if (url.includes("/me/player?market")) return respuesta({ is_playing: true, progress_ms: 10, device: { name: "PC" }, item: pista("actual", "Peso Pluma", "art9") });
-      if (url.includes("/me/tracks/contains")) return respuesta([true]);
-      if (url.includes("/me/tracks?ids=")) return respuesta(null, 200);
+      if (url.includes("/me/library/contains")) return respuesta([true]);
+      if (url.includes("/me/library?uris=")) return respuesta(null, 200);
       if (url.includes("/recommendations")) return respuesta({ error: { status: 404 } }, 404);
       if (url.includes("/artists/art9/top-tracks")) return respuesta({ tracks: [pista("actual"), pista("q1"), ...["t1", "t2", "t3"].map((id) => pista(id))] });
       if (url.includes("/search")) return respuesta({ tracks: { items: ["s1", "t1", "s2"].map((id) => pista(id)) } });
@@ -105,7 +105,7 @@ describe("0.11.4b música: Spotify con respuestas simuladas", () => {
 
     const g = await app.inject({ method: "PUT", url: "/api/musica/spotify/biblioteca/actual0000001", headers: h, payload: { guardar: false } });
     expect(g.json()).toEqual({ guardada: false });
-    expect(llamadas.some((l) => l.url.includes("/me/tracks?ids=actual0000001") && l.metodo === "DELETE")).toBe(true);
+    expect(llamadas.some((l) => l.url.includes(`/me/library?uris=${encodeURIComponent("spotify:track:actual0000001")}`) && l.metodo === "DELETE")).toBe(true);
 
     const v = (await app.inject({ method: "POST", url: "/api/musica/spotify/parecidas", headers: h })).json<{ agregadas: number; canciones: { id: string }[] }>();
     expect(v.canciones.map((c) => c.id)).toEqual(["t1", "t2", "t3", "s1", "s2"]);

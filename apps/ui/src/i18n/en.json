@@ -4960,5 +4960,6 @@
 "Pone la wiki, las capturas, el video, el logo y la versión al día con esta versión de Mi Setup. Si ya está publicado, lo nuevo se publica también.": "Brings the wiki, screenshots, video, logo and version up to date with this version of Mi Setup. If it's already published, the new content is published too.",
 "Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Update by itself with each version (the previous one stays in the version history)",
 "No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check the address and that this Mi Setup is running.",
-"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check your internet and that this Mi Setup is running."
+"No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check your internet and that this Mi Setup is running.",
+"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify only shows the songs of your own or collaborative playlists. You can still play this one in full."
 }

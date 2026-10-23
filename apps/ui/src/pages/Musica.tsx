@@ -114,8 +114,10 @@ function useSpotify() {
   const estado = useQuery({
     queryKey: ["spotify"],
     queryFn: () => api<EstadoSpotify>("/api/musica/spotify/estado"),
-    refetchInterval: (q) => (q.state.data?.conectado ? 5_000 : false),
-    retry: false,
+    // Si la primera vez falla (token de Spotify por renovar, servidor arrancando), reintenta solo:
+    // antes había que salir y volver a entrar a Música para que cargara.
+    refetchInterval: (q) => (q.state.data?.conectado ? 5_000 : q.state.error ? 8_000 : false),
+    retry: 2,
   });
   const remoto = useQuery({ queryKey: ["spotify", "remoto"], queryFn: estadoRemoto, staleTime: 30_000 });
   const refrescar = () => setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["spotify"], exact: true }), 700);
@@ -485,7 +487,7 @@ function Playlists({ sp, conectado }: { sp: ReturnType<typeof useSpotify>; conec
   const [abierta, setAbierta] = useState<string | null>(null);
   const forma = useForma();
   const lista = useQuery({ queryKey: ["spotify", "playlists"], queryFn: () => api<Playlist[]>("/api/musica/spotify/playlists"), enabled: conectado, staleTime: 60_000 });
-  const detalle = useQuery({ queryKey: ["spotify", "playlist", abierta], queryFn: () => api<Playlist & { pistas: PistaSpotify[] }>(`/api/musica/spotify/playlists/${abierta}`), enabled: Boolean(abierta) });
+  const detalle = useQuery({ queryKey: ["spotify", "playlist", abierta], queryFn: () => api<Playlist & { pistas: PistaSpotify[]; legible?: boolean }>(`/api/musica/spotify/playlists/${abierta}`), enabled: Boolean(abierta) });
   const { visibles, paginas } = usePaginado(lista.data, forma === "celular" ? 6 : 8);
   const pistas = usePaginado(detalle.data?.pistas, 10);
 
@@ -513,6 +515,7 @@ function Playlists({ sp, conectado }: { sp: ReturnType<typeof useSpotify>; conec
                 ) : null}
               </div>
             </div>
+            {pl.legible === false ? <p className="mb-3 text-sm text-tenue">Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.</p> : null}
             <div className="space-y-0.5">
               {pistas.visibles.map((p) => {
                 const i = pl.pistas.indexOf(p);

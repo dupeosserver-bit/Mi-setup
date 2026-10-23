@@ -31,6 +31,7 @@ import {
   pistasDePlaylist,
   pkce,
   type DispositivoSp,
+  type ElementoPlaylistSp,
   type Pista,
   type PistaSp,
   type PlaylistSp,
@@ -155,8 +156,13 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     }
     if (r.status === 429) throw new HttpError(429, "Spotify pidió esperar un momento. Intenta de nuevo en unos segundos.");
     if (!r.ok) throw new HttpError(502, `Spotify respondió ${r.status}`);
+    // Los controles (siguiente, pausa…) a veces responden 200 con un texto que no es JSON: no es un error.
     const texto = await r.text();
-    return texto ? (JSON.parse(texto) as T) : null;
+    try {
+      return texto ? (JSON.parse(texto) as T) : null;
+    } catch {
+      return null;
+    }
   }
 
   async function parecidas(userId: string, actual: Pista, excluir: string[]): Promise<Pista[]> {
@@ -168,7 +174,7 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     }
     if (candidatas.length < 10) {
       const artista = actual.artistas.split(",")[0]!.trim();
-      const b = await spotify<{ tracks: { items: PistaSp[] } }>(userId, `/search?type=track&limit=20&market=MX&q=${encodeURIComponent(`artist:"${artista}"`)}`, { tolerar: true });
+      const b = await spotify<{ tracks: { items: PistaSp[] } }>(userId, `/search?type=track&limit=10&market=MX&q=${encodeURIComponent(`artist:"${artista}"`)}`, { tolerar: true });
       candidatas.push(...(b?.tracks.items ?? []).map(mapearPista));
     }
     return parecidasSinRepetir(candidatas, [actual.id, ...excluir], 10);
@@ -407,7 +413,8 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       if (!(await getSetting(db, `spotify:${user.id}`))) return { conectado: false, configurado: Boolean(deps.config.env.SPOTIFY_CLIENT_ID) };
       const d = await spotify<ReproductorSp>(user.id, "/me/player?market=MX", { tolerar: true });
       let guardada = false;
-      if (d?.item?.id) guardada = Boolean((await spotify<boolean[]>(user.id, `/me/tracks/contains?ids=${d.item.id}`, { tolerar: true }))?.[0]);
+      // El corazón es un extra: si Spotify falla al revisarlo, el reproductor sale igual.
+      if (d?.item?.uri) guardada = Boolean((await spotify<boolean[]>(user.id, `/me/library/contains?uris=${encodeURIComponent(d.item.uri)}`, { tolerar: true }).catch(() => null))?.[0]);
       return mapearEstado(d, guardada);
     });
 
@@ -448,7 +455,8 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     app.put("/api/musica/spotify/biblioteca/:id", musEscribir, async (request) => {
       const id = idSpotify.parse((request.params as { id: string }).id);
       const { guardar } = z.object({ guardar: z.boolean() }).parse(request.body);
-      await spotify(currentUser(request).id, `/me/tracks?ids=${id}`, { metodo: guardar ? "PUT" : "DELETE" });
+      // Desde 2026 Spotify guarda y quita con /me/library y direcciones spotify:track:….
+      await spotify(currentUser(request).id, `/me/library?uris=${encodeURIComponent(`spotify:track:${id}`)}`, { metodo: guardar ? "PUT" : "DELETE" });
       return { guardada: guardar };
     });
 
@@ -470,11 +478,16 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
     app.get("/api/musica/spotify/playlists/:id", musLeer, async (request) => {
       const id = idSpotify.parse((request.params as { id: string }).id);
       const user = currentUser(request);
+      // Spotify (2026) solo da las canciones de las playlists tuyas o colaborativas; de las demás, solo sus datos.
       const [info, d] = await Promise.all([
-        spotify<PlaylistSp>(user.id, `/playlists/${id}?fields=id,uri,name,images,tracks.total,owner.display_name`),
-        spotify<{ items: { track: PistaSp | null }[] }>(user.id, `/playlists/${id}/tracks?limit=100&market=MX`),
+        spotify<PlaylistSp>(user.id, `/playlists/${id}?fields=id,uri,name,images,items.total,tracks.total,owner.display_name`),
+        spotify<{ items: ElementoPlaylistSp[] }>(user.id, `/playlists/${id}/items?limit=50&market=MX`, { tolerar: true }),
       ]);
-      return { ...(info ? mapearPlaylist(info) : { id, uri: `spotify:playlist:${id}`, nombre: "", portada: null, total: 0, de: "" }), pistas: pistasDePlaylist(d?.items ?? []) };
+      return {
+        ...(info ? mapearPlaylist(info) : { id, uri: `spotify:playlist:${id}`, nombre: "", portada: null, total: 0, de: "" }),
+        pistas: pistasDePlaylist(d?.items ?? []),
+        legible: d !== null,
+      };
     });
 
     app.get("/api/musica/spotify/recientes", musLeer, async (request) => {
@@ -492,7 +505,7 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       const b = await spotify<{ playlists: { items: (PlaylistSp | null)[] } }>(user.id, `/search?type=playlist&limit=5&market=MX&q=${encodeURIComponent("Top 50 México")}`, { tolerar: true });
       for (const pl of b?.playlists.items ?? []) {
         if (!pl) continue;
-        const d = await spotify<{ items: { track: PistaSp | null }[] }>(user.id, `/playlists/${pl.id}/tracks?limit=50&market=MX`, { tolerar: true });
+        const d = await spotify<{ items: ElementoPlaylistSp[] }>(user.id, `/playlists/${pl.id}/items?limit=50&market=MX`, { tolerar: true });
         const pistas = pistasDePlaylist(d?.items ?? []);
         if (pistas.length) return { fuente: "mexico" as const, pistas };
       }
@@ -501,7 +514,8 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
 
     app.get("/api/musica/spotify/buscar", musLeer, async (request) => {
       const { q } = z.object({ q: z.string().trim().min(1).max(100) }).parse(request.query);
-      const d = await spotify<{ tracks: { items: PistaSp[] } }>(currentUser(request).id, `/search?type=track&limit=15&market=MX&q=${encodeURIComponent(q)}`);
+      // Desde 2026 la búsqueda da máximo 10 resultados.
+      const d = await spotify<{ tracks: { items: PistaSp[] } }>(currentUser(request).id, `/search?type=track&limit=10&market=MX&q=${encodeURIComponent(q)}`);
       return (d?.tracks.items ?? []).map(mapearPista);
     });
   };

@@ -81,7 +81,7 @@ function Rejilla({ elementos, alAbrir }: { elementos: Resumen[]; alAbrir: (r: Re
   const pagina = usePaginado(elementos, 18);
   return (
     <>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="sin-seleccion grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {pagina.visibles.map((r) => (
           <Poster key={`${r.tipo}-${r.id}`} r={r} alAbrir={() => alAbrir(r)} />
         ))}
@@ -100,7 +100,7 @@ function Fila({ titulo, icono: Icono, elementos, alAbrir }: { titulo: string; ic
         <Icono className="h-4 w-4 text-tenue" />
         {titulo}
       </h2>
-      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+      <div className="sin-seleccion -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
         {pagina.visibles.map((r) => (
           <div key={`${r.tipo}-${r.id}`} className="w-28 shrink-0 snap-start sm:w-36 xl:w-40">
             <Poster r={r} alAbrir={() => alAbrir(r)} />

@@ -40,7 +40,7 @@ export function Paginas({ pagina, total, hayMas, alCambiar }: { pagina: number; 
     });
   };
   return (
-    <nav ref={caja} className="mt-3 flex items-center justify-center gap-1" aria-label="Páginas">
+    <nav ref={caja} className="mt-3 flex min-w-0 max-w-full flex-wrap items-center justify-center gap-1" aria-label="Páginas">
       <Boton tamano="sm" variante="secundario" icono={ChevronLeft} disabled={pagina <= 1} onClick={() => ir(pagina - 1)} aria-label="Página anterior">
         <span className="hidden sm:inline">Anterior</span>
       </Boton>

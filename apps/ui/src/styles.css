@@ -3,8 +3,17 @@
 @tailwind utilities;
 
 /* Arrastrar un enlace (como los del menú) mostraba su dirección; se ve como app, no como página. */
-a:not([draggable="true"]) {
+a:not([draggable="true"]),
+img:not([draggable="true"]) {
   -webkit-user-drag: none;
+}
+
+/* Pósters, tarjetas y botones no se marcan al arrastrar el mouse (los campos y las notas sí). */
+button,
+[role="button"],
+.sin-seleccion {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 :root {
