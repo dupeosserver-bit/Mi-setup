@@ -144,5 +144,12 @@
  "ctrl+B N",
  "ctrl+B D",
  "Ctrl K",
- "UTF-8"
+ "UTF-8",
+ "600 72px Inter, system-ui, sans-serif",
+ "MiSetupFirmaElegante",
+ "MiSetupFirmaClasica",
+ "MiSetupFirmaModerna",
+ "{0}px \"{1}\", cursive",
+ "M{0} {1}H{2}{3}V{4}{5}H{6}{7}V{8}{9}Z",
+ "Logo"
 ]

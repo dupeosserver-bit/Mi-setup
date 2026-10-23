@@ -3,10 +3,12 @@
  * una foto, arrastra la firma al lugar que quieras y cámbiale el tamaño.
  * Todo se hace en tu equipo con pdf.js y pdf-lib: el documento no se sube.
  */
-import { Download, FileText, ImagePlus, Move, PenLine, Upload } from "lucide-react";
+import { Download, FileText, ImagePlus, Move, PenLine, Save, Upload } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LETRAS_FIRMA, TINTAS, cargarLetra, guardarFirma, leerFirmaGuardada, primerNombre, type LetraFirma } from "../lib/firmas";
 import { guardarBlob } from "../lib/guardar";
+import { useSesion } from "../lib/sesion";
 import { Boton, Campo, Cargando, Entrada, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
 
 type PdfJs = typeof import("pdfjs-dist");
@@ -33,64 +35,126 @@ export function aCoordenadasPdf(c: Colocacion, anchoPagina: number, altoPagina: 
   return { x: c.x * anchoPagina, y: altoPagina - c.y * altoPagina - alto, width: ancho, height: alto };
 }
 
-function LienzoFirma({ alCambiar }: { alCambiar: (png: string | null) => void }) {
-  const [modo, setModo] = useState<"dibujar" | "escribir" | "imagen">("dibujar");
-  const [nombre, setNombre] = useState("");
-  const [color, setColor] = useState("#0b1f5c");
+type ModoFirma = "escrita" | "dibujar" | "imagen" | "nombre";
+
+export function ElegirFirma({ alCambiar }: { alCambiar: (png: string | null) => void }) {
+  const guardada = useMemo(() => leerFirmaGuardada(), []);
+  const nombreCuenta = useSesion((s) => primerNombre(s.usuario?.displayName));
+  const [modo, setModo] = useState<ModoFirma>(guardada ? "dibujar" : "escrita");
+  const [nombre, setNombre] = useState(nombreCuenta);
+  const [letra, setLetra] = useState<LetraFirma>("elegante");
+  const [color, setColor] = useState<string>(TINTAS[0].color);
+  const [hayTrazo, setHayTrazo] = useState(false);
   const lienzo = useRef<HTMLCanvasElement>(null);
   const dibujando = useRef(false);
   const archivo = useRef<HTMLInputElement>(null);
 
-  const recortarYAvisar = () => {
-    // Se recorta al tamaño de lo dibujado para que la firma no tenga aire de más.
-    const c = lienzo.current!;
+  const recortar = () => {
+    const c = lienzo.current;
+    if (!c) return null;
     const g = c.getContext("2d")!;
     const d = g.getImageData(0, 0, c.width, c.height).data;
-    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
-    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3]! > 10) {
-      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
-    }
-    if (x1 < 0) return alCambiar(null);
+    let x0 = c.width;
+    let y0 = c.height;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < c.height; y++)
+      for (let x = 0; x < c.width; x++)
+        if (d[(y * c.width + x) * 4 + 3]! > 10) {
+          x0 = Math.min(x0, x);
+          y0 = Math.min(y0, y);
+          x1 = Math.max(x1, x);
+          y1 = Math.max(y1, y);
+        }
+    if (x1 < 0) return null;
     const m = 6;
     const r = document.createElement("canvas");
     r.width = x1 - x0 + 2 * m;
     r.height = y1 - y0 + 2 * m;
     r.getContext("2d")!.drawImage(c, x0 - m, y0 - m, r.width, r.height, 0, 0, r.width, r.height);
-    alCambiar(r.toDataURL("image/png"));
+    return r.toDataURL("image/png");
   };
-  const limpiar = () => {
+  const vaciar = () => {
     const c = lienzo.current;
     c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
-    alCambiar(null);
   };
+
   useEffect(() => {
-    if (modo !== "escribir") return;
-    const c = lienzo.current!;
-    const g = c.getContext("2d")!;
-    g.clearRect(0, 0, c.width, c.height);
-    if (!nombre.trim()) return alCambiar(null);
-    g.fillStyle = color;
-    g.font = `italic 600 96px "Segoe Script", "Brush Script MT", "Comic Sans MS", cursive`;
-    g.textBaseline = "middle";
-    g.fillText(nombre, 20, c.height / 2, c.width - 40);
-    recortarYAvisar();
-  }, [modo, nombre, color]);
+    if (modo !== "dibujar" || !guardada) return;
+    const c = lienzo.current;
+    if (!c) return;
+    const i = new Image();
+    i.onload = () => {
+      vaciar();
+      const escala = Math.min((c.width - 40) / i.width, (c.height - 40) / i.height, 1);
+      c.getContext("2d")!.drawImage(i, (c.width - i.width * escala) / 2, (c.height - i.height * escala) / 2, i.width * escala, i.height * escala);
+      setHayTrazo(true);
+      alCambiar(guardada);
+    };
+    i.src = guardada;
+  }, [modo, guardada]);
+
+  useEffect(() => {
+    if (modo !== "escrita" && modo !== "nombre") return;
+    let vivo = true;
+    void (async () => {
+      if (modo === "escrita") await cargarLetra(letra).catch(() => undefined);
+      const c = lienzo.current;
+      if (!vivo || !c) return;
+      vaciar();
+      const texto = nombre.trim();
+      if (!texto) return alCambiar(null);
+      const g = c.getContext("2d")!;
+      g.fillStyle = color;
+      g.textBaseline = "middle";
+      g.font = modo === "escrita" ? `${LETRAS_FIRMA[letra].tamano}px "${LETRAS_FIRMA[letra].familia}", cursive` : `600 72px Inter, system-ui, sans-serif`;
+      g.fillText(texto, 24, c.height / 2, c.width - 48);
+      alCambiar(recortar());
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [modo, nombre, letra, color]);
+
   const punto = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * e.currentTarget.width, ((e.clientY - r.top) / r.height) * e.currentTarget.height] as const;
   };
+  const cambiarModo = (m: ModoFirma) => {
+    setModo(m);
+    vaciar();
+    setHayTrazo(false);
+    alCambiar(null);
+  };
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <Pestanas
         valor={modo}
-        alCambiar={(m) => (setModo(m), limpiar())}
+        alCambiar={cambiarModo}
         opciones={[
+          { id: "escrita", texto: "Escrita" },
           { id: "dibujar", texto: "Dibujar" },
-          { id: "escribir", texto: "Escribir" },
-          { id: "imagen", texto: "Subir imagen" },
+          { id: "imagen", texto: "Imagen" },
+          { id: "nombre", texto: "Solo mi nombre" },
         ]}
       />
-      {modo === "escribir" ? <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre" maxLength={40} /> : null}
+      {modo === "escrita" || modo === "nombre" ? (
+        <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre, ej. Yahir" maxLength={40} />
+      ) : null}
+      {modo === "escrita" ? (
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.keys(LETRAS_FIRMA) as LetraFirma[]).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setLetra(l)}
+              className={cx("rounded-xl border px-2 py-2 text-xs", letra === l ? "border-acento bg-[color-mix(in_srgb,var(--acento)_12%,transparent)]" : "border-borde text-tenue hover:bg-tarjeta")}
+            >
+              {LETRAS_FIRMA[l].nombre}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {modo === "imagen" ? (
         <>
           <input
@@ -116,7 +180,7 @@ function LienzoFirma({ alCambiar }: { alCambiar: (png: string | null) => void })
           ref={lienzo}
           width={900}
           height={300}
-          className={cx("w-full max-w-lg touch-none rounded-xl border border-borde bg-white", modo === "escribir" && "pointer-events-none")}
+          className={cx("w-full touch-none rounded-xl border border-borde bg-white", modo !== "dibujar" && "pointer-events-none")}
           onPointerDown={(e) => {
             dibujando.current = true;
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -137,21 +201,51 @@ function LienzoFirma({ alCambiar }: { alCambiar: (png: string | null) => void })
             g.stroke();
           }}
           onPointerUp={() => {
-            if (dibujando.current) recortarYAvisar();
+            if (dibujando.current) {
+              setHayTrazo(true);
+              alCambiar(recortar());
+            }
             dibujando.current = false;
           }}
         />
       )}
       <div className="flex flex-wrap items-center gap-2">
         {modo !== "imagen" ? (
-          <label className="flex items-center gap-1 text-xs text-tenue">
-            Color <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-7 w-9 rounded" />
-          </label>
+          <div className="flex items-center gap-1.5" role="group" aria-label="Tinta">
+            {TINTAS.map((t) => (
+              <button
+                key={t.color}
+                type="button"
+                title={t.nombre}
+                aria-label={t.nombre}
+                onClick={() => setColor(t.color)}
+                className={cx("h-7 w-7 rounded-full border-2", color === t.color ? "border-acento" : "border-transparent")}
+                style={{ background: t.color }}
+              />
+            ))}
+          </div>
         ) : null}
-        <Boton tamano="sm" variante="fantasma" onClick={limpiar}>
-          Borrar firma
-        </Boton>
+        {modo === "dibujar" ? (
+          <>
+            <Boton tamano="sm" variante="fantasma" onClick={() => (vaciar(), setHayTrazo(false), alCambiar(null))}>
+              Vaciar
+            </Boton>
+            <Boton
+              tamano="sm"
+              icono={Save}
+              disabled={!hayTrazo}
+              onClick={() => {
+                guardarFirma(recortar());
+                avisar("Firma guardada en este equipo");
+              }}
+            >
+              Guardar mi firma
+            </Boton>
+          </>
+        ) : null}
       </div>
+      {modo === "escrita" && !guardada ? <p className="text-xs text-tenue">Como aún no tienes firma dibujada, se usa tu nombre con letra de firma.</p> : null}
+      {modo === "nombre" ? <p className="text-xs text-tenue">Sin firma: solo se escribe tu nombre en letra normal.</p> : null}
     </div>
   );
 }
@@ -292,7 +386,7 @@ export function FirmarDocumento() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,380px)_1fr]">
       <Tarjeta titulo="1. Tu firma" icono={PenLine}>
-        <LienzoFirma alCambiar={setFirma} />
+        <ElegirFirma alCambiar={setFirma} />
       </Tarjeta>
       <Tarjeta
         titulo="2. Documento"

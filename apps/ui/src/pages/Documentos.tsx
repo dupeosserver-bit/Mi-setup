@@ -6,9 +6,9 @@
 import { Camera, Combine, Download, FileText, PenLine, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { PDFDocument, degrees } from "pdf-lib";
 import { useEffect, useRef, useState } from "react";
-import { FirmarDocumento } from "../components/FirmarDocumento";
+import { ElegirFirma, FirmarDocumento } from "../components/FirmarDocumento";
 import { guardarBlob } from "../lib/guardar";
-import { Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
+import { Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 
 function bajar(bytes: Uint8Array, nombre: string) {
   void guardarBlob(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), nombre).catch(avisarError);
@@ -213,106 +213,86 @@ function FirmaRapida() {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [pagina, setPagina] = useState("1");
   const [posicion, setPosicion] = useState<"abajo-derecha" | "abajo-izquierda" | "abajo-centro">("abajo-derecha");
-  const lienzo = useRef<HTMLCanvasElement>(null);
-  const dibujando = useRef(false);
-  const [hayFirma, setHayFirma] = useState(false);
-
-  const punto = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * e.currentTarget.width, ((e.clientY - r.top) / r.height) * e.currentTarget.height] as const;
-  };
-  const limpiar = () => {
-    const c = lienzo.current;
-    c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
-    setHayFirma(false);
-  };
+  const [firma, setFirma] = useState<string | null>(null);
   const firmar = async () => {
-    if (!archivo || !lienzo.current) return;
+    if (!archivo || !firma) return;
     try {
       const doc = await abrir(archivo);
-      const png = await doc.embedPng(lienzo.current.toDataURL("image/png"));
+      const imagen = firma.startsWith("data:image/png") ? await doc.embedPng(firma) : await doc.embedJpg(firma);
       const i = Math.min(Math.max(Number(pagina) || 1, 1), doc.getPageCount()) - 1;
       const p = doc.getPage(i);
       const ancho = p.getWidth() * 0.3;
-      const alto = (png.height / png.width) * ancho;
+      const alto = (imagen.height / imagen.width) * ancho;
       const x = posicion === "abajo-izquierda" ? 40 : posicion === "abajo-centro" ? (p.getWidth() - ancho) / 2 : p.getWidth() - ancho - 40;
-      p.drawImage(png, { x, y: 50, width: ancho, height: alto });
+      p.drawImage(imagen, { x, y: 50, width: ancho, height: alto });
       bajar(await doc.save(), `firmado-${archivo.name}`);
     } catch (err) {
       avisarError(err);
     }
   };
   return (
-    <Tarjeta titulo="Firmar un PDF" icono={PenLine}>
-      <div className="space-y-3">
-        <ElegirArchivos texto={archivo ? `Cambiar (${archivo.name})` : "Elegir PDF"} alElegir={(f) => setArchivo(f[0] ?? null)} />
-        <p className="text-sm text-tenue">Dibuja tu firma con el dedo o el mouse:</p>
-        <canvas
-          ref={lienzo}
-          width={600}
-          height={200}
-          className="w-full max-w-md touch-none rounded-xl border border-borde bg-white"
-          onPointerDown={(e) => {
-            dibujando.current = true;
-            const ctx = e.currentTarget.getContext("2d")!;
-            const [x, y] = punto(e);
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-          }}
-          onPointerMove={(e) => {
-            if (!dibujando.current) return;
-            const ctx = e.currentTarget.getContext("2d")!;
-            ctx.lineWidth = 4;
-            ctx.lineCap = "round";
-            ctx.strokeStyle = "#0b1f5c";
-            const [x, y] = punto(e);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            setHayFirma(true);
-          }}
-          onPointerUp={() => (dibujando.current = false)}
-          onPointerLeave={() => (dibujando.current = false)}
-        />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <Campo etiqueta="Página">
-            <Entrada type="number" min={1} value={pagina} onChange={(e) => setPagina(e.target.value)} />
-          </Campo>
-          <Campo etiqueta="Dónde">
-            <Selector value={posicion} onChange={(e) => setPosicion(e.target.value as typeof posicion)}>
-              <option value="abajo-derecha">Abajo a la derecha</option>
-              <option value="abajo-centro">Abajo al centro</option>
-              <option value="abajo-izquierda">Abajo a la izquierda</option>
-            </Selector>
-          </Campo>
-        </div>
-        <div className="flex gap-2">
-          <Boton variante="primario" icono={Download} disabled={!archivo || !hayFirma} onClick={() => void firmar()}>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
+      <Tarjeta titulo="1. Tu firma" icono={PenLine}>
+        <ElegirFirma alCambiar={setFirma} />
+      </Tarjeta>
+      <Tarjeta titulo="2. Dónde va" icono={FileText}>
+        <div className="space-y-3">
+          <ElegirArchivos texto={archivo ? `Cambiar (${archivo.name})` : "Elegir PDF"} alElegir={(f) => setArchivo(f[0] ?? null)} />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Campo etiqueta="Página">
+              <Entrada type="number" min={1} value={pagina} onChange={(e) => setPagina(e.target.value)} />
+            </Campo>
+            <Campo etiqueta="Dónde">
+              <Selector value={posicion} onChange={(e) => setPosicion(e.target.value as typeof posicion)}>
+                <option value="abajo-derecha">Abajo a la derecha</option>
+                <option value="abajo-centro">Abajo al centro</option>
+                <option value="abajo-izquierda">Abajo a la izquierda</option>
+              </Selector>
+            </Campo>
+          </div>
+          <Boton variante="primario" icono={Download} disabled={!archivo || !firma} onClick={() => void firmar()}>
             Firmar y descargar
           </Boton>
-          <Boton variante="fantasma" onClick={limpiar}>
-            Borrar firma
-          </Boton>
         </div>
-      </div>
-    </Tarjeta>
+      </Tarjeta>
+    </div>
   );
 }
 
+const ACCIONES = [
+  { id: "unir", titulo: "Unir PDF", texto: "Junta varios PDF en uno, en el orden que elijas.", icono: Combine, color: "#58a6ff" },
+  { id: "paginas", titulo: "Páginas", texto: "Saca, borra o gira páginas de un PDF.", icono: Scissors, color: "#d29922" },
+  { id: "fotos", titulo: "Fotos a PDF", texto: "Convierte fotos o la cámara en un PDF.", icono: Camera, color: "#3fb950" },
+  { id: "firmar", titulo: "Firmar", texto: "Escrita, dibujada o con imagen, donde quieras.", icono: PenLine, color: "#bc8cff" },
+] as const;
+
 export default function Documentos() {
-  const [pestana, setPestana] = useState<"unir" | "paginas" | "fotos" | "firmar">("unir");
+  const [pestana, setPestana] = useState<(typeof ACCIONES)[number]["id"]>("unir");
   return (
     <div className="space-y-4">
       <Encabezado titulo="Documentos y PDF" descripcion="Todo se hace en tu equipo: tus documentos no se suben a ningún lado." />
-      <Pestanas
-        valor={pestana}
-        alCambiar={setPestana}
-        opciones={[
-          { id: "unir", texto: "Unir" },
-          { id: "paginas", texto: "Páginas" },
-          { id: "fotos", texto: "Fotos a PDF" },
-          { id: "firmar", texto: "Firmar" },
-        ]}
-      />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {ACCIONES.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => setPestana(a.id)}
+            aria-pressed={pestana === a.id}
+            className={cx(
+              "flex flex-col gap-3 rounded-tarjeta border p-4 text-left transition-colors sm:flex-row sm:items-center",
+              pestana === a.id ? "border-acento bg-[color-mix(in_srgb,var(--acento)_10%,var(--superficie))]" : "border-borde bg-superficie hover:bg-tarjeta",
+            )}
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl" style={{ background: `color-mix(in srgb, ${a.color} 18%, transparent)`, color: a.color }}>
+              <a.icono className="h-6 w-6" />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">{a.titulo}</span>
+              <span className="block text-xs text-tenue">{a.texto}</span>
+            </span>
+          </button>
+        ))}
+      </div>
       {pestana === "unir" ? <Unir /> : pestana === "paginas" ? <Paginas /> : pestana === "fotos" ? <FotosAPdf /> : <Firmar />}
       {pestana === "unir" ? <Vacio icono={FileText} texto="Elige dos o más PDF; se unen en el orden de la lista." /> : null}
     </div>
