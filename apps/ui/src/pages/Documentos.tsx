@@ -1,9 +1,4 @@
-/**
- * Documentos y PDF, todo en tu equipo (nada se sube): unir PDFs, sacar o borrar
- * páginas, girar, fotos a PDF (también con la cámara) y firmar (con el dedo, escrita o
- * con imagen) en el lugar que elijas de un PDF o una foto.
- */
-import { Camera, Combine, Download, FileText, PenLine, RotateCw, Scissors, Trash2 } from "lucide-react";
+import { Camera, Combine, Download, FileText, PenLine, RotateCw, Scissors, Trash2, Upload } from "lucide-react";
 import { PDFDocument, degrees } from "pdf-lib";
 import { useEffect, useRef, useState } from "react";
 import { ElegirFirma, FirmarDocumento } from "../components/FirmarDocumento";
@@ -14,10 +9,12 @@ function bajar(bytes: Uint8Array, nombre: string) {
   void guardarBlob(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), nombre).catch(avisarError);
 }
 
-/** "1-3, 5, 8-9" → [0,1,2,4,7,8] (índices desde 0, sin repetir, dentro del total). */
 export function leerPaginas(texto: string, total: number): number[] {
   const salida = new Set<number>();
-  for (const parte of texto.split(",").map((s) => s.trim()).filter(Boolean)) {
+  for (const parte of texto
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     const m = /^(\d+)\s*-\s*(\d+)$/.exec(parte);
     if (m) {
       const [a, b] = [Number(m[1]), Number(m[2])].sort((x, y) => x - y) as [number, number];
@@ -30,6 +27,58 @@ export function leerPaginas(texto: string, total: number): number[] {
   return [...salida].sort((a, b) => a - b);
 }
 
+interface Llegada {
+  tipo: "pdf" | "foto";
+  archivos: File[];
+}
+
+function Soltar({ alSoltar }: { alSoltar: (e: Llegada) => void }) {
+  const [encima, setEncima] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const recibir = (lista: File[]) => {
+    const pdfs = lista.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    const fotos = lista.filter((f) => f.type.startsWith("image/"));
+    if (pdfs.length) alSoltar({ tipo: "pdf", archivos: pdfs });
+    else if (fotos.length) alSoltar({ tipo: "foto", archivos: fotos });
+    else avisar("Solo PDF o fotos", "error");
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => ref.current?.click()}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setEncima(true);
+      }}
+      onDragLeave={() => setEncima(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setEncima(false);
+        recibir(Array.from(e.dataTransfer.files));
+      }}
+      className={cx(
+        "flex w-full flex-col items-center gap-2 rounded-tarjeta border-2 border-dashed p-6 text-center transition-colors",
+        encima ? "border-acento bg-[color-mix(in_srgb,var(--acento)_10%,transparent)]" : "border-borde bg-superficie hover:border-tenue",
+      )}
+    >
+      <Upload className="h-7 w-7 text-acento" />
+      <span className="font-semibold">Suelta aquí tus PDF o fotos</span>
+      <span className="text-xs text-tenue">o toca para elegirlos · los PDF van a «Unir» y las fotos a «Fotos a PDF»</span>
+      <input
+        ref={ref}
+        type="file"
+        multiple
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          recibir(Array.from(e.target.files ?? []));
+          e.target.value = "";
+        }}
+      />
+    </button>
+  );
+}
+
 async function abrir(f: File) {
   return PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true });
 }
@@ -38,10 +87,17 @@ function ElegirArchivos({ multiple = false, accept = "application/pdf", alElegir
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
-      <input ref={ref} type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => {
-        alElegir(Array.from(e.target.files ?? []));
-        e.target.value = "";
-      }} />
+      <input
+        ref={ref}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="hidden"
+        onChange={(e) => {
+          alElegir(Array.from(e.target.files ?? []));
+          e.target.value = "";
+        }}
+      />
       <Boton icono={FileText} onClick={() => ref.current?.click()}>
         {texto}
       </Boton>
@@ -49,8 +105,11 @@ function ElegirArchivos({ multiple = false, accept = "application/pdf", alElegir
   );
 }
 
-function Unir() {
+function Unir({ nuevos }: { nuevos: Llegada | null }) {
   const [archivos, setArchivos] = useState<File[]>([]);
+  useEffect(() => {
+    if (nuevos?.tipo === "pdf") setArchivos((a) => [...a, ...nuevos.archivos]);
+  }, [nuevos]);
   const [trabajando, setTrabajando] = useState(false);
   const unir = async () => {
     setTrabajando(true);
@@ -139,15 +198,17 @@ function Paginas() {
   );
 }
 
-function FotosAPdf() {
+function FotosAPdf({ nuevos }: { nuevos: Llegada | null }) {
   const [fotos, setFotos] = useState<File[]>([]);
+  useEffect(() => {
+    if (nuevos?.tipo === "foto") setFotos((a) => [...a, ...nuevos.archivos]);
+  }, [nuevos]);
   const [trabajando, setTrabajando] = useState(false);
   const crear = async () => {
     setTrabajando(true);
     try {
       const doc = await PDFDocument.create();
       for (const f of fotos) {
-        // Se pasa por un lienzo para aceptar cualquier formato y bajar el peso.
         const bitmap = await createImageBitmap(f);
         const escala = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
         const lienzo = document.createElement("canvas");
@@ -174,10 +235,16 @@ function FotosAPdf() {
           <ElegirArchivos multiple accept="image/*" texto="Elegir fotos" alElegir={(f) => setFotos((a) => [...a, ...f])} />
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-borde px-4 text-sm hover:bg-tarjeta">
             <Camera className="h-4 w-4" /> Tomar foto
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-              setFotos((a) => [...a, ...Array.from(e.target.files ?? [])]);
-              e.target.value = "";
-            }} />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                setFotos((a) => [...a, ...Array.from(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
           </label>
         </div>
         {fotos.length ? <p className="text-sm">{fotos.length} foto(s) lista(s).</p> : null}
@@ -185,7 +252,11 @@ function FotosAPdf() {
           <Boton variante="primario" icono={Download} disabled={!fotos.length} cargando={trabajando} onClick={() => void crear()}>
             Crear PDF
           </Boton>
-          {fotos.length ? <Boton variante="fantasma" onClick={() => setFotos([])}>Vaciar</Boton> : null}
+          {fotos.length ? (
+            <Boton variante="fantasma" onClick={() => setFotos([])}>
+              Vaciar
+            </Boton>
+          ) : null}
         </div>
       </div>
     </Tarjeta>
@@ -268,6 +339,7 @@ const ACCIONES = [
 
 export default function Documentos() {
   const [pestana, setPestana] = useState<(typeof ACCIONES)[number]["id"]>("unir");
+  const [nuevos, setNuevos] = useState<Llegada | null>(null);
   return (
     <div className="space-y-4">
       <Encabezado titulo="Documentos y PDF" descripcion="Todo se hace en tu equipo: tus documentos no se suben a ningún lado." />
@@ -293,7 +365,13 @@ export default function Documentos() {
           </button>
         ))}
       </div>
-      {pestana === "unir" ? <Unir /> : pestana === "paginas" ? <Paginas /> : pestana === "fotos" ? <FotosAPdf /> : <Firmar />}
+      <Soltar
+        alSoltar={(e) => {
+          setNuevos(e);
+          setPestana(e.tipo === "pdf" ? "unir" : "fotos");
+        }}
+      />
+      {pestana === "unir" ? <Unir nuevos={nuevos} /> : pestana === "paginas" ? <Paginas /> : pestana === "fotos" ? <FotosAPdf nuevos={nuevos} /> : <Firmar />}
       {pestana === "unir" ? <Vacio icono={FileText} texto="Elige dos o más PDF; se unen en el orden de la lista." /> : null}
     </div>
   );

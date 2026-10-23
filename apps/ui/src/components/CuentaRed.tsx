@@ -1,9 +1,10 @@
 /** Estado y conexión (OAuth) de una cuenta de red: Twitch, YouTube, Kick o X. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link2, Unlink } from "lucide-react";
+import { Link2, Lock, Unlink, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
-import { queryClient } from "../lib/consultas";
+import { queryClient, useMe } from "../lib/consultas";
 import { abrirExterno } from "../lib/plataforma";
 import { Boton, FaltaConfigurar, Insignia, avisar, avisarError } from "./ui";
 
@@ -65,6 +66,25 @@ export function EstadoCuenta({ c }: { c: CuentaRed }) {
           Conectar
         </Boton>
       )}
+    </div>
+  );
+}
+
+export function EtiquetaInvitados() {
+  const me = useMe();
+  const maestra = me.data?.usuario.role === "maestra";
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--acento)_14%,transparent)] px-2.5 py-1 text-xs font-medium text-acento">
+        <Lock className="h-3.5 w-3.5" />
+        Solo tú e invitados
+      </span>
+      {maestra ? (
+        <Link to="/seguridad/cuentas" className="inline-flex items-center gap-1.5 rounded-full border border-borde px-2.5 py-1 text-xs text-tenue hover:text-texto">
+          <UserPlus className="h-3.5 w-3.5" />
+          Invitar
+        </Link>
+      ) : null}
     </div>
   );
 }

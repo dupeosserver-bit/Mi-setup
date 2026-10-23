@@ -1,14 +1,10 @@
-/**
- * Bots de Discord (creador): pegas el token de tu aplicación y Mi Setup mantiene el bot encendido. Se configura
- * por módulos (bienvenida, moderación, niveles, economía, tickets, roles, comandos, registros) y, si lo vendes,
- * le pones cliente, fecha de vencimiento y un enlace para que su dueño lo edite sin ver tu cuenta.
- */
 import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Bot, CalendarClock, Copy, KeyRound, Link2, Plus, Trash2, Unlink } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PanelBot, type ApiBot, type BotDetalle } from "../components/PanelBot";
+import { EtiquetaInvitados } from "../components/CuentaRed";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Modal, Tarjeta, Vacio, avisar, avisarError } from "../components/ui";
 import { API_BASE, api } from "../lib/api";
 import { copiarSeguro } from "../lib/boveda/utilidades";
@@ -95,7 +91,11 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
   const b = q.data;
 
   const guardarDatos = useMutation({
-    mutationFn: () => api(`/api/bots/${id}`, { metodo: "PATCH", cuerpo: { cliente: cliente ?? b?.cliente ?? "", vence: (vence ?? aFechaCorta(b?.vence ?? null)) ? new Date(`${vence ?? aFechaCorta(b?.vence ?? null)}T23:59:59`).toISOString() : null } }),
+    mutationFn: () =>
+      api(`/api/bots/${id}`, {
+        metodo: "PATCH",
+        cuerpo: { cliente: cliente ?? b?.cliente ?? "", vence: (vence ?? aFechaCorta(b?.vence ?? null)) ? new Date(`${vence ?? aFechaCorta(b?.vence ?? null)}T23:59:59`).toISOString() : null },
+      }),
     onSuccess: () => {
       avisar("Datos guardados");
       setCliente(null);
@@ -141,7 +141,8 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} aria-label="Volver" onClick={alVolver} />
-        <h2 className="text-lg font-semibold">{b.nombre}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{b.nombre}</h2>
+        <EtiquetaInvitados />
       </div>
       <PanelBot bot={b} api={apis} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -200,7 +201,16 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
                 icono={Trash2}
                 className="text-peligro"
                 onClick={async () => {
-                  if (!(await confirmar({ titulo: "Borrar bot", mensaje: `${b.nombre} se apaga y se borra con su configuración, niveles y monedas.`, peligroso: true, textoExacto: b.nombre, boton: "Borrar" }))) return;
+                  if (
+                    !(await confirmar({
+                      titulo: "Borrar bot",
+                      mensaje: `${b.nombre} se apaga y se borra con su configuración, niveles y monedas.`,
+                      peligroso: true,
+                      textoExacto: b.nombre,
+                      boton: "Borrar",
+                    }))
+                  )
+                    return;
                   await api(`/api/bots/${id}`, { metodo: "DELETE" }).catch(avisarError);
                   refrescar();
                   alVolver();
@@ -229,7 +239,16 @@ export default function BotsDiscord() {
       <Encabezado
         titulo="Bots de Discord"
         descripcion="Crea bots con módulos (bienvenida, moderación, niveles, economía, tickets…) y Mi Setup los mantiene encendidos. Puedes venderlos con un enlace para el cliente."
-        acciones={puede ? <Boton variante="primario" icono={Plus} onClick={() => setNuevo(true)}>Nuevo bot</Boton> : null}
+        acciones={
+          <>
+            <EtiquetaInvitados />
+            {puede ? (
+              <Boton variante="primario" icono={Plus} onClick={() => setNuevo(true)}>
+                Nuevo bot
+              </Boton>
+            ) : null}
+          </>
+        }
       />
       <ErrorCaja error={q.error} />
       {q.isLoading ? <Cargando /> : null}
@@ -238,15 +257,21 @@ export default function BotsDiscord() {
         {pgBd.visibles.map((b) => (
           <button key={b.id} type="button" onClick={() => setParams({ bot: b.id })} className="rounded-tarjeta border border-borde bg-superficie p-4 text-left transition-colors hover:bg-tarjeta">
             <div className="flex items-center gap-2">
-              <Bot className="h-4 w-4 text-tenue" />
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#5865f2] text-white">
+                <Bot className="h-4 w-4" />
+              </span>
               <span className="min-w-0 flex-1 truncate font-medium">{b.nombre}</span>
-              <Insignia tono={b.estado === "encendido" ? "ok" : b.estado === "error" ? "peligro" : "neutro"}>{b.estado === "encendido" ? "Encendido" : b.estado === "error" ? "Error" : "Apagado"}</Insignia>
+              <Insignia tono={b.estado === "encendido" ? "ok" : b.estado === "error" ? "peligro" : "neutro"}>
+                {b.estado === "encendido" ? "Encendido" : b.estado === "error" ? "Error" : "Apagado"}
+              </Insignia>
             </div>
             <p className="mt-1 truncate text-xs text-tenue">
               {b.botNombre ?? "Sin conectar"}
               {b.cliente ? ` · ${b.cliente}` : ""}
             </p>
-            <p className={`mt-2 text-[11px] ${b.vencido ? "text-peligro" : "text-tenue"}`}>{b.vence ? (b.vencido ? "Servicio vencido" : `Vence ${new Date(b.vence).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" })}`) : "Sin vencimiento"}</p>
+            <p className={`mt-2 text-[11px] ${b.vencido ? "text-peligro" : "text-tenue"}`}>
+              {b.vence ? (b.vencido ? "Servicio vencido" : `Vence ${new Date(b.vence).toLocaleDateString(localeActual(), { day: "numeric", month: "short", year: "numeric" })}`) : "Sin vencimiento"}
+            </p>
             {b.compartido ? <p className="text-[11px] text-tenue">Con enlace para el cliente</p> : null}
             {b.error ? <p className="mt-1 truncate text-[11px] text-peligro">{b.error}</p> : null}
           </button>

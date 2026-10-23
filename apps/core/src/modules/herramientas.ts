@@ -150,8 +150,17 @@ export function herramientasRoutes(deps: ModuleDeps) {
 
     app.patch("/api/enlaces/:id", enlacesEscribir, async (request) => {
       const { id } = idParams.parse(request.params);
-      const { activo } = z.object({ activo: z.boolean() }).parse(request.body);
-      await db.update(shortLinks).set({ active: activo }).where(and(eq(shortLinks.id, id), eq(shortLinks.userId, currentUser(request).id)));
+      const d = z
+        .object({
+          activo: z.boolean().optional(),
+          destino: z.string().trim().url("Pega un enlace completo (https://…)").max(4000).refine((u) => /^https?:\/\//i.test(u), "Solo enlaces http o https").optional(),
+        })
+        .refine((x) => x.activo !== undefined || x.destino !== undefined, "Nada que cambiar")
+        .parse(request.body);
+      await db
+        .update(shortLinks)
+        .set({ ...(d.activo !== undefined ? { active: d.activo } : {}), ...(d.destino ? { target: d.destino } : {}) })
+        .where(and(eq(shortLinks.id, id), eq(shortLinks.userId, currentUser(request).id)));
       return { ok: true };
     });
 

@@ -789,27 +789,24 @@ function Ofertas() {
           </div>
           {ofertas.isLoading ? <Cargando /> : null}
           <ErrorCaja error={ofertas.error} />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 min-[1700px]:grid-cols-5">
             {ofertas.data?.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => abrirExterno(o.url)}
-                className="flex gap-3 rounded-tarjeta border border-borde bg-superficie p-3 text-left hover:bg-tarjeta"
-              >
-                <img src={o.imagen} alt={o.titulo} loading="lazy" referrerPolicy="no-referrer" className="h-16 w-28 shrink-0 rounded-lg object-cover" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{o.titulo}</p>
-                  <p className="text-xs text-tenue">{nombreTienda.get(o.tienda) ?? "Tienda"}</p>
-                  <div className="mt-1 flex items-center gap-2 text-sm">
-                    <span className="font-bold">{moneda === "USD" ? `${o.precio.toFixed(2)} USD` : (convertir(o.precio, "USD") ?? `${o.precio.toFixed(2)} USD`)}</span>
-                    <span className="text-xs text-tenue line-through">
-                      {moneda === "USD" ? o.precioNormal.toFixed(2) : (convertir(o.precioNormal, "USD") ?? o.precioNormal.toFixed(2))}
-                    </span>
-                    <Insignia tono="ok">-{o.ahorro}%</Insignia>
-                  </div>
+              <button key={o.id} type="button" onClick={() => abrirExterno(o.url)} className="min-w-0 overflow-hidden rounded-tarjeta border border-borde bg-superficie text-left transition-colors hover:border-tenue">
+                <div className="relative">
+                  <img src={o.imagen} alt={o.titulo} loading="lazy" referrerPolicy="no-referrer" className="aspect-[16/9] w-full object-cover" />
+                  <span className="absolute left-2 top-2 rounded-lg bg-ok px-2 py-0.5 text-sm font-bold text-fondo">-{o.ahorro}%</span>
                 </div>
-                <ExternalLink className="h-4 w-4 shrink-0 text-tenue" />
+                <div className="space-y-1 p-3">
+                  <p className="truncate text-sm font-medium">{o.titulo}</p>
+                  <p className="truncate text-xs text-tenue">{nombreTienda.get(o.tienda) ?? "Tienda"}</p>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-bold">{moneda === "USD" ? `${o.precio.toFixed(2)} USD` : (convertir(o.precio, "USD") ?? `${o.precio.toFixed(2)} USD`)}</span>
+                    <span className="text-xs text-tenue line-through">{moneda === "USD" ? o.precioNormal.toFixed(2) : (convertir(o.precioNormal, "USD") ?? o.precioNormal.toFixed(2))}</span>
+                  </div>
+                  <p className="flex items-center gap-1 text-[11px] text-tenue">
+                    Abrir en la tienda <ExternalLink className="h-3 w-3" />
+                  </p>
+                </div>
               </button>
             ))}
           </div>
@@ -857,7 +854,7 @@ function JuegosGratis() {
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
       {lista.data?.length === 0 ? <Vacio icono={Gift} texto="No hay juegos gratis activos para esa plataforma." /> : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1700px]:grid-cols-4">
         {lista.data?.map((g) => (
           <button
             key={g.id}
@@ -1539,7 +1536,6 @@ type PestanaNovedades = "clima" | "noticias" | "compras" | "ofertas" | "gratis" 
 const PESTANAS: readonly PestanaNovedades[] = ["clima", "noticias", "compras", "ofertas", "gratis", "steam", "precios", "cripto", "inversiones", "monedas"];
 
 export default function Novedades() {
-  // ?pestana=… permite llegar directo (p. ej. desde el buscador o las rutas viejas).
   const [params, setParams] = useSearchParams();
   const pedida = params.get("pestana") as PestanaNovedades | null;
   const [pestana, setPestanaEstado] = useState<PestanaNovedades>(pedida && PESTANAS.includes(pedida) ? pedida : "clima");

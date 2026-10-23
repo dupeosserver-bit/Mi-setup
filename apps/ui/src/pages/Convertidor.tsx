@@ -1,10 +1,6 @@
-/**
- * Convertidor: imágenes (en tu equipo), audio y video (en tu VPS con ffmpeg)
- * y datos CSV / JSON / Excel (en tu equipo).
- */
-import { Download, FileAudio, Image as ImageIcon, Repeat, Table } from "lucide-react";
+import { ArrowRight, Download, FileAudio, Image as ImageIcon, Repeat, Table, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, avisar, avisarError } from "../components/ui";
+import { AreaTexto, Boton, Campo, Encabezado, Entrada, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { API_BASE, refrescar } from "../lib/api";
 import { guardarBlob } from "../lib/guardar";
 import { fmtBytes } from "../lib/formato";
@@ -16,8 +12,6 @@ function bajarBlob(b: Blob, nombre: string) {
 
 const sinExtension = (n: string) => n.replace(/\.[^.]+$/, "") || "archivo";
 
-// ---------------------------------------------------------------- imágenes
-
 function Imagenes() {
   const ref = useRef<HTMLInputElement>(null);
   const [archivos, setArchivos] = useState<File[]>([]);
@@ -25,6 +19,8 @@ function Imagenes() {
   const [anchoMax, setAnchoMax] = useState("1920");
   const [calidad, setCalidad] = useState("80");
   const [trabajando, setTrabajando] = useState(false);
+  const [encima, setEncima] = useState(false);
+  const [listas, setListas] = useState<{ nombre: string; antes: number; despues: number }[]>([]);
   const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[formato];
 
   const convertir = async () => {
@@ -50,7 +46,9 @@ function Imagenes() {
         const b = await new Promise<Blob>((r, x) => c.toBlob((bl) => (bl ? r(bl) : x(new Error("No se pudo convertir"))), formato, Number(calidad) / 100));
         antes += f.size;
         despues += b.size;
-        bajarBlob(b, `${sinExtension(f.name)}.${ext}`);
+        const nombre = `${sinExtension(f.name)}.${ext}`;
+        setListas((l) => [{ nombre, antes: f.size, despues: b.size }, ...l].slice(0, 30));
+        bajarBlob(b, nombre);
       }
       avisar(`Listo: de ${fmtBytes(antes)} a ${fmtBytes(despues)}`);
     } catch (err) {
@@ -60,40 +58,92 @@ function Imagenes() {
     }
   };
 
+  const ahorro = listas.reduce((t, x) => t + Math.max(0, x.antes - x.despues), 0);
+  const FORMATOS_IMG = [
+    { id: "image/webp", texto: "WebP", ayuda: "La más ligera" },
+    { id: "image/jpeg", texto: "JPG", ayuda: "Funciona en todo" },
+    { id: "image/png", texto: "PNG", ayuda: "Sin pérdida" },
+  ] as const;
   return (
-    <Tarjeta titulo="Imágenes" icono={ImageIcon}>
-      <div className="space-y-3">
-        <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
-          setArchivos(Array.from(e.target.files ?? []));
-          e.target.value = "";
-        }} />
-        <Boton icono={ImageIcon} onClick={() => ref.current?.click()}>
-          {archivos.length ? `${archivos.length} imagen(es) elegidas` : "Elegir imágenes"}
-        </Boton>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <Campo etiqueta="Convertir a">
-            <Selector value={formato} onChange={(e) => setFormato(e.target.value as typeof formato)}>
-              <option value="image/webp">WebP (la más ligera)</option>
-              <option value="image/jpeg">JPG</option>
-              <option value="image/png">PNG (sin pérdida)</option>
-            </Selector>
-          </Campo>
-          <Campo etiqueta="Tamaño máximo (px)">
-            <Entrada type="number" min={100} value={anchoMax} onChange={(e) => setAnchoMax(e.target.value)} />
-          </Campo>
-          <Campo etiqueta={`Calidad: ${calidad}%`}>
-            <input type="range" min={30} max={100} value={calidad} onChange={(e) => setCalidad(e.target.value)} className="w-full" />
-          </Campo>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <Tarjeta titulo="Imágenes" icono={ImageIcon}>
+        <div className="space-y-4">
+          <input
+            ref={ref}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              setArchivos(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => ref.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setEncima(true);
+            }}
+            onDragLeave={() => setEncima(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setEncima(false);
+              setArchivos(Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/")));
+            }}
+            className={cx(
+              "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center transition-colors",
+              encima ? "border-acento bg-[color-mix(in_srgb,var(--acento)_10%,transparent)]" : "border-borde bg-fondo hover:border-tenue",
+            )}
+          >
+            <Upload className="h-7 w-7 text-acento" />
+            <span className="font-semibold">{archivos.length ? `${archivos.length} imagen(es) elegidas` : "Suelta tus fotos aquí"}</span>
+            <span className="text-xs text-tenue">o toca para elegirlas</span>
+          </button>
+          <div className="grid grid-cols-3 gap-2">
+            {FORMATOS_IMG.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFormato(f.id)}
+                className={cx("rounded-xl border p-3 text-left", formato === f.id ? "border-acento bg-[color-mix(in_srgb,var(--acento)_10%,transparent)]" : "border-borde bg-fondo")}
+              >
+                <span className="block font-semibold">{f.texto}</span>
+                <span className="block text-xs text-tenue">{f.ayuda}</span>
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Campo etiqueta="Tamaño máximo (px)">
+              <Entrada type="number" min={100} value={anchoMax} onChange={(e) => setAnchoMax(e.target.value)} />
+            </Campo>
+            <Campo etiqueta={`Calidad: ${calidad}%`}>
+              <input type="range" min={30} max={100} value={calidad} onChange={(e) => setCalidad(e.target.value)} className="w-full accent-[var(--acento)]" />
+            </Campo>
+          </div>
+          <Boton variante="primario" icono={Download} disabled={!archivos.length} cargando={trabajando} onClick={() => void convertir()}>
+            Convertir y descargar
+          </Boton>
         </div>
-        <Boton variante="primario" icono={Download} disabled={!archivos.length} cargando={trabajando} onClick={() => void convertir()}>
-          Convertir y descargar
-        </Boton>
-      </div>
-    </Tarjeta>
+      </Tarjeta>
+      <Tarjeta titulo="Listas" acciones={listas.length ? <span className="text-xs font-semibold text-ok">Ahorraste {fmtBytes(ahorro)}</span> : null}>
+        {!listas.length ? <p className="text-sm text-tenue">Aquí ves cuánto pesaba cada foto antes y después.</p> : null}
+        <ul className="space-y-2">
+          {listas.map((x, i) => (
+            <li key={`${x.nombre}-${i}`} className="rounded-xl bg-fondo p-3 text-sm">
+              <p className="truncate font-medium">{x.nombre}</p>
+              <p className="mt-1 flex items-center gap-2 text-xs text-tenue">
+                {fmtBytes(x.antes)} <ArrowRight className="h-3 w-3" /> <span className="font-semibold text-texto">{fmtBytes(x.despues)}</span>
+                {x.antes > x.despues ? <span className="ml-auto text-ok">-{Math.round((1 - x.despues / x.antes) * 100)}%</span> : null}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </Tarjeta>
+    </div>
   );
 }
-
-// ---------------------------------------------------------------- audio y video
 
 const FORMATOS_MEDIA = [
   { id: "mp3", texto: "MP3 (sacar el audio)" },
@@ -137,7 +187,7 @@ function Media() {
           try {
             msg = (JSON.parse(texto) as { error?: string }).error ?? msg;
           } catch {
-            /* sin JSON */
+            void 0;
           }
           reject(new Error(msg));
         };
@@ -163,10 +213,16 @@ function Media() {
     <Tarjeta titulo="Audio y video" icono={FileAudio}>
       <div className="space-y-3">
         <p className="text-sm text-tenue">Se convierte en tu VPS (hasta 500 MB). Ej.: sacarle el MP3 a un video o comprimir un video para mandarlo por WhatsApp.</p>
-        <input ref={ref} type="file" accept="audio/*,video/*" className="hidden" onChange={(e) => {
-          setArchivo(e.target.files?.[0] ?? null);
-          e.target.value = "";
-        }} />
+        <input
+          ref={ref}
+          type="file"
+          accept="audio/*,video/*"
+          className="hidden"
+          onChange={(e) => {
+            setArchivo(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
         <Boton icono={FileAudio} onClick={() => ref.current?.click()}>
           {archivo ? `${archivo.name} (${fmtBytes(archivo.size)})` : "Elegir audio o video"}
         </Boton>
@@ -194,8 +250,6 @@ function Media() {
     </Tarjeta>
   );
 }
-
-// ---------------------------------------------------------------- datos
 
 function Datos() {
   const ref = useRef<HTMLInputElement>(null);
@@ -247,10 +301,16 @@ function Datos() {
   return (
     <Tarjeta titulo="Datos: CSV, JSON y Excel" icono={Table}>
       <div className="space-y-3">
-        <input ref={ref} type="file" accept=".csv,.json,.xlsx,.xls,.txt" className="hidden" onChange={(e) => {
-          void abrirArchivo(e.target.files?.[0]);
-          e.target.value = "";
-        }} />
+        <input
+          ref={ref}
+          type="file"
+          accept=".csv,.json,.xlsx,.xls,.txt"
+          className="hidden"
+          onChange={(e) => {
+            void abrirArchivo(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
         <Boton icono={Table} onClick={() => ref.current?.click()}>
           Abrir archivo
         </Boton>
