@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
 import { useTema } from "../lib/tiempo-real";
-import { CATEGORIAS, MODULOS_UI } from "../modulos";
+import { CATEGORIAS, MODULOS_UI, categoriaDe } from "../modulos";
 import { ResumenInicio } from "./inicio-widgets";
 import { EsteEquipo } from "../components/EsteEquipo";
 
@@ -62,7 +62,7 @@ export default function Inicio() {
 
       <h2 className="mb-3 mt-8 text-sm font-semibold text-tenue">Apartados</h2>
       {CATEGORIAS.map((c) => {
-        const mods = visibles.filter((id) => MODULES[id].category === c.id);
+        const mods = visibles.filter((id) => categoriaDe(id, me?.usuario.role === "maestra") === c.id).sort((a, b) => Number(MODULES[a].category !== c.id) - Number(MODULES[b].category !== c.id));
         if (mods.length === 0) return null;
         return (
           <section key={c.id} className="mb-5">

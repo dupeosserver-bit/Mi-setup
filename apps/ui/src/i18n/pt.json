@@ -3915,5 +3915,17 @@
 "Actualizar el sitio oficial": "Atualizar o site oficial",
 "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "As páginas são substituídas pelas desta versão. O que você mudou à mão no editor se perde (fica no histórico de versões).",
 "Actualizar con esta versión": "Atualizar com esta versão",
-"Ver menú completo": "Ver menu completo"
+"Ver menú completo": "Ver menu completo",
+"Cerrar todas menos esta": "Fechar todas menos esta",
+"Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.": "Seus outros dispositivos terão que entrar de novo. Esta sessão continua aberta.",
+"entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.": "entrada(s) de lugares novos ou bloqueadas. Se não reconhecer, feche essas sessões e mude a senha.",
+"Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.": "Você recebe um aviso no celular quando alguém entra de um lugar novo. Para avisos de SSH, ative «Alertas de entrada» na revisão acima.",
+"Tus correos, tus contraseñas y tus sitios: revisa y protégete.": "Seus e-mails, suas senhas e seus sites: revise e proteja-se.",
+"Se cambió de lugar": "Mudou de lugar",
+"Dónde tienes la sesión abierta · ahora está en Equipos": "Onde sua sessão está aberta · agora está em Dispositivos",
+"Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor": "Entradas recentes e alertas · agora está em VPS → Segurança do servidor",
+"Mi cuenta › Equipos": "Minha conta › Dispositivos",
+"Máximo {0} cuentas: quita una para agregar otra": "Máximo de {0} contas: remova uma para adicionar outra",
+"Conecta hasta {0} cuentas de Gmail iniciando sesión para revisar correos peligrosos.": "Conecte até {0} contas do Gmail fazendo login para revisar e-mails perigosos.",
+"IA › Agentes de IA": "IA › Agentes de IA"
 }

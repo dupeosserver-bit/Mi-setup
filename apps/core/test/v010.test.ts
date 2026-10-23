@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { zonaDe } from "../src/modules/cloudflare.js";
 import { nombreRespaldo, scriptRespaldo, validarCarpeta } from "../src/modules/respaldos-vps.js";
+import { generateTotpSecret, totpAt } from "../src/auth/totp.js";
 import { bearer, createTestContext, seedUser, TEST_SECRETS } from "./helpers.js";
 
 type Ctx = Awaited<ReturnType<typeof createTestContext>>;
@@ -20,8 +21,8 @@ afterEach(async () => {
 async function preparar() {
   dir = await mkdtemp(join(tmpdir(), "v010-"));
   ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir }) });
-  await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123", permissions: { finanzas_personales: "escritura", notas: "escritura", host_local: "escritura" } as never });
-  await seedUser(ctx.db, { email: "otra@x.test", password: "clave-de-prueba-123", permissions: { finanzas_personales: "escritura", notas: "escritura", host_local: "escritura" } as never });
+  await seedUser(ctx.db, { email: "u@x.test", password: "clave-de-prueba-123", permissions: { finanzas_personales: "escritura", notas: "escritura" } });
+  await seedUser(ctx.db, { email: "otra@x.test", password: "clave-de-prueba-123", permissions: { finanzas_personales: "escritura", notas: "escritura" } });
   const login = async (email: string) =>
     bearer((await ctx!.app.inject({ method: "POST", url: "/api/auth/login", payload: { email, password: "clave-de-prueba-123" } })).json<{ accessToken: string }>().accessToken);
   return { h: await login("u@x.test"), otra: await login("otra@x.test") };
@@ -152,11 +153,19 @@ describe("notas: adjuntos y color", () => {
   });
 });
 
-describe("Host local desde el celular", () => {
+async function prepararDueno() {
+  const { otra } = await preparar();
+  const secreto = generateTotpSecret();
+  await seedUser(ctx!.db, { email: "m@x.test", password: "clave-maestra-123", role: "maestra", totpSecret: secreto });
+  const r = await ctx!.app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "m@x.test", password: "clave-maestra-123", totp: totpAt(secreto, ctx!.clock.now) } });
+  return { h: bearer(r.json<{ accessToken: string }>().accessToken), otra };
+}
+
+describe("Host local desde el celular (solo el dueño)", () => {
   const servidor = { id: "11111111-1111-4111-8111-111111111111", nombre: "Survival", tipo: "paper", version: "1.21.4", ramMb: 4096, puerto: 25565, estado: "detenido", jugadores: [], propiedades: { difficulty: "normal" } };
 
   it("la PC sube su lista, el celular edita y la PC aplica", async () => {
-    const { h } = await preparar();
+    const { h } = await prepararDueno();
     const app = ctx!.app;
     // Antes de que la PC sincronice no hay nada que editar.
     expect((await app.inject({ method: "POST", url: "/api/hostlocal/ediciones", headers: h, payload: { servidorId: servidor.id, cambios: { ramMb: 8192 } } })).statusCode).toBe(404);
@@ -175,10 +184,10 @@ describe("Host local desde el celular", () => {
     expect((await app.inject({ method: "GET", url: "/api/hostlocal/servidores", headers: h })).json<{ pendientes: unknown[] }>().pendientes).toHaveLength(0);
   });
 
-  it("cada cuenta ve solo lo suyo", async () => {
-    const { h, otra } = await preparar();
+  it("otras cuentas no entran a Host local", async () => {
+    const { h, otra } = await prepararDueno();
     const app = ctx!.app;
     await app.inject({ method: "PUT", url: "/api/hostlocal/sincronizar", headers: h, payload: { servidores: [servidor] } });
-    expect((await app.inject({ method: "GET", url: "/api/hostlocal/servidores", headers: otra })).json<{ servidores: unknown[] }>().servidores).toHaveLength(0);
+    expect((await app.inject({ method: "GET", url: "/api/hostlocal/servidores", headers: otra })).statusCode).toBe(403);
   });
 });

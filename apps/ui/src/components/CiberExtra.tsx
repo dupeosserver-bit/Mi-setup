@@ -1,13 +1,13 @@
 /**
- * Ciberseguridad, parte 2:
- * - Mi cuenta: sesiones abiertas (cerrar las que no reconozcas) e inicios de sesión recientes con alertas.
- * - Correos de Google: varias cuentas, filtraciones, bandeja revisada (qué abrir y qué no) y enviar revisando antes.
+ * - Sesiones abiertas de tu cuenta (en Equipos) y entradas recientes del servidor (en VPS → Seguridad del servidor).
+ * - Correos de Google: hasta 10 cuentas, filtraciones, bandeja revisada (qué abrir y qué no) y enviar revisando antes.
  */
-import { usePaginado } from "./Paginas";
+import { Paginas, usePaginado } from "./Paginas";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, LogOut, Mail, MailPlus, MonitorSmartphone, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, LogOut, Mail, MailPlus, MonitorSmartphone, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
@@ -33,6 +33,7 @@ interface Inicio {
   ip: string | null;
   detalle: { dispositivo?: string | null; motivo?: string; servidor?: string; usuario?: string };
   navegador: string;
+  usuario?: string | null;
 }
 
 const TEXTO_INICIO: Record<string, { texto: string; tono: "ok" | "aviso" | "peligro" | "neutro" }> = {
@@ -44,9 +45,8 @@ const TEXTO_INICIO: Record<string, { texto: string; tono: "ok" | "aviso" | "peli
   entrada_ssh: { texto: "Entraron por SSH", tono: "aviso" },
 };
 
-export function MiCuenta() {
+export function SesionesAbiertas() {
   const sesiones = useQuery({ queryKey: ["seguridad", "sesiones"], queryFn: () => api<Sesion[]>("/api/seguridad/sesiones") });
-  const inicios = useQuery({ queryKey: ["seguridad", "inicios"], queryFn: () => api<Inicio[]>("/api/seguridad/inicios") });
   const refrescar = () => void queryClient.invalidateQueries({ queryKey: ["seguridad"] });
   const cerrar = useMutation({ mutationFn: (id: string) => api(`/api/seguridad/sesiones/${id}`, { metodo: "DELETE" }), onSuccess: refrescar, onError: avisarError });
   const otras = useMutation({
@@ -57,74 +57,95 @@ export function MiCuenta() {
     },
     onError: avisarError,
   });
-  const nuevos = (inicios.data ?? []).filter((i) => i.tipo === "login_nuevo_lugar" || i.tipo === "login_bloqueado").length;
-  const pgIni = usePaginado(inicios.data, 10);
   return (
-    <div className="space-y-4">
+    <Tarjeta
+      titulo="Dónde tienes la sesión abierta"
+      icono={MonitorSmartphone}
+      acciones={
+        (sesiones.data?.length ?? 0) > 1 ? (
+          <Boton
+            tamano="sm"
+            variante="peligro"
+            icono={LogOut}
+            cargando={otras.isPending}
+            onClick={async () => {
+              if (await confirmar({ titulo: "Cerrar todas menos esta", mensaje: "Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.", boton: "Cerrar las demás" })) otras.mutate();
+            }}
+          >
+            Cerrar todas menos esta
+          </Boton>
+        ) : null
+      }
+    >
+      <ErrorCaja error={sesiones.error} />
+      {sesiones.isLoading ? <Cargando /> : null}
+      <ul className="divide-y divide-borde">
+        {sesiones.data?.map((s) => (
+          <li key={s.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">
+                {s.dispositivo} {s.actual ? <Insignia tono="ok">Este</Insignia> : null}
+              </p>
+              <p className="truncate text-xs text-tenue" title={s.navegador}>
+                {s.ip ?? "IP desconocida"} · usada {haceCuanto(s.ultimoUso)} · desde {fmtFechaHora(s.creada)}
+              </p>
+            </div>
+            {!s.actual ? <Boton tamano="sm" variante="fantasma" icono={LogOut} onClick={() => cerrar.mutate(s.id)}>Cerrar</Boton> : null}
+          </li>
+        ))}
+      </ul>
+    </Tarjeta>
+  );
+}
+
+export function EntradasRecientes() {
+  const [pagina, setPagina] = useState(1);
+  const q = useQuery({
+    queryKey: ["vps", "entradas", pagina],
+    queryFn: () => api<{ total: number; pagina: number; porPagina: number; entradas: Inicio[] }>(`/api/vps/seguridad/entradas?pagina=${pagina}`),
+    placeholderData: (previo) => previo,
+  });
+  const entradas = q.data?.entradas ?? [];
+  const nuevos = entradas.filter((i) => i.tipo === "login_nuevo_lugar" || i.tipo === "login_bloqueado").length;
+  const paginas = q.data ? Math.max(1, Math.ceil(q.data.total / q.data.porPagina)) : 1;
+  return (
+    <Tarjeta titulo="Entradas recientes y alertas" icono={ShieldAlert}>
       {nuevos ? (
-        <p className="flex items-center gap-2 rounded-xl bg-peligro/10 p-3 text-sm">
-          <ShieldAlert className="h-4 w-4 shrink-0 text-peligro" /> Hubo {nuevos} entrada(s) desde lugares nuevos o bloqueadas. Si no fuiste tú, cierra esas sesiones y cambia tu contraseña.
+        <p className="mb-3 flex items-center gap-2 rounded-xl bg-peligro/10 p-3 text-sm">
+          <ShieldAlert className="h-4 w-4 shrink-0 text-peligro" /> Hay {nuevos} entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.
         </p>
       ) : null}
-      <Tarjeta
-        titulo="Dónde tienes la sesión abierta"
-        icono={MonitorSmartphone}
-        acciones={
-          (sesiones.data?.length ?? 0) > 1 ? (
-            <Boton
-              tamano="sm"
-              variante="peligro"
-              icono={LogOut}
-              cargando={otras.isPending}
-              onClick={async () => {
-                if (await confirmar({ titulo: "Cerrar las demás sesiones", mensaje: "Todos tus otros dispositivos tendrán que volver a entrar.", boton: "Cerrar las demás" })) otras.mutate();
-              }}
-            >
-              Cerrar las demás
-            </Boton>
-          ) : null
-        }
-      >
-        <ErrorCaja error={sesiones.error} />
-        {sesiones.isLoading ? <Cargando /> : null}
-        <ul className="divide-y divide-borde">
-          {sesiones.data?.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">
-                  {s.dispositivo} {s.actual ? <Insignia tono="ok">Este</Insignia> : null}
-                </p>
-                <p className="truncate text-xs text-tenue" title={s.navegador}>
-                  {s.ip ?? "IP desconocida"} · usada {haceCuanto(s.ultimoUso)} · desde {fmtFechaHora(s.creada)}
-                </p>
-              </div>
-              {!s.actual ? <Boton tamano="sm" variante="fantasma" icono={LogOut} onClick={() => cerrar.mutate(s.id)}>Cerrar</Boton> : null}
+      <ErrorCaja error={q.error} />
+      {q.isLoading ? <Cargando /> : null}
+      {q.data && entradas.length === 0 ? <p className="text-sm text-tenue">Sin movimientos.</p> : null}
+      <ul className="divide-y divide-borde">
+        {entradas.map((i, n) => {
+          const t = TEXTO_INICIO[i.tipo] ?? { texto: i.tipo, tono: "neutro" as const };
+          return (
+            <li key={`${i.fecha}-${n}`} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+              <Insignia tono={t.tono}>{t.texto}</Insignia>
+              <span className="min-w-0 flex-1 truncate text-xs text-tenue" title={i.navegador}>
+                {i.usuario ? `${i.usuario} · ` : ""}
+                {i.tipo === "entrada_ssh" ? `${i.detalle.servidor ?? ""} · usuario ${i.detalle.usuario ?? "?"} · ` : ""}
+                {i.ip ?? ""} {i.detalle.dispositivo ? `· ${i.detalle.dispositivo}` : ""}
+              </span>
+              <span className="text-xs text-tenue">{fmtFechaHora(i.fecha)}</span>
             </li>
-          ))}
-        </ul>
-      </Tarjeta>
-      <Tarjeta titulo="Entradas recientes y alertas" icono={ShieldAlert}>
-        <ErrorCaja error={inicios.error} />
-        {inicios.data?.length === 0 ? <p className="text-sm text-tenue">Sin movimientos.</p> : null}
-        <ul className="divide-y divide-borde">
-          {pgIni.visibles.map((i, n) => {
-            const t = TEXTO_INICIO[i.tipo] ?? { texto: i.tipo, tono: "neutro" as const };
-            return (
-              <li key={n} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                <Insignia tono={t.tono}>{t.texto}</Insignia>
-                <span className="min-w-0 flex-1 truncate text-xs text-tenue" title={i.navegador}>
-                  {i.tipo === "entrada_ssh" ? `${i.detalle.servidor ?? ""} · usuario ${i.detalle.usuario ?? "?"} · ` : ""}
-                  {i.ip ?? ""} {i.detalle.dispositivo ? `· ${i.detalle.dispositivo}` : ""}
-                </span>
-                <span className="text-xs text-tenue">{fmtFechaHora(i.fecha)}</span>
-              </li>
-            );
-          })}
-        </ul>
-        {pgIni.paginas}
-        <p className="mt-2 text-xs text-tenue">A la cuenta maestra le llega aviso al celular cuando alguien entra desde un lugar nuevo. Para tus VPS, activa «Alertas de entrada por SSH» en VPS → Seguridad del servidor.</p>
-      </Tarjeta>
-    </div>
+          );
+        })}
+      </ul>
+      <Paginas pagina={pagina} total={paginas} alCambiar={setPagina} />
+      <p className="mt-2 text-xs text-tenue">Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.</p>
+    </Tarjeta>
+  );
+}
+
+export function SeMudo({ texto, ruta }: { texto: string; ruta: string }) {
+  return (
+    <Link to={ruta} className="flex items-center gap-2 rounded-xl border border-borde px-3 py-2 text-sm text-tenue hover:text-texto">
+      <ArrowRight className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1">{texto}</span>
+    </Link>
   );
 }
 
@@ -293,7 +314,7 @@ function Bandeja({ cuenta }: { cuenta: CuentaGoogle }) {
 export function CorreosGoogle() {
   const puede = usePuede("ciberseguridad", "escritura");
   const { data: me } = useMe();
-  const cuentas = useQuery({ queryKey: ["correo-google", "cuentas"], queryFn: () => api<{ configurado: boolean; cuentas: CuentaGoogle[] }>("/api/google/correo/cuentas") });
+  const cuentas = useQuery({ queryKey: ["correo-google", "cuentas"], queryFn: () => api<{ configurado: boolean; limite?: number; cuentas: CuentaGoogle[] }>("/api/google/correo/cuentas") });
   const filtraciones = useQuery({ queryKey: ["correo-google", "filtraciones"], queryFn: () => api<{ email: string; fuentes: string[]; revisado: boolean }[]>("/api/ciberseguridad/filtraciones"), staleTime: 10 * 60_000 });
   const [redactar, setRedactar] = useState<CuentaGoogle | null>(null);
   useTema<{ recurso?: string }>(me ? temas.usuario(me.usuario.id) : null, (m) => {
@@ -310,6 +331,9 @@ export function CorreosGoogle() {
     onError: avisarError,
   });
   const pgFil = usePaginado(filtraciones.data, 12);
+  const limite = cuentas.data?.limite ?? 10;
+  const usadas = cuentas.data?.cuentas.length ?? 0;
+  const lleno = usadas >= limite;
   return (
     <div className="space-y-4">
       <Tarjeta titulo="¿Tus correos salieron en una filtración?" icono={ShieldAlert}>
@@ -339,18 +363,21 @@ export function CorreosGoogle() {
         titulo="Cuentas de Google"
         icono={Mail}
         acciones={
-          puede && cuentas.data?.configurado ? (
-            <Boton tamano="sm" variante="primario" icono={Plus} cargando={conectar.isPending} onClick={() => conectar.mutate()}>
-              Conectar cuenta
-            </Boton>
-          ) : null
+          <>
+            {cuentas.data ? <Insignia tono={lleno ? "aviso" : "neutro"}>{usadas} de {limite}</Insignia> : null}
+            {puede && cuentas.data?.configurado ? (
+              <Boton tamano="sm" variante="primario" icono={Plus} cargando={conectar.isPending} disabled={lleno} title={lleno ? `Máximo ${limite} cuentas: quita una para agregar otra` : undefined} onClick={() => conectar.mutate()}>
+                Conectar cuenta
+              </Boton>
+            ) : null}
+          </>
         }
       >
         <ErrorCaja error={cuentas.error} />
         {cuentas.data && !cuentas.data.configurado ? (
           <p className="text-sm text-tenue">Falta configurar: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (Ajustes → Servicios y claves → Google; activa también la Gmail API y agrega la dirección de retorno /api/google/correo/callback).</p>
         ) : null}
-        {cuentas.data?.configurado && !cuentas.data.cuentas.length ? <Vacio icono={Mail} texto="Conecta una o varias cuentas de Gmail para revisar correos peligrosos." /> : null}
+        {cuentas.data?.configurado && !cuentas.data.cuentas.length ? <Vacio icono={Mail} texto={`Conecta hasta ${limite} cuentas de Gmail iniciando sesión para revisar correos peligrosos.`} /> : null}
         <div className="space-y-4">
           {cuentas.data?.cuentas.map((c) => (
             <div key={c.id} className="space-y-2 rounded-xl border border-borde p-3">

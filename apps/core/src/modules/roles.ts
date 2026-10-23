@@ -2,7 +2,7 @@
  * Roles tipo Discord: nombre, color y permisos por módulo. Los permisos de
  * una cuenta son el nivel más alto entre los suyos y los de sus roles. Los
  * módulos solo-maestra nunca se otorgan por rol. Al primer arranque se crean
- * "Fundador" y "Dev" (se pueden editar o borrar).
+ * "Fundador", "Dev" e "Invitado" (Redes y streams); se pueden editar o borrar.
  */
 import { levelRank, MODULE_IDS, PERMISSION_LEVELS, sanitizePermissionMap, type PermissionMap } from "@mi-setup/shared";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -39,8 +39,15 @@ export async function permisosDeRoles(db: Database, userId: string): Promise<{ p
   return { permisos, roles: filas.map((r) => ({ id: r.id, nombre: r.nombre, color: r.color })) };
 }
 
+export const PERMISOS_INVITADO_REDES: PermissionMap = { streams: "escritura", x: "escritura", discord: "escritura", bots_discord: "escritura", vps_bots: "escritura", streamer: "escritura" };
+
 /** Crea los roles iniciales una sola vez (si luego se borran, no vuelven). */
 export async function sembrarRoles(deps: ModuleDeps): Promise<void> {
+  if (!(await getSetting<boolean>(deps.db, "roles.invitado.sembrado"))) {
+    const permisos = sanitizePermissionMap(PERMISOS_INVITADO_REDES);
+    if (Object.keys(permisos).length) await deps.db.insert(roles).values({ name: "Invitado", color: "#e0457b", position: 2, permissions: permisos });
+    await setSetting(deps.db, "roles.invitado.sembrado", true, deps.now());
+  }
   if (await getSetting<boolean>(deps.db, "roles.sembrados")) return;
   const todos = Object.fromEntries(MODULE_IDS.map((m) => [m, "administrar"])) as PermissionMap;
   await deps.db.insert(roles).values([

@@ -197,6 +197,7 @@ export default function VpsAgentes() {
   const [servidor, setServidor] = useState<string | null>(null);
   return (
     <div className="space-y-4">
+      <p className="-mb-3 text-xs font-medium uppercase tracking-wide text-tenue">IA › Agentes de IA</p>
       <Encabezado
         titulo="Agentes de IA"
         descripcion="Claude Code, Gemini, Aider, modelos locales (Llama, Qwen) y paneles como Open WebUI o n8n, corriendo en tu VPS."

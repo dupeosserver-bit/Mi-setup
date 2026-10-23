@@ -3,12 +3,13 @@
  * enviarla), lecciones cortas y un cuaderno de laboratorio en tus notas.
  */
 import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, CheckCircle2, Eye, EyeOff, FlaskConical, Globe, KeyRound, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Eye, EyeOff, FlaskConical, Globe, KeyRound, MoveRight, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CorreosGoogle, MiCuenta } from "../components/CiberExtra";
+import { CorreosGoogle, SeMudo } from "../components/CiberExtra";
 import { Boton, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
+import { usePuede } from "../lib/consultas";
 import { localeActual } from "../lib/idioma";
 
 type Estado = "ok" | "aviso" | "mal";
@@ -184,21 +185,20 @@ const LECCIONES: { titulo: string; texto: string }[] = [
 
 export default function Ciberseguridad() {
   const navegar = useNavigate();
+  const puedeVps = usePuede("vps_seguridad", "lectura");
   const [abierta, setAbierta] = useState<number | null>(0);
-  const [pestana, setPestana] = useState<"general" | "cuenta" | "correos">("general");
+  const [pestana, setPestana] = useState<"general" | "correos">("general");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Ciberseguridad" descripcion="Tu cuenta, tus correos, tus contraseñas y tus sitios: revisa y protégete." />
+      <Encabezado titulo="Ciberseguridad" descripcion="Tus correos, tus contraseñas y tus sitios: revisa y protégete." />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
         opciones={[
           { id: "general", texto: "Sitios y contraseñas" },
-          { id: "cuenta", texto: "Mi cuenta" },
           { id: "correos", texto: "Correos de Google" },
         ]}
       />
-      {pestana === "cuenta" ? <MiCuenta /> : null}
       {pestana === "correos" ? <CorreosGoogle /> : null}
       {pestana === "general" ? (
         <>
@@ -230,6 +230,12 @@ export default function Ciberseguridad() {
                 </li>
               ))}
             </ul>
+          </Tarjeta>
+          <Tarjeta titulo="Se cambió de lugar" icono={MoveRight}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SeMudo texto="Dónde tienes la sesión abierta · ahora está en Equipos" ruta="/equipos" />
+              {puedeVps ? <SeMudo texto="Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor" ruta="/vps/seguridad" /> : null}
+            </div>
           </Tarjeta>
           <Tarjeta titulo="Cuaderno de laboratorio" icono={FlaskConical}>
             <p className="text-sm text-tenue">Apunta tus prácticas (comandos, banderas de CTF, lo que aprendiste) en una página de tus notas, con casillas y tablero de tareas.</p>

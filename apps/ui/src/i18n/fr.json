@@ -3915,5 +3915,17 @@
 "Actualizar el sitio oficial": "Mettre à jour le site officiel",
 "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "Ses pages sont remplacées par celles de cette version. Ce que vous avez modifié à la main dans l’éditeur est perdu (il reste dans l’historique).",
 "Actualizar con esta versión": "Mettre à jour avec cette version",
-"Ver menú completo": "Voir le menu complet"
+"Ver menú completo": "Voir le menu complet",
+"Cerrar todas menos esta": "Tout fermer sauf celle-ci",
+"Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.": "Vos autres appareils devront se reconnecter. Cette session reste ouverte.",
+"entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.": "connexion(s) depuis de nouveaux lieux ou bloquées. Si vous ne les reconnaissez pas, fermez ces sessions et changez le mot de passe.",
+"Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.": "Vous recevez une alerte sur le téléphone quand quelqu'un se connecte depuis un nouveau lieu. Pour les alertes SSH, activez «Alertes de connexion» dans la vérification ci-dessus.",
+"Tus correos, tus contraseñas y tus sitios: revisa y protégete.": "Vos e-mails, vos mots de passe et vos sites : vérifiez et protégez-vous.",
+"Se cambió de lugar": "Déplacé",
+"Dónde tienes la sesión abierta · ahora está en Equipos": "Où votre session est ouverte · maintenant dans Appareils",
+"Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor": "Connexions récentes et alertes · maintenant dans VPS → Sécurité du serveur",
+"Mi cuenta › Equipos": "Mon compte › Appareils",
+"Máximo {0} cuentas: quita una para agregar otra": "{0} comptes maximum : retirez-en un pour en ajouter un autre",
+"Conecta hasta {0} cuentas de Gmail iniciando sesión para revisar correos peligrosos.": "Connectez jusqu'à {0} comptes Gmail en vous identifiant pour vérifier les e-mails dangereux.",
+"IA › Agentes de IA": "IA › Agents IA"
 }

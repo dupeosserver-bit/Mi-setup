@@ -50,7 +50,6 @@ export const MODULES = {
   vps_archivos: { label: "Archivos", category: "vps", masterOnly: true },
   vps_seguridad: { label: "Seguridad del servidor", category: "vps", masterOnly: true },
   respaldos: { label: "Respaldos", category: "vps", masterOnly: false },
-  vps_agentes: { label: "Agentes de IA", category: "vps", masterOnly: true },
 
   // Panel (hosting)
   pterodactyl: { label: "Pterodactyl", category: "panel", masterOnly: false },
@@ -68,7 +67,7 @@ export const MODULES = {
   auditoria: { label: "Registro de actividad", category: "seguridad", masterOnly: true },
   cuentas: { label: "Cuentas y permisos", category: "seguridad", masterOnly: true },
 
-  // Redes y streams
+  // Redes y streams (solo el dueño y las cuentas que él invite con un rol)
   streams: { label: "Streams", category: "redes", masterOnly: false },
   x: { label: "X (Twitter)", category: "redes", masterOnly: false },
   discord: { label: "Discord", category: "redes", masterOnly: false },
@@ -79,7 +78,7 @@ export const MODULES = {
   // Novedades
   novedades: { label: "Novedades", category: "novedades", masterOnly: false },
   codigo: { label: "Código (editor)", category: "programacion", masterOnly: false },
-  host_local: { label: "Servidores en mi PC", category: "host_local", masterOnly: false },
+  host_local: { label: "Servidores en mi PC", category: "host_local", masterOnly: true },
   sitios: { label: "Sitios y apps", category: "sitios", masterOnly: false },
   ejercicios: { label: "Ejercicios de código", category: "programacion", masterOnly: false },
   noticias: { label: "Noticias", category: "novedades", masterOnly: false },
@@ -112,6 +111,7 @@ export const MODULES = {
   // IA asistente
   ia: { label: "IA asistente", category: "ia", masterOnly: false },
   ia_creativa: { label: "IA creativa", category: "ia", masterOnly: false },
+  vps_agentes: { label: "Agentes de IA", category: "ia", masterOnly: true },
 
   // Ajustes
   ajustes: { label: "Ajustes", category: "ajustes", masterOnly: false },

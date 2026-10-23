@@ -21,7 +21,7 @@ import { escritorio } from "../lib/plataforma";
 import { useBotonFlotante, usePreferencias } from "../lib/preferencias";
 import { useSesion } from "../lib/sesion";
 import { tiempoReal, useEstadoConexion, useTema } from "../lib/tiempo-real";
-import { CATEGORIAS, MODULOS_UI, grupoDe, moduloPorRuta } from "../modulos";
+import { CATEGORIAS, MODULOS_UI, categoriaDe, grupoDe, moduloPorRuta } from "../modulos";
 import { AsistenteFlotante } from "./Asistente";
 import { Buscador } from "./Buscador";
 import { ErrorPantalla } from "./ErrorPantalla";
@@ -110,9 +110,11 @@ interface ItemMenu {
   readonly ids: readonly ModuleId[];
 }
 
-function agruparVisibles(visibles: Set<ModuleId>) {
+function agruparVisibles(visibles: Set<ModuleId>, esDueno: boolean) {
   return CATEGORIAS.map((c) => {
-    const modulos = Object.values(MODULOS_UI).filter((mod) => MODULES[mod.id].category === c.id && (mod.enMenu !== false || !visibles.has("novedades")) && visibles.has(mod.id));
+    const modulos = Object.values(MODULOS_UI)
+      .filter((mod) => categoriaDe(mod.id, esDueno) === c.id && (mod.enMenu !== false || !visibles.has("novedades")) && visibles.has(mod.id))
+      .sort((a, b) => Number(MODULES[a.id].category !== c.id) - Number(MODULES[b.id].category !== c.id));
     const items: ItemMenu[] = [];
     for (const mod of modulos) {
       const grupo = grupoDe(mod.id);
@@ -379,7 +381,8 @@ export function Layout() {
   const prefs = usePreferencias();
   const conexion = useEstadoConexion();
   const visibles = useVisibles();
-  const grupos = useMemo(() => agruparVisibles(visibles), [visibles]);
+  const esDueno = me?.usuario.role === "maestra";
+  const grupos = useMemo(() => agruparVisibles(visibles, esDueno), [visibles, esDueno]);
   const [panel, setPanel] = useState(false);
   const [buscar, setBuscar] = useState(false);
   const [compacta, setCompacta] = useState(() => localStorage.getItem(CLAVE_LATERAL) === "iconos");

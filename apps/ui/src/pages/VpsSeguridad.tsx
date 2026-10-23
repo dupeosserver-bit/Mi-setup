@@ -8,6 +8,7 @@ import { AlertTriangle, CheckCircle2, Lock, Network, RefreshCw, ShieldAlert, Shi
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Boton, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { EntradasRecientes } from "../components/CiberExtra";
 import { EnergiaVps } from "../components/EnergiaVps";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
@@ -217,6 +218,8 @@ export default function VpsSeguridad() {
       ) : null}
 
       {servidor && puede ? <EnergiaVps servidor={servidor} nombre={nombre} /> : null}
+
+      <EntradasRecientes />
 
       {accion.isPending ? <Cargando texto="Aplicando cambios en el servidor…" /> : null}
       {salida ? (

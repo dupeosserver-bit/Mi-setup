@@ -1,4 +1,4 @@
-/** Modelos de IA además de Claude: los de Ollama descargados en el VPS y los agentes (VPS → Agentes). */
+/** Modelos de IA además de Claude: los de Ollama descargados en el VPS y los agentes (IA → Agentes de IA). */
 import type { ModeloElegido } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";

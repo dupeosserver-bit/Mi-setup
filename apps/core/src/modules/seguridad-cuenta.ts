@@ -1,14 +1,16 @@
 /**
- * Seguridad de tu cuenta: dónde tienes la sesión abierta (y cerrar las que no
- * reconozcas), tus inicios de sesión recientes (correctos, fallidos y desde un
- * lugar nuevo) y las alertas de entrada a tus VPS y home labs.
+ * Sesiones abiertas de tu cuenta (viven en Equipos) y entradas recientes con
+ * alertas de todo el servidor (viven en VPS → Seguridad del servidor).
  */
-import { and, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { auditLog, sessions } from "../db/schema.js";
+import { z } from "zod";
+import { auditLog, sessions, users } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { currentUser } from "../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "./common.js";
+
+const TIPOS_ENTRADA = ["login", "login_fallido", "login_nuevo_lugar", "login_bloqueado", "sesion_cerrada_remota", "entrada_ssh"];
 
 export function seguridadCuentaRoutes(deps: ModuleDeps) {
   const { db } = deps;
@@ -60,22 +62,31 @@ export function seguridadCuentaRoutes(deps: ModuleDeps) {
       return { cerradas: r.length };
     });
 
-    /** Tus últimos inicios de sesión y alertas (el registro no se puede borrar). */
-    app.get("/api/seguridad/inicios", autenticado, async (request) => {
-      const user = currentUser(request);
+    app.get("/api/vps/seguridad/entradas", { config: { acceso: { modulo: "vps_seguridad", nivel: "lectura" } } }, async (request) => {
+      const { pagina, porPagina } = z.object({ pagina: z.coerce.number().int().min(1).max(1000).default(1), porPagina: z.coerce.number().int().min(5).max(50).default(15) }).parse(request.query);
+      const filtro = inArray(auditLog.action, TIPOS_ENTRADA);
+      const [total] = await db.select({ n: count() }).from(auditLog).where(filtro);
       const filas = await db
-        .select()
+        .select({ fila: auditLog, email: users.email, nombre: users.displayName })
         .from(auditLog)
-        .where(and(eq(auditLog.actorUserId, user.id), inArray(auditLog.action, ["login", "login_fallido", "login_nuevo_lugar", "login_bloqueado", "sesion_cerrada_remota", "entrada_ssh"])))
+        .leftJoin(users, eq(auditLog.actorUserId, users.id))
+        .where(filtro)
         .orderBy(desc(auditLog.createdAt))
-        .limit(60);
-      return filas.map((f) => ({
-        fecha: f.createdAt.toISOString(),
-        tipo: f.action,
-        ip: f.ip,
-        detalle: (f.details as { dispositivo?: string | null; motivo?: string; servidor?: string; usuario?: string }) ?? {},
-        navegador: (f.userAgent ?? "").slice(0, 160),
-      }));
+        .limit(porPagina)
+        .offset((pagina - 1) * porPagina);
+      return {
+        total: Number(total?.n ?? 0),
+        pagina,
+        porPagina,
+        entradas: filas.map(({ fila: f, email, nombre }) => ({
+          fecha: f.createdAt.toISOString(),
+          tipo: f.action,
+          ip: f.ip,
+          usuario: nombre ?? email ?? null,
+          detalle: (f.details as { dispositivo?: string | null; motivo?: string; servidor?: string; usuario?: string }) ?? {},
+          navegador: (f.userAgent ?? "").slice(0, 160),
+        })),
+      };
     });
   };
 }

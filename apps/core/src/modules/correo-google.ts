@@ -11,7 +11,7 @@
  * fragmento y enlaces, marcados como texto no confiable).
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { and, count, eq, gt } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { googleAccounts, oauthStates, users } from "../db/schema.js";
@@ -22,6 +22,7 @@ import type { IaSimple } from "./ia/simple.js";
 import { pagina, pedirJson } from "./http-json.js";
 
 const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"];
+export const MAX_CUENTAS_GOOGLE = 10;
 const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
 
 // ---------------------------------------------------------------- análisis (funciones puras)
@@ -258,18 +259,25 @@ export function correoGoogleRoutes(deps: ModuleDeps, ia: IaSimple) {
     return { fuentes: (d?.breaches?.[0] ?? []).slice(0, 100), revisado: true };
   }
 
+  async function cuantasCuentas(userId: string): Promise<number> {
+    const [r] = await db.select({ n: count() }).from(googleAccounts).where(eq(googleAccounts.userId, userId));
+    return Number(r?.n ?? 0);
+  }
+
   return async function (app: FastifyInstance): Promise<void> {
     app.get("/api/google/correo/cuentas", leer, async (request) => {
       const user = currentUser(request);
       const filas = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
       return {
         configurado: Boolean(deps.config.env.GOOGLE_CLIENT_ID && deps.config.env.GOOGLE_CLIENT_SECRET),
+        limite: MAX_CUENTAS_GOOGLE,
         cuentas: filas.map((c) => ({ id: c.id, email: c.email, conectada: c.createdAt.toISOString(), enviar: c.scopes.includes("gmail.send") })),
       };
     });
 
     app.post("/api/google/correo/conectar", { config: { acceso: { modulo: "ciberseguridad", nivel: "escritura", reauth: "pin" } } }, async (request) => {
       const user = currentUser(request);
+      if ((await cuantasCuentas(user.id)) >= MAX_CUENTAS_GOOGLE) throw new HttpError(400, `Ya tienes ${MAX_CUENTAS_GOOGLE} cuentas de Google. Quita una para agregar otra.`);
       const { id } = credenciales();
       const state = randomBytes(32).toString("base64url");
       await db.insert(oauthStates).values({ stateHash: sha256(state), platform: "gmail", userId: user.id, verifierEnc: null, expiresAt: new Date(deps.now().getTime() + 10 * 60_000) });
@@ -307,6 +315,12 @@ export function correoGoogleRoutes(deps: ModuleDeps, ia: IaSimple) {
           body: new URLSearchParams({ grant_type: "authorization_code", code: q.code, redirect_uri: retorno(), client_id: id, client_secret: secreto }).toString(),
         });
         const perfil = await pedirJson<{ emailAddress: string }>("Gmail", "https://gmail.googleapis.com/gmail/v1/users/me/profile", { headers: { authorization: `Bearer ${t.access_token}` } });
+        const email = perfil.emailAddress.toLowerCase();
+        const [yaEsta] = await db.select({ id: googleAccounts.id }).from(googleAccounts).where(and(eq(googleAccounts.userId, fila.userId), eq(googleAccounts.email, email)));
+        if (!yaEsta && (await cuantasCuentas(fila.userId)) >= MAX_CUENTAS_GOOGLE) {
+          reply.code(400);
+          return pagina("No se conectó la cuenta", `Ya tienes ${MAX_CUENTAS_GOOGLE} cuentas de Google en Mi Setup. Quita una desde la app para agregar otra.`);
+        }
         const cipher = requireCipher(deps);
         const valores = {
           accessTokenEnc: cipher.encrypt(t.access_token),
@@ -316,7 +330,7 @@ export function correoGoogleRoutes(deps: ModuleDeps, ia: IaSimple) {
         };
         await db
           .insert(googleAccounts)
-          .values({ userId: fila.userId, email: perfil.emailAddress.toLowerCase(), ...valores })
+          .values({ userId: fila.userId, email, ...valores })
           .onConflictDoUpdate({ target: [googleAccounts.userId, googleAccounts.email], set: valores });
         await deps.audit.record({ actorType: "usuario", actorUserId: fila.userId, action: "cuenta_google_conectada", module: "ciberseguridad", target: perfil.emailAddress, outcome: "ok" });
         deps.hub.publicar(`usuario:${fila.userId}`, { recurso: "correo-google" });

@@ -6,7 +6,7 @@ import { Avisos } from "./components/ui";
 import { asegurarDispositivo, iniciarLatidos } from "./lib/dispositivo";
 import { useSesion } from "./lib/sesion";
 import { tiempoReal } from "./lib/tiempo-real";
-import { MODULOS_UI } from "./modulos";
+import { MODULOS_UI, RUTAS_MOVIDAS } from "./modulos";
 import Inicio from "./pages/Inicio";
 import Login from "./pages/Login";
 
@@ -67,6 +67,9 @@ export function App() {
         />
         <Route element={conSesion ? <Layout /> : <Navigate to="/login" replace />}>
           <Route index element={<Inicio />} />
+          {RUTAS_MOVIDAS.map((r) => (
+            <Route key={r.desde} path={`${r.desde.slice(1)}/*`} element={<Navigate to={r.hasta} replace />} />
+          ))}
           {Object.values(MODULOS_UI).map((m) => (
             <Route
               key={m.id}

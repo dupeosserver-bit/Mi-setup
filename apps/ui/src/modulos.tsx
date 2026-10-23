@@ -1,5 +1,5 @@
 /** Registro de apartados de la UI: ruta, ícono y página de cada módulo. */
-import type { ModuleCategory, ModuleId } from "@mi-setup/shared";
+import { MODULES, type ModuleCategory, type ModuleId } from "@mi-setup/shared";
 import {
   Activity,
   Code2,
@@ -104,7 +104,6 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   negocio: m("negocio", "/panel/negocio", Lightbulb, lazy(() => import("./pages/Negocio"))),
 
   respaldos: m("respaldos", "/respaldos", Archive, lazy(() => import("./pages/Respaldos"))),
-  vps_agentes: m("vps_agentes", "/vps/agentes", BrainCircuit, lazy(() => import("./pages/VpsAgentes"))),
 
   boveda: m("boveda", "/seguridad/boveda", KeyRound, lazy(() => import("./pages/Boveda"))),
   autenticador: m("autenticador", "/seguridad/2fa", ShieldCheck, lazy(() => import("./pages/Autenticador"))),
@@ -144,6 +143,7 @@ export const MODULOS_UI: Record<ModuleId, ModuloUi> = {
   control_remoto: m("control_remoto", "/control-remoto", MonitorUp, PUBLICA ? Pendiente : lazy(() => import("./pages/ControlRemoto"))),
   ia: m("ia", "/ia", Sparkles, lazy(() => import("./pages/Ia"))),
   ia_creativa: m("ia_creativa", "/ia/creativa", Wand2, lazy(() => import("./pages/IaCreativa"))),
+  vps_agentes: m("vps_agentes", "/ia/agentes", BrainCircuit, lazy(() => import("./pages/VpsAgentes"))),
   ajustes: m("ajustes", "/ajustes", Settings, lazy(() => import("./pages/Ajustes"))),
 };
 
@@ -209,6 +209,15 @@ export const GRUPOS_MENU: readonly GrupoMenu[] = [
     ],
   },
 ];
+
+export const RUTAS_MOVIDAS: readonly { desde: string; hasta: string }[] = [{ desde: "/vps/agentes", hasta: "/ia/agentes" }];
+
+const NEGOCIO = new Set<ModuleId>(["clientes", "vencimientos", "finanzas", "negocio"]);
+
+export function categoriaDe(id: ModuleId, esDueno: boolean): ModuleCategory {
+  if (NEGOCIO.has(id) && (PUBLICA || !esDueno)) return "sitios";
+  return MODULES[id].category;
+}
 
 export function grupoDe(id: ModuleId): GrupoMenu | undefined {
   return GRUPOS_MENU.find((g) => g.miembros.some((m) => m.id === id));

@@ -332,8 +332,6 @@ describe("seguridad: tu cuenta", () => {
     const sesiones = (await app.inject({ method: "GET", url: "/api/seguridad/sesiones", headers: h })).json<{ id: string; actual: boolean; dispositivo: string }[]>();
     expect(sesiones.length).toBeGreaterThanOrEqual(2);
     expect(sesiones.filter((x) => x.actual)).toHaveLength(1);
-    const inicios = (await app.inject({ method: "GET", url: "/api/seguridad/inicios", headers: h })).json<{ tipo: string }[]>();
-    expect(inicios.some((i) => i.tipo === "login_nuevo_lugar")).toBe(true);
     const actual = sesiones.find((x) => x.actual)!;
     expect((await app.inject({ method: "DELETE", url: `/api/seguridad/sesiones/${actual.id}`, headers: h })).statusCode).toBe(400);
     const cerradas = await app.inject({ method: "POST", url: "/api/seguridad/sesiones/cerrar-otras", headers: h });

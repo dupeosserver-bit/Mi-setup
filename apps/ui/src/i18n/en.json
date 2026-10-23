@@ -3915,5 +3915,17 @@
 "Actualizar el sitio oficial": "Update the official site",
 "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "Its pages are replaced with this version's. Anything you changed by hand in the editor is lost (it stays in the version history).",
 "Actualizar con esta versión": "Update to this version",
-"Ver menú completo": "Show full menu"
+"Ver menú completo": "Show full menu",
+"Cerrar todas menos esta": "Close all except this one",
+"Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.": "Your other devices will have to sign in again. This session stays open.",
+"entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.": "sign-in(s) from new places or blocked. If you don't recognize them, close those sessions and change the password.",
+"Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.": "You get a phone alert when someone signs in from a new place. For SSH alerts, turn on «Sign-in alerts» in the check above.",
+"Tus correos, tus contraseñas y tus sitios: revisa y protégete.": "Your email, your passwords and your sites: check them and stay safe.",
+"Se cambió de lugar": "Moved",
+"Dónde tienes la sesión abierta · ahora está en Equipos": "Where you're signed in · now in Devices",
+"Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor": "Recent sign-ins and alerts · now in VPS → Server security",
+"Mi cuenta › Equipos": "My account › Devices",
+"Máximo {0} cuentas: quita una para agregar otra": "Up to {0} accounts: remove one to add another",
+"Conecta hasta {0} cuentas de Gmail iniciando sesión para revisar correos peligrosos.": "Connect up to {0} Gmail accounts by signing in to check dangerous emails.",
+"IA › Agentes de IA": "AI › AI agents"
 }

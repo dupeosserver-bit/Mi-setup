@@ -5,6 +5,7 @@ import { Laptop, MonitorSmartphone, Pencil, Smartphone, Trash2 } from "lucide-re
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Anillo, BarrasDiscos, LineaEnVivo, useVentana, type PuntoSerie } from "../components/graficas";
+import { SesionesAbiertas } from "../components/CiberExtra";
 import { Boton, Cargando, Encabezado, ErrorCaja, Insignia, Punto, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
@@ -127,6 +128,7 @@ export default function Equipos() {
   if (isLoading) return <Cargando />;
   return (
     <>
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-tenue">Mi cuenta › Equipos</p>
       <Encabezado titulo="Equipos" descripcion="PC y celular vinculados. Latido cada 15 s; se marcan como desconectados a los 45 s." />
       <ErrorCaja error={error} />
       {data && data.length === 0 ? <Vacio icono={MonitorSmartphone} texto="Abre la app en tu PC o en tu celular para registrarlos." /> : null}
@@ -190,6 +192,9 @@ export default function Equipos() {
             </Tarjeta>
           ) : null,
         )}
+      </div>
+      <div className="mt-4">
+        <SesionesAbiertas />
       </div>
     </>
   );

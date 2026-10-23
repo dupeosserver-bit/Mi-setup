@@ -164,7 +164,7 @@ export class AuthService {
       if (user.role === "maestra") {
         await this.deps.notifier.send({
           title: "Mi Setup: entraron desde un lugar nuevo",
-          message: `Cuenta: ${corto(email)}\nIP: ${corto(client.ip)}\nDispositivo: ${corto(input.dispositivo ?? client.userAgent)}\nSi no fuiste tú: Ciberseguridad → Mi cuenta → cerrar esa sesión y cambia tu contraseña.`,
+          message: `Cuenta: ${corto(email)}\nIP: ${corto(client.ip)}\nDispositivo: ${corto(input.dispositivo ?? client.userAgent)}\nSi no fuiste tú: Equipos → Dónde tienes la sesión abierta → cierra esa sesión y cambia tu contraseña.`,
           priority: 4,
           tags: ["rotating_light"],
         });

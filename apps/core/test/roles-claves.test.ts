@@ -24,11 +24,11 @@ async function usuario(c: Ctx, email = "u@x.test") {
 }
 
 describe("roles tipo Discord", () => {
-  it("crea Fundador y Dev; un rol otorga sus permisos pero nunca módulos solo-maestra", async () => {
+  it("crea Fundador, Dev e Invitado; un rol otorga sus permisos pero nunca módulos solo-maestra", async () => {
     ctx = await createTestContext();
     const h = await maestra(ctx);
     const roles = (await ctx.app.inject({ method: "GET", url: "/api/roles", headers: h })).json<{ id: string; nombre: string }[]>();
-    expect(roles.map((r) => r.nombre)).toEqual(["Fundador", "Dev"]);
+    expect(roles.map((r) => r.nombre)).toEqual(["Fundador", "Dev", "Invitado"]);
 
     const uid = await seedUser(ctx.db, { email: "u@x.test", password: "clave-usuario-123" });
     let hu = await usuario(ctx);

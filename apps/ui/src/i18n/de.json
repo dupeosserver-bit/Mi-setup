@@ -3915,5 +3915,17 @@
 "Actualizar el sitio oficial": "Offizielle Website aktualisieren",
 "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "Die Seiten werden durch die dieser Version ersetzt. Was du im Editor von Hand geändert hast, geht verloren (bleibt im Versionsverlauf).",
 "Actualizar con esta versión": "Mit dieser Version aktualisieren",
-"Ver menú completo": "Ganzes Menü anzeigen"
+"Ver menú completo": "Ganzes Menü anzeigen",
+"Cerrar todas menos esta": "Alle außer dieser schließen",
+"Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.": "Deine anderen Geräte müssen sich neu anmelden. Diese Sitzung bleibt offen.",
+"entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.": "Anmeldung(en) von neuen Orten oder blockiert. Wenn du sie nicht kennst, schließe diese Sitzungen und ändere das Passwort.",
+"Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.": "Du bekommst eine Handy-Meldung, wenn sich jemand von einem neuen Ort anmeldet. Für SSH-Meldungen aktiviere «Anmeldewarnungen» in der Prüfung oben.",
+"Tus correos, tus contraseñas y tus sitios: revisa y protégete.": "Deine E-Mails, Passwörter und Seiten: prüfen und schützen.",
+"Se cambió de lugar": "Umgezogen",
+"Dónde tienes la sesión abierta · ahora está en Equipos": "Wo du angemeldet bist · jetzt unter Geräte",
+"Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor": "Letzte Anmeldungen und Warnungen · jetzt unter VPS → Serversicherheit",
+"Mi cuenta › Equipos": "Mein Konto › Geräte",
+"Máximo {0} cuentas: quita una para agregar otra": "Höchstens {0} Konten: entferne eins, um ein anderes hinzuzufügen",
+"Conecta hasta {0} cuentas de Gmail iniciando sesión para revisar correos peligrosos.": "Verbinde bis zu {0} Gmail-Konten per Anmeldung, um gefährliche E-Mails zu prüfen.",
+"IA › Agentes de IA": "KI › KI-Agenten"
 }

@@ -3915,5 +3915,17 @@
 "Actualizar el sitio oficial": "Aggiorna il sito ufficiale",
 "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano en el editor se pierde (queda en el historial de versiones).": "Le pagine vengono sostituite con quelle di questa versione. Ciò che hai cambiato a mano nell’editor si perde (resta nella cronologia delle versioni).",
 "Actualizar con esta versión": "Aggiorna con questa versione",
-"Ver menú completo": "Vedi menu completo"
+"Ver menú completo": "Vedi menu completo",
+"Cerrar todas menos esta": "Chiudi tutte tranne questa",
+"Tus otros dispositivos tendrán que volver a entrar. Esta sesión se queda abierta.": "Gli altri dispositivi dovranno accedere di nuovo. Questa sessione resta aperta.",
+"entrada(s) desde lugares nuevos o bloqueadas. Si no las reconoces, cierra esas sesiones y cambia la contraseña.": "accesso/i da luoghi nuovi o bloccati. Se non li riconosci, chiudi quelle sessioni e cambia la password.",
+"Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.": "Ricevi un avviso sul telefono quando qualcuno accede da un luogo nuovo. Per gli avvisi SSH, attiva «Avvisi di accesso» nel controllo qui sopra.",
+"Tus correos, tus contraseñas y tus sitios: revisa y protégete.": "Le tue email, le tue password e i tuoi siti: controlla e proteggiti.",
+"Se cambió de lugar": "Spostato",
+"Dónde tienes la sesión abierta · ahora está en Equipos": "Dove hai la sessione aperta · ora è in Dispositivi",
+"Entradas recientes y alertas · ahora está en VPS → Seguridad del servidor": "Accessi recenti e avvisi · ora è in VPS → Sicurezza del server",
+"Mi cuenta › Equipos": "Il mio account › Dispositivi",
+"Máximo {0} cuentas: quita una para agregar otra": "Massimo {0} account: rimuovine uno per aggiungerne un altro",
+"Conecta hasta {0} cuentas de Gmail iniciando sesión para revisar correos peligrosos.": "Collega fino a {0} account Gmail accedendo per controllare le email pericolose.",
+"IA › Agentes de IA": "IA › Agenti IA"
 }
