@@ -18,6 +18,7 @@ import { can } from "@mi-setup/shared";
 import { currentUser, type AuthUser } from "../../security/rbac.js";
 import { clientInfo, idParams, type ModuleDeps } from "../common.js";
 import { carpetaArchivos } from "../herramientas.js";
+import { generarConGemini } from "../imagenes.js";
 import { calcularCosto, clienteAnthropic, clienteOllama, type ClienteIa } from "../ia/servicio.js";
 import { SLUG_VALIDO, SLUGS_RESERVADOS, type DetectorSitios } from "./detector.js";
 import { armarPagina, type AjustesSitio, type PaginaPublicada } from "./publico.js";
@@ -55,6 +56,8 @@ const ajustesSchema = z.object({
   /** Muestra la demo de Mi Setup en /demo y las apps para descargar (solo sitios de la cuenta maestra). */
   demo: z.boolean().optional(),
   descargas: z.boolean().optional(),
+  estado: z.enum(["abierto", "mantenimiento", "cerrado"]).optional(),
+  mantenimiento: z.object({ mensaje: z.string().trim().max(300).optional(), regreso: z.string().trim().max(60).optional() }).optional(),
 });
 
 const paginaSchema = z.object({
@@ -298,6 +301,24 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       const { size } = await stat(ruta);
       const [a] = await db.insert(siteAssets).values({ siteId: s.id, name: archivo.filename.slice(0, 120), storedName: guardado, mime: archivo.mimetype, size }).returning();
       return { id: a!.id, url: `/api/sitios/${s.id}/archivos/${a!.id}`, urlPublica: `/_archivos/${a!.id}` };
+    });
+
+    app.post("/api/sitios/:id/icono-ia", escribir, async (request) => {
+      const s = await sitioDe(request);
+      const { idea } = z.object({ idea: z.string().trim().max(300).default("") }).parse(request.body ?? {});
+      const a = (s.settings ?? {}) as AjustesSitio;
+      const prompt = [
+        `Ícono de app cuadrado para «${a.titulo || s.name}».`,
+        a.descripcion ? `Trata de: ${a.descripcion}.` : "",
+        idea ? `Idea del dueño: ${idea}.` : "",
+        a.color ? `Color principal ${a.color}.` : "",
+        "Estilo moderno y plano, un solo símbolo grande y centrado, fondo de un solo color o degradado suave, bordes con aire alrededor, sin texto ni letras, se debe entender a 32 px.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const { imagenes, modelo } = await generarConGemini(deps, prompt, "1:1");
+      await deps.audit.record({ actorType: "usuario", actorUserId: currentUser(request).id, action: "icono_sitio_ia", module: "sitios", target: s.id, outcome: "ok", details: { modelo }, ...clientInfo(request) });
+      return { imagenes };
     });
 
     app.delete("/api/sitios/:id/archivos/:archivo", escribir, async (request) => {

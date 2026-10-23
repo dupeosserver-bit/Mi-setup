@@ -22,6 +22,12 @@ import {
   Inbox,
   KeyRound,
   LayoutTemplate,
+  Maximize2,
+  Minimize2,
+  Lock,
+  MoreVertical,
+  Wrench,
+  Power,
   MessagesSquare,
   ShieldAlert,
   Plus,
@@ -45,6 +51,10 @@ import { PUBLICA } from "../edicion";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
 import { PLANTILLAS_SITIOS } from "../lib/plantillasSitios";
 import { abrirExterno } from "../lib/plataforma";
+import { dataUrlABlob, prepararIcono, revisarArchivoIcono } from "../lib/iconoSitio";
+import { MODULOS_UI } from "../modulos";
+import { useModoPagina } from "../lib/marco";
+import { useNavigate } from "react-router-dom";
 import { localeActual } from "../lib/idioma";
 
 const EditorSitio = lazy(() => import("../components/EditorSitio").then((m) => ({ default: m.EditorSitio })));
@@ -65,7 +75,10 @@ interface Ajustes {
   comunidad?: { activa: boolean; oficial?: string };
   demo?: boolean;
   descargas?: boolean;
+  estado?: EstadoSitio;
+  mantenimiento?: { mensaje?: string; regreso?: string };
 }
+type EstadoSitio = "abierto" | "mantenimiento" | "cerrado";
 interface Sitio {
   id: string;
   nombre: string;
@@ -97,6 +110,230 @@ const aSlug = (t: string) =>
     .slice(0, 40);
 const fecha = (f: string) => new Date(f).toLocaleString(localeActual(), { dateStyle: "medium", timeStyle: "short" });
 const invalidar = (id?: string) => void queryClient.invalidateQueries({ queryKey: id ? ["sitios", id] : ["sitios"] });
+
+
+const ESTADOS: Record<EstadoSitio, { texto: string; explica: string; icono: typeof Globe; tono: "ok" | "aviso" | "peligro" }> = {
+  abierto: { texto: "Abierto", explica: "Todos ven tu sitio normal.", icono: Globe, tono: "ok" },
+  mantenimiento: { texto: "En mantenimiento", explica: "Se ve la página «Volvemos pronto» con tu mensaje. No llegan formularios ni pedidos.", icono: Wrench, tono: "aviso" },
+  cerrado: { texto: "Cerrado", explica: "Nadie lo ve, pero no se borra nada. Lo vuelves a abrir cuando quieras.", icono: Lock, tono: "peligro" },
+};
+const estadoDe = (s: Sitio): EstadoSitio => s.ajustes.estado ?? "abierto";
+const urlIcono = (s: Sitio) => (s.ajustes.icono && /^[0-9a-f-]{36}$/.test(s.ajustes.icono) ? `${API_BASE}/api/sitios/${s.id}/archivos/${s.ajustes.icono}` : (s.ajustes.icono ?? null));
+const cambiarAjustes = (s: Sitio, ajustes: Partial<Ajustes>) => api<Sitio>(`/api/sitios/${s.id}/ajustes`, { metodo: "PUT", cuerpo: { ajustes } });
+
+function EstadoInsignia({ sitio }: { sitio: Sitio }) {
+  if (!sitio.publicado) return <Insignia tono="neutro">Borrador</Insignia>;
+  const e = ESTADOS[estadoDe(sitio)];
+  return <Insignia tono={e.tono}>{estadoDe(sitio) === "abierto" ? "Publicado" : e.texto}</Insignia>;
+}
+
+function EstadoDelSitio({ sitio }: { sitio: Sitio }) {
+  const [estado, setEstado] = useState<EstadoSitio>(estadoDe(sitio));
+  const [mensaje, setMensaje] = useState(sitio.ajustes.mantenimiento?.mensaje ?? "");
+  const [regreso, setRegreso] = useState(sitio.ajustes.mantenimiento?.regreso ?? "");
+  const guardar = useMutation({
+    mutationFn: (e: EstadoSitio) => cambiarAjustes(sitio, { estado: e, mantenimiento: { mensaje: mensaje.trim(), regreso: regreso.trim() } }),
+    onSuccess: (_r, e) => {
+      avisar(e === "abierto" ? "Tu sitio está abierto" : e === "mantenimiento" ? "Tu sitio está en mantenimiento" : "Tu sitio está cerrado (no se borró nada)");
+      invalidar(sitio.id);
+      invalidar();
+    },
+    onError: avisarError,
+  });
+  return (
+    <Tarjeta titulo="Estado del sitio" icono={Power}>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {(Object.keys(ESTADOS) as EstadoSitio[]).map((id) => {
+          const e = ESTADOS[id];
+          const Icono = e.icono;
+          const activo = estado === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setEstado(id)}
+              className={cx("rounded-xl border p-3 text-left transition-colors", activo ? "border-acento bg-[color-mix(in_srgb,var(--acento)_12%,transparent)]" : "border-borde hover:bg-tarjeta")}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Icono className={cx("h-4 w-4", activo ? "text-acento" : "text-tenue")} />
+                {e.texto}
+              </span>
+              <span className="mt-1 block text-xs text-tenue">{e.explica}</span>
+            </button>
+          );
+        })}
+      </div>
+      {estado === "mantenimiento" ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-[2fr_1fr]">
+          <Campo etiqueta="Mensaje para tus visitantes">
+            <AreaTexto rows={2} maxLength={300} value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder={`${sitio.nombre} está en mantenimiento. Estamos haciendo mejoras.`} />
+          </Campo>
+          <Campo etiqueta="¿Cuándo regresas? (opcional)">
+            <Entrada maxLength={60} value={regreso} onChange={(e) => setRegreso(e.target.value)} placeholder="Lunes 9 a. m." />
+          </Campo>
+        </div>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Boton variante="primario" cargando={guardar.isPending} disabled={!sitio.publicado} onClick={() => guardar.mutate(estado)}>
+          Guardar estado
+        </Boton>
+        {!sitio.publicado ? <span className="text-xs text-tenue">Primero publica tu sitio.</span> : null}
+      </div>
+    </Tarjeta>
+  );
+}
+
+function IconoDelSitio({ sitio }: { sitio: Sitio }) {
+  const entrada = useRef<HTMLInputElement>(null);
+  const [idea, setIdea] = useState("");
+  const [propuestas, setPropuestas] = useState<string[]>([]);
+  const [elegida, setElegida] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | undefined>();
+  const actual = urlIcono(sitio);
+  const crear = useMutation({
+    mutationFn: () => api<{ imagenes: string[] }>(`/api/sitios/${sitio.id}/icono-ia`, { metodo: "POST", cuerpo: { idea } }),
+    onSuccess: (r) => {
+      setPropuestas((p) => [...r.imagenes, ...p].slice(0, 4));
+      setElegida(r.imagenes[0] ?? null);
+    },
+    onError: avisarError,
+  });
+  const poner = useMutation({
+    mutationFn: async (origen: Blob) => {
+      const { archivo, aviso: a } = await prepararIcono(origen);
+      setAviso(a);
+      const subido = await subirImagenSitio(sitio.id, archivo, "icono");
+      await cambiarAjustes(sitio, { icono: subido.id });
+    },
+    onSuccess: () => {
+      avisar("Ícono listo");
+      setPropuestas([]);
+      setElegida(null);
+      invalidar(sitio.id);
+      invalidar();
+    },
+    onError: avisarError,
+  });
+  const vista = elegida ?? actual;
+  return (
+    <Tarjeta titulo="Ícono del sitio" icono={Sparkles}>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="space-y-4">
+          <p className="text-xs text-tenue">
+            Es la imagen que sale en la pestaña del navegador y en la pantalla del celular si instalan tu sitio como app. Lo mejor: <b className="text-texto">cuadrada, de 512×512 o más</b>, en <b className="text-texto">JPG o PNG</b>, menos de 2 MB, con un dibujo simple y algo de aire en las orillas. Si no es cuadrada, la recortamos al centro y la dejamos del tamaño que pide la página.
+          </p>
+          <div className="space-y-2 rounded-xl border border-borde p-3">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-acento" /> Hacerlo con la IA
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Entrada value={idea} maxLength={300} onChange={(e) => setIdea(e.target.value)} placeholder="Idea (opcional): un pan con un sombrero" />
+              <Boton variante="primario" icono={Sparkles} cargando={crear.isPending} onClick={() => crear.mutate()}>
+                {propuestas.length ? "Otra propuesta" : "Proponer ícono"}
+              </Boton>
+            </div>
+            {propuestas.length ? (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  {propuestas.map((p) => (
+                    <button key={p} type="button" onClick={() => setElegida(p)} className={cx("overflow-hidden rounded-xl border-2", elegida === p ? "border-acento" : "border-transparent")}>
+                      <img src={p} alt="Propuesta de ícono" className="aspect-square w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Boton variante="primario" icono={Check} disabled={!elegida} cargando={poner.isPending} onClick={async () => elegida && poner.mutate(await dataUrlABlob(elegida))}>
+                    Aprobar y usar este
+                  </Boton>
+                  <Boton variante="fantasma" onClick={() => (setPropuestas([]), setElegida(null))}>
+                    Descartar
+                  </Boton>
+                </div>
+              </>
+            ) : null}
+            <p className="text-[11px] text-tenue">La IA solo propone: no se cambia nada hasta que tocas «Aprobar». Usa tu clave de Gemini de Ajustes → Servicios y claves.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Boton icono={Upload} cargando={poner.isPending} onClick={() => entrada.current?.click()}>
+              Subir mi imagen (JPG o PNG)
+            </Boton>
+            {aviso ? <span className="text-xs text-aviso">{aviso}</span> : null}
+          </div>
+          <input
+            ref={entrada}
+            type="file"
+            accept="image/png,image/jpeg"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              const r = revisarArchivoIcono(f);
+              if (!r.ok) return avisar(r.aviso ?? "Imagen no válida", "error");
+              poner.mutate(f);
+            }}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+          <div className="rounded-2xl p-4 text-center" style={{ background: "linear-gradient(160deg, #1d2b53, #7e2553)" }}>
+            <div className="mx-auto h-16 w-16 overflow-hidden rounded-[18px] bg-white/10 shadow-lg">{vista ? <img src={vista} alt="" className="h-full w-full object-cover" /> : <Globe className="m-4 h-8 w-8 text-white/70" />}</div>
+            <p className="mt-2 truncate text-xs text-white">{sitio.ajustes.nombreCorto || sitio.nombre}</p>
+            <p className="text-[10px] text-white/60">En el celular</p>
+          </div>
+          <div className="rounded-2xl border border-borde p-3">
+            <div className="flex items-center gap-2 rounded-t-lg bg-fondo px-2 py-1.5">
+              <span className="h-4 w-4 shrink-0 overflow-hidden rounded">{vista ? <img src={vista} alt="" className="h-full w-full object-cover" /> : <Globe className="h-4 w-4 text-tenue" />}</span>
+              <span className="truncate text-[11px]">{sitio.ajustes.titulo || sitio.nombre}</span>
+            </div>
+            <p className="mt-2 text-center text-[10px] text-tenue">En la pestaña del navegador</p>
+          </div>
+        </div>
+      </div>
+    </Tarjeta>
+  );
+}
+
+function MenuEstado({ sitio }: { sitio: Sitio }) {
+  const [abierto, setAbierto] = useState(false);
+  const cambiar = useMutation({
+    mutationFn: (e: EstadoSitio) => cambiarAjustes(sitio, { estado: e }),
+    onSuccess: (_r, e) => {
+      avisar(e === "abierto" ? "Sitio abierto" : e === "mantenimiento" ? "Sitio en mantenimiento" : "Sitio cerrado (no se borró nada)");
+      invalidar();
+    },
+    onError: avisarError,
+  });
+  if (!sitio.publicado) return null;
+  const actual = estadoDe(sitio);
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <Boton tamano="icono" variante="fantasma" icono={MoreVertical} aria-label="Opciones del sitio" onClick={() => setAbierto((v) => !v)} />
+      {abierto ? (
+        <div className="absolute right-0 top-9 z-20 w-56 overflow-hidden rounded-xl border border-borde bg-superficie py-1 shadow-xl" onMouseLeave={() => setAbierto(false)}>
+          {(Object.keys(ESTADOS) as EstadoSitio[])
+            .filter((e) => e !== actual)
+            .map((e) => {
+              const Icono = ESTADOS[e].icono;
+              return (
+                <button
+                  key={e}
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-tarjeta"
+                  onClick={() => {
+                    setAbierto(false);
+                    cambiar.mutate(e);
+                  }}
+                >
+                  <Icono className="h-4 w-4 text-tenue" />
+                  {e === "abierto" ? "Volver a abrir" : e === "mantenimiento" ? "Poner en mantenimiento" : "Cerrar sin borrar"}
+                </button>
+              );
+            })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- crear
 function Crear({ alCrear, alCerrar }: { alCrear: (s: Sitio) => void; alCerrar: () => void }) {
@@ -824,6 +1061,8 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
   );
   return (
     <div className="space-y-4">
+      <EstadoDelSitio sitio={sitio} />
+      <IconoDelSitio sitio={sitio} />
       {sitio.publicado ? <Conexion sitio={sitio} /> : null}
       <Tarjeta titulo="Nombre y dirección" icono={Globe}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -849,7 +1088,6 @@ function AjustesSitio({ sitio, alBorrar }: { sitio: Sitio; alBorrar: () => void 
           <Campo etiqueta="Título">
             <Entrada value={a.titulo ?? ""} onChange={(e) => setA({ ...a, titulo: e.target.value })} />
           </Campo>
-          <Campo etiqueta="Ícono (favicon)">{selectorImagen(a.icono, (v) => setA({ ...a, icono: v }))}</Campo>
           <Campo etiqueta="Descripción (Google y WhatsApp)">
             <AreaTexto rows={2} value={a.descripcion ?? ""} onChange={(e) => setA({ ...a, descripcion: e.target.value })} maxLength={300} />
           </Campo>
@@ -1229,18 +1467,44 @@ type PestanaSitio = "editor" | "imagenes" | "mensajes" | "comunidad" | "datos" |
 function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
   const q = useQuery({ queryKey: ["sitios", id], queryFn: () => api<Sitio & { borrador: Record<string, unknown> }>(`/api/sitios/${id}`) });
   const [pestana, setPestana] = useState<PestanaSitio>("editor");
+  const [completa, setCompleta] = useState(false);
+  useModoPagina(completa && pestana === "editor" ? "completa" : "normal");
   const entradas = useQuery({ queryKey: ["sitios", id, "entradas"], queryFn: () => api<{ leida: boolean }[]>(`/api/sitios/${id}/entradas`), refetchInterval: 60_000 });
   const nuevos = (entradas.data ?? []).filter((e) => !e.leida).length;
   const s = q.data;
   const editable = useMemo(() => (s ? { id: s.id, nombre: s.nombre, url: s.url, publicado: s.publicado, borrador: s.borrador } : null), [s?.id]);
   if (q.isLoading) return <Cargando />;
   if (!s || !editable) return <ErrorCaja error={q.error} />;
+  if (completa && pestana === "editor")
+    return (
+      <div className="flex h-full min-h-0 flex-col safe-top">
+        <div className="flex shrink-0 items-center gap-2 border-b border-borde bg-superficie px-2 py-1.5">
+          <Boton tamano="sm" variante="fantasma" icono={Minimize2} onClick={() => setCompleta(false)}>
+            Salir de pantalla completa
+          </Boton>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.nombre}</span>
+          <EstadoInsignia sitio={s} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Suspense fallback={<Cargando texto="Abriendo el editor…" />}>
+            <EditorSitio
+              sitio={editable}
+              alPublicar={(url) => {
+                invalidar(id);
+                invalidar();
+                if (url) avisar(`Publicado en ${url.replace(/^https?:\/\//, "")}`);
+              }}
+            />
+          </Suspense>
+        </div>
+      </div>
+    );
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} aria-label="Volver" onClick={alVolver} />
         <h2 className="text-lg font-semibold">{s.nombre}</h2>
-        <Insignia tono={s.publicado ? "ok" : "neutro"}>{s.publicado ? "Publicado" : "Borrador"}</Insignia>
+        <EstadoInsignia sitio={s} />
         <button type="button" className="truncate text-xs text-tenue underline" onClick={() => abrirExterno(s.url)}>
           {s.url.replace(/^https?:\/\//, "")}
         </button>
@@ -1248,6 +1512,11 @@ function Detalle({ id, alVolver }: { id: string; alVolver: () => void }) {
           <button type="button" className="text-xs text-acento underline" onClick={() => setPestana("ajustes")}>
             ¿No abre? Revisar
           </button>
+        ) : null}
+        {pestana === "editor" ? (
+          <Boton className="ml-auto" tamano="sm" variante="fantasma" icono={Maximize2} onClick={() => setCompleta(true)}>
+            Pantalla completa
+          </Boton>
         ) : null}
       </div>
       <Pestanas
@@ -1310,6 +1579,10 @@ export default function Sitios() {
   });
 
   const pgSit = usePaginado(q.data, 12);
+  const navegar = useNavigate();
+  const esMaestra = useMe().data?.usuario.role === "maestra";
+  const puedeNegocio = usePuede("clientes");
+  const verNegocio = puedeNegocio && (PUBLICA || !esMaestra);
   if (elegido) return <Detalle id={elegido} alVolver={() => abrir(null)} />;
   return (
     <div className="space-y-4">
@@ -1344,18 +1617,56 @@ export default function Sitios() {
       <ErrorCaja error={q.error} />
       {q.isLoading ? <Cargando /> : null}
       {q.data && !q.data.length ? <Vacio icono={Globe} texto="Crea tu primer sitio: la página de la pastelería, la de tu servidor de Minecraft o tu link in bio." /> : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {pgSit.visibles.map((s) => (
-          <button key={s.id} type="button" onClick={() => abrir(s.id)} className="rounded-tarjeta border border-borde bg-superficie p-4 text-left transition-colors hover:bg-tarjeta">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-tenue" />
-              <span className="min-w-0 flex-1 truncate font-medium">{s.nombre}</span>
-              <Insignia tono={s.publicado ? "ok" : "neutro"}>{s.publicado ? "Publicado" : "Borrador"}</Insignia>
-            </div>
-            <p className="mt-1 truncate text-xs text-tenue">{s.url.replace(/^https?:\/\//, "")}</p>
-            <p className="mt-2 text-[11px] text-tenue">Editado {fecha(s.actualizado)}</p>
+      {verNegocio ? (
+        <div className="flex gap-1 rounded-xl border border-borde bg-superficie p-1 text-sm sm:w-fit">
+          <span className="flex-1 rounded-lg bg-tarjeta px-3 py-1.5 text-center font-medium sm:flex-none">Sitios y apps</span>
+          <button type="button" className="flex-1 rounded-lg px-3 py-1.5 text-tenue hover:text-texto sm:flex-none" onClick={() => navegar(MODULOS_UI.clientes.ruta)}>
+            Negocio y cobros
           </button>
-        ))}
+        </div>
+      ) : null}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {pgSit.visibles.map((s) => {
+          const estado = estadoDe(s);
+          const icono = urlIcono(s);
+          const tapado = s.publicado && estado !== "abierto";
+          const Aviso = ESTADOS[estado].icono;
+          return (
+            <div key={s.id} role="button" tabIndex={0} onClick={() => abrir(s.id)} onKeyDown={(e) => e.key === "Enter" && abrir(s.id)} className="group cursor-pointer overflow-hidden rounded-tarjeta border border-borde bg-superficie transition-colors hover:border-acento">
+              <div className="relative h-32 overflow-hidden" style={{ background: `linear-gradient(135deg, ${s.ajustes.color || "#7c5cff"}, color-mix(in srgb, ${s.ajustes.color || "#7c5cff"} 30%, #0b0a10))` }}>
+                <div className="absolute inset-x-4 top-4 rounded-lg bg-white/90 p-2 shadow-lg">
+                  <div className="mb-1.5 flex gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#ff6b81]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#f5c451]" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#3ddc84]" />
+                  </div>
+                  <p className="truncate text-xs font-bold text-[#111]">{s.ajustes.titulo || s.nombre}</p>
+                  <div className="mt-1 h-1.5 w-2/3 rounded bg-[#ddd]" />
+                  <div className="mt-1 h-1.5 w-1/2 rounded bg-[#e9e9e9]" />
+                </div>
+                {tapado ? (
+                  <div className="absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,#0b0a10_70%,transparent)] text-center text-white">
+                    <span>
+                      <Aviso className="mx-auto h-6 w-6" />
+                      <span className="mt-1 block text-xs font-semibold">{estado === "mantenimiento" ? "Volvemos pronto" : "Cerrado"}</span>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-3 p-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-tarjeta">{icono ? <img src={icono} alt="" className="h-full w-full object-cover" /> : <Globe className="h-4 w-4 text-tenue" />}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate font-medium">{s.nombre}</span>
+                    <EstadoInsignia sitio={s} />
+                  </span>
+                  <span className="block truncate text-xs text-tenue">{s.url.replace(/^https?:\/\//, "")} · {fecha(s.actualizado)}</span>
+                </span>
+                {puede ? <MenuEstado sitio={s} /> : null}
+              </div>
+            </div>
+          );
+        })}
       </div>
       {pgSit.paginas}
       {crear ? (

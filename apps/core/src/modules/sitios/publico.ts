@@ -50,6 +50,30 @@ export interface AjustesSitio {
   demo?: boolean;
   /** Muestra las apps para descargar (solo sitios de la cuenta maestra). */
   descargas?: boolean;
+  /** Abierto, en mantenimiento («Volvemos pronto») o cerrado sin borrarlo. */
+  estado?: EstadoSitio;
+  mantenimiento?: { mensaje?: string; regreso?: string };
+}
+
+export type EstadoSitio = "abierto" | "mantenimiento" | "cerrado";
+
+export const estadoDe = (a: AjustesSitio): EstadoSitio => a.estado ?? "abierto";
+
+export function paginaEstado(s: { name: string; settings: unknown }): { html: string; codigo: number } | null {
+  const a = (s.settings ?? {}) as AjustesSitio;
+  const estado = estadoDe(a);
+  if (estado === "abierto") return null;
+  const nombre = esc(a.titulo || s.name);
+  const color = a.color && /^#[0-9a-fA-F]{3,8}$/.test(a.color) ? a.color : "#b497ff";
+  const icono = urlArchivo(a.icono);
+  const logo = icono ? `<img src="${esc(icono)}" alt="" width="72" height="72" style="border-radius:18px;margin-bottom:12px">` : `<div style="font-size:52px;margin-bottom:8px">${estado === "mantenimiento" ? "🛠️" : "🔒"}</div>`;
+  if (estado === "cerrado") return { codigo: 410, html: paginaSimple(`${a.titulo || s.name} · Cerrado`, `${logo}<h1>${nombre}</h1><p>Este sitio está cerrado por ahora.</p>`) };
+  const m = a.mantenimiento ?? {};
+  const regreso = m.regreso ? `<p style="display:inline-block;margin-top:8px;padding:8px 14px;border-radius:999px;background:${color}22;color:${color}">Regresamos: ${esc(m.regreso)}</p>` : "";
+  return {
+    codigo: 503,
+    html: paginaSimple(`${a.titulo || s.name} · Volvemos pronto`, `${logo}<h1>Volvemos pronto</h1><p>${esc(m.mensaje || `${a.titulo || s.name} está en mantenimiento. Estamos haciendo mejoras.`)}</p>${regreso}`),
+  };
 }
 
 type FilaSitio = typeof sites.$inferSelect;
@@ -143,6 +167,13 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
     cache.set(host, { sitio, hasta: ahora + 15_000, version: detector.version });
     if (!sitio) throw new HttpError(404, "Sitio no encontrado");
     return sitio;
+  }
+
+  async function sitioAbierto(request: FastifyRequest): Promise<FilaSitio> {
+    const s = await sitioDe(request);
+    const estado = estadoDe((s.settings ?? {}) as AjustesSitio);
+    if (estado !== "abierto") throw new HttpError(503, estado === "cerrado" ? "Este sitio está cerrado" : "Este sitio está en mantenimiento; vuelve pronto");
+    return s;
   }
 
   const limitar = (request: FastifyRequest, clave: string, maximo: number) => {
@@ -240,7 +271,7 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
     });
 
     app.post("/__sitio/_ms/formulario", publico, async (request) => {
-      const s = await sitioDe(request);
+      const s = await sitioAbierto(request);
       const d = z.object({ formulario: z.string().max(60).default("contacto"), datos: z.record(z.string().max(2000)) }).parse(request.body);
       limitar(request, `formulario:${s.id}`, 8);
       if (d.datos["_trampa"]) return { ok: true }; // campo oculto que solo llenan los bots
@@ -252,7 +283,7 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
     });
 
     app.post("/__sitio/_ms/pedido", publico, async (request) => {
-      const s = await sitioDe(request);
+      const s = await sitioAbierto(request);
       const d = z
         .object({
           items: z.array(z.object({ nombre: z.string().max(120), precio: z.number().min(0).max(1_000_000), cantidad: z.number().int().min(1).max(999) })).min(1).max(50),
@@ -267,7 +298,7 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
     });
 
     app.post("/__sitio/_ms/entrar", publico, async (request, reply) => {
-      const s = await sitioDe(request);
+      const s = await sitioAbierto(request);
       limitar(request, `entrar:${s.id}`, 8);
       const d = z.object({ correo: z.string().trim().toLowerCase().max(200), clave: z.string().max(200) }).parse(request.body);
       const [m] = await db.select().from(siteMembers).where(and(eq(siteMembers.siteId, s.id), eq(siteMembers.email, d.correo)));
@@ -293,7 +324,7 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
       return m ? { conectado: true, nombre: m.name, correo: m.email } : { conectado: false };
     });
 
-    comunidad?.publicas(app, sitioDe, limitar, avisarDueno);
+    comunidad?.publicas(app, sitioAbierto, limitar, avisarDueno);
 
     // ---------------------------------------------------------- apps para descargar (sitio oficial)
     const conDescargas = async (request: FastifyRequest) => {
@@ -384,6 +415,11 @@ export function sitiosPublicosRoutes(deps: ModuleDeps, detector: DetectorSitios,
         s = await sitioDe(request);
       } catch {
         return enviarHtml(reply, paginaSimple("Sitio no disponible", `<h1>🚧</h1><p>Este sitio todavía no está publicado.</p>`), 404);
+      }
+      const aviso = paginaEstado(s);
+      if (aviso) {
+        if (aviso.codigo === 503) reply.header("retry-after", "3600");
+        return enviarHtml(reply, aviso.html, aviso.codigo);
       }
       const ruta = ("/" + ((request.params as { "*": string })["*"] ?? "")).replace(/\/+$/, "").split("?")[0] || "/";
       const paginas = (s.published as { paginas?: PaginaPublicada[] }).paginas ?? [];
