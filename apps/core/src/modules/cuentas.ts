@@ -4,7 +4,7 @@
  * Todo cambio pide reautenticación fuerte y queda auditado.
  */
 import { MODULE_IDS, PERMISSION_LEVELS, passwordSchema, sanitizePermissionMap, type PermissionMap } from "@mi-setup/shared";
-import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
@@ -247,10 +247,12 @@ export function cuentasRoutes(deps: ModuleDeps) {
       desde: z.coerce.date().optional(),
       hasta: z.coerce.date().optional(),
       antesDe: z.coerce.number().int().positive().optional(),
+      q: z.string().trim().max(80).optional(),
       limite: z.coerce.number().int().min(1).max(500).default(100),
     });
 
     async function consultar(q: z.infer<typeof filtroSchema>, limite: number) {
+      const patron = q.q ? `%${q.q.replace(/[%_\\]/g, "\\$&")}%` : null;
       const condiciones = [
         q.modulo ? eq(auditLog.module, q.modulo) : undefined,
         q.accion ? eq(auditLog.action, q.accion) : undefined,
@@ -260,6 +262,7 @@ export function cuentasRoutes(deps: ModuleDeps) {
         q.desde ? gte(auditLog.createdAt, q.desde) : undefined,
         q.hasta ? lte(auditLog.createdAt, q.hasta) : undefined,
         q.antesDe ? lt(auditLog.id, q.antesDe) : undefined,
+        patron ? or(ilike(auditLog.action, patron), ilike(auditLog.target, patron)) : undefined,
       ].filter((c) => c !== undefined);
       const filas = await db
         .select()
@@ -287,6 +290,39 @@ export function cuentasRoutes(deps: ModuleDeps) {
     app.get("/api/auditoria", { config: { acceso: { modulo: "auditoria", nivel: "lectura" } } }, async (request) => {
       const q = filtroSchema.parse(request.query);
       return consultar(q, q.limite);
+    });
+
+    const resumenSchema = z.object({
+      desde: z.coerce.date(),
+      zona: z.coerce.number().int().min(-840).max(840).default(0),
+    });
+
+    app.get("/api/auditoria/resumen", { config: { acceso: { modulo: "auditoria", nivel: "lectura" } } }, async (request) => {
+      const q = resumenSchema.parse(request.query);
+      const semana = new Date(deps.now().getTime() - 7 * 24 * 60 * 60 * 1000);
+      const conteo = sql<number>`cast(count(*) as int)`;
+      const enSemana = gte(auditLog.createdAt, semana);
+      const [totales] = await db
+        .select({
+          total: conteo,
+          iaOk: sql<number>`cast(count(*) filter (where ${auditLog.actorType} = 'ia' and ${auditLog.outcome} = 'ok') as int)`,
+          denegadas: sql<number>`cast(count(*) filter (where ${auditLog.outcome} = 'denegado') as int)`,
+          errores: sql<number>`cast(count(*) filter (where ${auditLog.outcome} = 'error') as int)`,
+        })
+        .from(auditLog)
+        .where(enSemana);
+      const top = await db.select({ accion: auditLog.action, veces: conteo }).from(auditLog).where(enSemana).groupBy(auditLog.action).orderBy(desc(conteo)).limit(5);
+      const hoy = await db.select({ fecha: auditLog.createdAt }).from(auditLog).where(gte(auditLog.createdAt, q.desde)).limit(50_000);
+      const porHora = Array.from({ length: 24 }, () => 0);
+      for (const f of hoy) porHora[new Date(f.fecha.getTime() - q.zona * 60_000).getUTCHours()]! += 1;
+      return {
+        semana: totales?.total ?? 0,
+        iaAprobadas: totales?.iaOk ?? 0,
+        denegadas: totales?.denegadas ?? 0,
+        errores: totales?.errores ?? 0,
+        porHora,
+        top: top.map((t) => ({ accion: t.accion, veces: Number(t.veces) })),
+      };
     });
 
     app.get("/api/auditoria/acciones", { config: { acceso: { modulo: "auditoria", nivel: "lectura" } } }, async () => {

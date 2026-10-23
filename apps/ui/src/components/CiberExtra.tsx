@@ -5,9 +5,8 @@
 import { Paginas, usePaginado } from "./Paginas";
 import { temas } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, Mail, MailPlus, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Mail, MailPlus, Plus, RefreshCw, Send, ShieldAlert, Sparkles, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, useMe, usePuede } from "../lib/consultas";
@@ -75,15 +74,6 @@ export function EntradasRecientes() {
       <Paginas pagina={pagina} total={paginas} alCambiar={setPagina} />
       <p className="mt-2 text-xs text-tenue">Te llega aviso al celular cuando alguien entra desde un lugar nuevo. Para avisos de SSH, activa «Alertas de entrada» en la revisión de arriba.</p>
     </Tarjeta>
-  );
-}
-
-export function SeMudo({ texto, ruta }: { texto: string; ruta: string }) {
-  return (
-    <Link to={ruta} className="flex items-center gap-2 rounded-xl border border-borde px-3 py-2 text-sm text-tenue hover:text-texto">
-      <ArrowRight className="h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1">{texto}</span>
-    </Link>
   );
 }
 

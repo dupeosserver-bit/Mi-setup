@@ -1,17 +1,18 @@
-/** Gestor de contraseñas (cifrado de extremo a extremo). */
 import { usePaginado } from "../components/Paginas";
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, RefreshCw, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
+import { ArrowLeft, Copy, Download, ExternalLink, Eye, EyeOff, Folder, History, KeyRound, Lock, Pencil, Plus, Search, ShieldCheck, StickyNote, Trash2, Upload, Wand2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { registerPlugin } from "@capacitor/core";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AVISO_SIN_RECUPERACION, Desbloqueo, MedidorFortaleza } from "../components/Desbloqueo";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Generador, Iniciales, MAX_HISTORIAL, confirmarIdentidad, copiarConfirmando, type Generada } from "../components/boveda/comun";
+import { useForma, useModoPagina } from "../lib/marco";
 import { vecesFiltrada } from "./Ciberseguridad";
 import { api } from "../lib/api";
 import { cifrar, contextoDe } from "../lib/boveda/cripto";
-import { leerColeccion, recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
-import { generarContrasena, OPCIONES_POR_DEFECTO, SIMBOLOS_POR_DEFECTO, type OpcionesGenerador } from "../lib/boveda/generador";
+import { recargarElementos, useBoveda, useConfigBoveda, useElementos, type Elemento } from "../lib/boveda/estado";
+import { generarContrasena, OPCIONES_POR_DEFECTO } from "../lib/boveda/generador";
 import { cambiarClaveMaestra, copiarSeguro, exportar, importar } from "../lib/boveda/utilidades";
 import { activarApertura, aperturaRapida, quitarApertura } from "../lib/boveda/rapida";
 import { biometriaSoportada } from "../lib/biometria";
@@ -32,104 +33,6 @@ interface Datos {
 
 type Item = Elemento<Datos>;
 
-const MAX_HISTORIAL = 10;
-
-interface Generada {
-  contrasena: string;
-  fecha: string;
-  para?: string;
-}
-
-/** Guarda una contraseña generada en el historial cifrado y deja solo las últimas 10. */
-async function guardarGenerada(clave: Uint8Array, contrasena: string, para?: string): Promise<void> {
-  const valor: Generada = { contrasena, fecha: new Date().toISOString(), ...(para ? { para } : {}) };
-  await api("/api/boveda/items", { cuerpo: { tipo: "generada", datos: await cifrar(clave, valor, contextoDe("generada")) } });
-  const todas = (await leerColeccion<Generada>("boveda", clave)).filter((e) => e.tipo === "generada").sort((a, b) => b.valor.fecha.localeCompare(a.valor.fecha));
-  for (const vieja of todas.slice(MAX_HISTORIAL)) await api(`/api/boveda/items/${vieja.id}`, { metodo: "DELETE" }).catch(() => undefined);
-  await recargarElementos();
-}
-
-function Generador({ alUsar, botonUsar = "Usar esta contraseña" }: { alUsar?: (c: string) => void; botonUsar?: string }) {
-  const clave = useBoveda((s) => s.clave);
-  const [o, setO] = useState<OpcionesGenerador>(OPCIONES_POR_DEFECTO);
-  const [valor, setValor] = useState(() => generarContrasena(OPCIONES_POR_DEFECTO));
-  const [para, setPara] = useState("");
-  const regenerar = (n: OpcionesGenerador) => {
-    setO(n);
-    try {
-      setValor(generarContrasena(n));
-    } catch (err) {
-      avisarError(err);
-    }
-  };
-  const recordar = () => {
-    if (clave) void guardarGenerada(clave, valor, para.trim() || undefined).catch(() => undefined);
-  };
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <Entrada value={valor} readOnly className="font-mono" />
-        <Boton tamano="icono" icono={RefreshCw} onClick={() => regenerar(o)} aria-label="Generar otra" />
-        <Boton
-          tamano="icono"
-          icono={Copy}
-          aria-label="Copiar"
-          onClick={() => {
-            void copiarSeguro(valor, "Contraseña copiada").catch(avisarError);
-            recordar();
-          }}
-        />
-      </div>
-      <MedidorFortaleza clave={valor} />
-      <Campo etiqueta={`Longitud: ${o.longitud} caracteres`}>
-        <input type="range" min={8} max={128} value={o.longitud} onChange={(e) => regenerar({ ...o, longitud: Number(e.target.value) })} className="w-full" />
-      </Campo>
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          ["mayusculas", "Mayúsculas (A-Z)"],
-          ["minusculas", "Minúsculas (a-z)"],
-          ["numeros", "Números (0-9)"],
-          ["simbolos", "Símbolos"],
-          ["sinAmbiguos", "Sin ambiguos (l, 1, O, 0)"],
-        ] as const).map(([k, t]) => (
-          <Interruptor key={k} activo={o[k]} alCambiar={(v) => regenerar({ ...o, [k]: v })} etiqueta={t} />
-        ))}
-      </div>
-      {o.simbolos ? (
-        <Campo etiqueta="Símbolos permitidos" ayuda="Quita los que el sitio no acepte.">
-          <div className="flex gap-2">
-            <Entrada value={o.simbolosTexto} onChange={(e) => regenerar({ ...o, simbolosTexto: e.target.value })} className="font-mono" />
-            <Boton tamano="sm" variante="fantasma" onClick={() => regenerar({ ...o, simbolosTexto: SIMBOLOS_POR_DEFECTO })}>
-              Todos
-            </Boton>
-          </div>
-        </Campo>
-      ) : null}
-      <Campo etiqueta="¿Para qué es? (opcional, se guarda en el historial)">
-        <Entrada value={para} onChange={(e) => setPara(e.target.value)} placeholder="Ej. cuenta de Steam" />
-      </Campo>
-      {clave ? (
-        <p className="text-xs text-tenue">Cada contraseña que copies o uses se guarda cifrada en el historial (las últimas {MAX_HISTORIAL}).</p>
-      ) : (
-        <p className="text-xs text-aviso">La bóveda está bloqueada: esta contraseña no se guardará en el historial. Ábrela en "Mis contraseñas" para guardarlas.</p>
-      )}
-      {alUsar ? (
-        <Boton
-          variante="primario"
-          className="w-full"
-          icono={Wand2}
-          onClick={() => {
-            recordar();
-            alUsar(valor);
-          }}
-        >
-          {botonUsar}
-        </Boton>
-      ) : null}
-    </div>
-  );
-}
-
 function HistorialGeneradas() {
   const { data, isLoading } = useElementos<Generada>("boveda");
   const [ver, setVer] = useState<string | null>(null);
@@ -148,8 +51,14 @@ function HistorialGeneradas() {
                 {new Date(g.valor.fecha).toLocaleString(localeActual())}
               </p>
             </div>
-            <Boton tamano="icono" variante="fantasma" icono={ver === g.id ? EyeOff : Eye} onClick={() => setVer(ver === g.id ? null : g.id)} aria-label="Mostrar u ocultar" />
-            <Boton tamano="icono" variante="fantasma" icono={Copy} onClick={() => void copiarSeguro(g.valor.contrasena, "Contraseña copiada").catch(avisarError)} aria-label="Copiar" />
+            <Boton
+              tamano="icono"
+              variante="fantasma"
+              icono={ver === g.id ? EyeOff : Eye}
+              onClick={() => (ver === g.id ? setVer(null) : void confirmarIdentidad().then(() => setVer(g.id), () => undefined))}
+              aria-label="Mostrar u ocultar"
+            />
+            <Boton tamano="icono" variante="fantasma" icono={Copy} onClick={() => void copiarConfirmando(g.valor.contrasena, "Contraseña copiada").catch(avisarError)} aria-label="Copiar" />
             <Boton
               tamano="icono"
               variante="fantasma"
@@ -248,25 +157,46 @@ function Editor({ inicial, carpetas, alTerminar }: { inicial: Item | null; carpe
   );
 }
 
-function Detalle({ item, puede, alEditar }: { item: Item; puede: boolean; alEditar: () => void }) {
+function Detalle({ item, puede, alEditar, alVolver }: { item: Item; puede: boolean; alEditar: () => void; alVolver?: () => void }) {
   const [ver, setVer] = useState(false);
+  useEffect(() => setVer(false), [item.id]);
   const v = item.valor;
+  const url = v.url ? (v.url.startsWith("http") ? v.url : `https://${v.url}`) : null;
   const fila = (etiqueta: string, valor: string | undefined, secreto = false) =>
     valor ? (
-      <div className="flex items-center gap-2 rounded-xl bg-fondo p-3">
+      <div className="flex items-center gap-2 rounded-xl border border-borde bg-fondo px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-tenue">{etiqueta}</p>
-          <p className={cx("truncate text-sm", secreto && "font-mono")}>{secreto && !ver ? "••••••••••••" : valor}</p>
+          <p className={cx("truncate text-sm", secreto && "font-mono tracking-wider")}>{secreto && !ver ? "••••••••••••" : valor}</p>
         </div>
-        {secreto ? <Boton tamano="icono" variante="fantasma" icono={ver ? EyeOff : Eye} onClick={() => setVer((x) => !x)} aria-label="Mostrar u ocultar" /> : null}
-        <Boton tamano="icono" variante="fantasma" icono={Copy} onClick={() => void copiarSeguro(valor, `${etiqueta} copiado`).catch(avisarError)} aria-label={`Copiar ${etiqueta}`} />
+        {secreto ? (
+          <Boton
+            tamano="icono"
+            variante="fantasma"
+            icono={ver ? EyeOff : Eye}
+            onClick={() => (ver ? setVer(false) : void confirmarIdentidad().then(() => setVer(true), () => undefined))}
+            aria-label="Mostrar u ocultar"
+          />
+        ) : null}
+        <Boton
+          tamano="icono"
+          variante="fantasma"
+          icono={Copy}
+          onClick={() => void (secreto ? copiarConfirmando(valor, `${etiqueta} copiada`) : copiarSeguro(valor, `${etiqueta} copiado`)).catch(avisarError)}
+          aria-label={`Copiar ${etiqueta}`}
+        />
       </div>
     ) : null;
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <h2 className="flex-1 truncate text-lg font-semibold">{v.nombre}</h2>
-        {v.url ? <Boton tamano="icono" variante="fantasma" icono={ExternalLink} onClick={() => abrirExterno(v.url!.startsWith("http") ? v.url! : `https://${v.url}`)} aria-label="Abrir sitio" /> : null}
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        {alVolver ? <Boton tamano="icono" variante="fantasma" icono={ArrowLeft} onClick={alVolver} aria-label="Volver" /> : null}
+        <Iniciales texto={v.nombre} tam={44} />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-semibold">{v.nombre}</h2>
+          <p className="truncate text-xs text-tenue">{[v.carpeta || "Sin carpeta", item.tipo === "nota" ? "Nota segura" : "Guardada y cifrada"].join(" · ")}</p>
+        </div>
+        {url ? <Boton tamano="icono" variante="fantasma" icono={ExternalLink} onClick={() => abrirExterno(url)} aria-label="Abrir sitio" /> : null}
         {puede ? <Boton tamano="icono" variante="fantasma" icono={Pencil} onClick={alEditar} aria-label="Editar" /> : null}
         {puede ? (
           <Boton
@@ -278,14 +208,39 @@ function Detalle({ item, puede, alEditar }: { item: Item; puede: boolean; alEdit
               if (!(await confirmar({ titulo: "Borrar", mensaje: `¿Borrar "${v.nombre}" de la bóveda?`, boton: "Borrar" }))) return;
               await api(`/api/boveda/items/${item.id}`, { metodo: "DELETE" }).catch(avisarError);
               await recargarElementos();
+              alVolver?.();
             }}
           />
         ) : null}
       </div>
-      {fila("Usuario", v.usuario)}
+      {fila("Usuario o correo", v.usuario)}
       {fila("Contraseña", v.contrasena, true)}
-      {fila("Sitio", v.url)}
-      {v.notas ? <p className="whitespace-pre-wrap rounded-xl bg-fondo p-3 text-sm">{v.notas}</p> : null}
+      {v.contrasena && ver ? <MedidorFortaleza clave={v.contrasena} /> : null}
+      {fila("Sitio web", v.url)}
+      {v.notas ? (
+        <div className="rounded-xl border border-borde bg-fondo p-3">
+          <p className="mb-1 flex items-center gap-1.5 text-xs text-tenue">
+            <StickyNote className="h-3.5 w-3.5" />
+            Notas · se guardan cifradas
+          </p>
+          <p className="whitespace-pre-wrap text-sm">{v.notas}</p>
+        </div>
+      ) : null}
+      <p className="flex items-center gap-1.5 text-xs text-tenue">
+        <Lock className="h-3.5 w-3.5" />
+        Ver o copiar la contraseña pide tu PIN o tu huella.
+      </p>
+    </div>
+  );
+}
+
+function DetalleCompleto(props: { item: Item; puede: boolean; alEditar: () => void; alVolver: () => void }) {
+  useModoPagina("completa");
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-fondo p-4">
+      <div className="mx-auto w-full max-w-2xl">
+        <Detalle {...props} />
+      </div>
     </div>
   );
 }
@@ -477,6 +432,7 @@ function Autocompletar({ items }: { items: Item[] }) {
 function Contenido() {
   const puede = usePuede("boveda", "escritura");
   const bloquear = useBoveda((s) => s.bloquear);
+  const forma = useForma();
   const { data: todos, isLoading, error } = useElementos<Datos>("boveda");
   const data = useMemo(() => todos?.filter((i) => i.tipo !== "generada"), [todos]);
   const [q, setQ] = useState("");
@@ -493,35 +449,58 @@ function Contenido() {
       .sort((a, b) => a.valor.nombre.localeCompare(b.valor.nombre));
   }, [data, q, carpeta]);
   const actual = data?.find((i) => i.id === sel) ?? null;
-
+  const ancho = forma === "pc";
   const pgBov = usePaginado(lista, 12);
+
+  if (actual && !ancho) {
+    return <DetalleCompleto item={actual} puede={puede} alEditar={() => setEditando(actual)} alVolver={() => setSel(null)} />;
+  }
+
+  const opcionCarpeta = (valor: string | null, texto: string, cuenta: number) => (
+    <button
+      key={valor ?? "_todo"}
+      type="button"
+      onClick={() => setCarpeta(valor)}
+      className={cx(
+        "flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm",
+        carpeta === valor ? "text-texto" : "text-tenue hover:bg-tarjeta hover:text-texto",
+        ancho ? "w-full" : "border border-borde",
+      )}
+      style={carpeta === valor ? { background: "color-mix(in srgb, var(--acento) 16%, transparent)" } : undefined}
+    >
+      {valor === null ? <KeyRound className="h-4 w-4" /> : <Folder className="h-4 w-4" />}
+      <span className="min-w-0 flex-1 truncate text-left">{texto}</span>
+      <small className="text-xs text-tenue">{cuenta}</small>
+    </button>
+  );
+
   return (
     <>
       <Encabezado
         titulo="Gestor de contraseñas"
-        descripcion="Cifrado de extremo a extremo. El portapapeles se borra a los 20 s."
+        descripcion="Cifrado de extremo a extremo. Las contraseñas se ven tapadas y el portapapeles se borra a los 20 s."
         acciones={
           <>
             <Herramientas />
-            <Boton tamano="sm" icono={Lock} onClick={bloquear}>Bloquear</Boton>
-            {puede ? <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>Nuevo</Boton> : null}
+            <Boton tamano="sm" icono={Lock} onClick={bloquear}>
+              Bloquear
+            </Boton>
+            {puede ? (
+              <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>
+                Nuevo
+              </Boton>
+            ) : null}
           </>
         }
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando texto="Descifrando…" /> : null}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_320px_1fr]">
-        <nav className="space-y-1 text-sm">
-          <button type="button" onClick={() => setCarpeta(null)} className={cx("flex w-full items-center gap-2 rounded-lg px-3 py-2", carpeta === null ? "bg-tarjeta" : "hover:bg-tarjeta")}>
-            <KeyRound className="h-4 w-4 text-tenue" /> Todo ({data?.length ?? 0})
-          </button>
-          {["", ...carpetas].map((c) => (
-            <button key={c || "_"} type="button" onClick={() => setCarpeta(c)} className={cx("flex w-full items-center gap-2 rounded-lg px-3 py-2", carpeta === c ? "bg-tarjeta" : "hover:bg-tarjeta")}>
-              <Folder className="h-4 w-4 text-tenue" /> {c || "Sin carpeta"}
-            </button>
-          ))}
+      <div className={cx("grid grid-cols-1 gap-4", ancho && "grid-cols-[200px_minmax(0,1fr)_minmax(0,1.1fr)]")}>
+        <nav className={cx("text-sm", ancho ? "space-y-1" : "-mx-1 flex gap-2 overflow-x-auto px-1 pb-1")} aria-label="Carpetas">
+          {opcionCarpeta(null, "Todo", data?.length ?? 0)}
+          {["", ...carpetas].map((c) => opcionCarpeta(c, c || "Sin carpeta", (data ?? []).filter((i) => (i.valor.carpeta || "") === c).length))}
         </nav>
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
             <Entrada className="pl-9" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -532,20 +511,23 @@ function Contenido() {
               key={i.id}
               type="button"
               onClick={() => setSel(i.id)}
-              className={cx("flex w-full items-center gap-3 rounded-xl border p-3 text-left", sel === i.id ? "border-acento/60 bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}
+              className={cx("flex w-full items-center gap-3 rounded-xl border p-2.5 text-left", sel === i.id ? "border-acento bg-tarjeta" : "border-borde bg-superficie hover:bg-tarjeta")}
             >
-              {i.tipo === "nota" ? <StickyNote className="h-4 w-4 shrink-0 text-tenue" /> : <KeyRound className="h-4 w-4 shrink-0 text-tenue" />}
-              <div className="min-w-0">
+              <Iniciales texto={i.valor.nombre} />
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{i.valor.nombre}</p>
                 <p className="truncate text-xs text-tenue">{i.valor.usuario || i.valor.url || (i.tipo === "nota" ? "Nota segura" : "")}</p>
               </div>
+              {i.tipo === "nota" ? <StickyNote className="h-4 w-4 shrink-0 text-tenue" /> : <span className="font-mono text-xs tracking-wider text-tenue">••••••</span>}
             </button>
           ))}
+          {pgBov.paginas}
         </div>
-        {pgBov.paginas}
-        <div className="rounded-tarjeta border border-borde bg-superficie p-4">
-          {actual ? <Detalle item={actual} puede={puede} alEditar={() => setEditando(actual)} /> : <Vacio icono={KeyRound} texto="Elige un elemento." />}
-        </div>
+        {ancho ? (
+          <div className="min-w-0 self-start rounded-tarjeta border border-borde bg-superficie p-4">
+            {actual ? <Detalle item={actual} puede={puede} alEditar={() => setEditando(actual)} alVolver={() => setSel(null)} /> : <Vacio icono={KeyRound} texto="Elige un elemento." />}
+          </div>
+        ) : null}
       </div>
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo elemento" : "Editar"} alCerrar={() => setEditando(null)}>
         {editando !== null ? <Editor inicial={editando === "nuevo" ? null : editando} carpetas={carpetas} alTerminar={() => setEditando(null)} /> : null}

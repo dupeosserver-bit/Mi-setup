@@ -1,11 +1,12 @@
-/** Autenticador 2FA: códigos TOTP calculados aquí; importar por enlace otpauth, imagen QR, cámara o a mano. */
 import { usePaginado } from "../components/Paginas";
 import { useMutation } from "@tanstack/react-query";
 import jsQR from "jsqr";
-import { Copy, Download, ImageUp, Link2, Lock, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { Copy, Dices, Download, ImageUp, Link2, Lock, Plus, QrCode, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Desbloqueo } from "../components/Desbloqueo";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Selector, Vacio, avisar, avisarError } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { Generador, Iniciales } from "../components/boveda/comun";
+import { useForma } from "../lib/marco";
 import { api } from "../lib/api";
 import { cifrar, contextoDe } from "../lib/boveda/cripto";
 import { recargarElementos, useBoveda, useConfigBoveda, useElementos } from "../lib/boveda/estado";
@@ -28,41 +29,44 @@ function Codigo({ id, cuenta, puede }: { id: string; cuenta: CuentaTotp; puede: 
   }, [cuenta]);
   const pct = estado ? (estado.restante / cuenta.periodo) * 100 : 0;
   const mitad = estado ? Math.ceil(estado.codigo.length / 2) : 0;
+  const poco = Boolean(estado && estado.restante <= 5);
+  const copiar = () => estado && void copiarSeguro(estado.codigo, "Código copiado").catch(avisarError);
+  const nombre = cuenta.emisor || cuenta.cuenta || "Sin emisor";
   return (
-    <li className="flex items-center gap-4 rounded-tarjeta border border-borde bg-superficie p-4">
-      <div className="relative h-10 w-10 shrink-0">
-        <svg viewBox="0 0 36 36" className="h-10 w-10 -rotate-90">
-          <circle cx="18" cy="18" r="16" fill="none" stroke="#2C2C2E" strokeWidth="3" />
-          <circle cx="18" cy="18" r="16" fill="none" stroke={estado && estado.restante <= 5 ? "#FF453A" : "#E5E5EA"} strokeWidth="3" strokeDasharray={`${pct} 100`} pathLength={100} />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[11px]">{estado?.restante ?? ""}</span>
+    <li
+      className="flex min-w-0 flex-col gap-3 rounded-tarjeta border bg-superficie p-4 transition-colors"
+      style={{ borderColor: poco ? "color-mix(in srgb, var(--error) 55%, transparent)" : "var(--borde)" }}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <Iniciales texto={nombre} tam={38} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{cuenta.emisor || "Sin emisor"}</p>
+          <p className="truncate text-xs text-tenue">{cuenta.cuenta}</p>
+        </div>
+        {puede ? (
+          <Boton
+            tamano="icono"
+            variante="fantasma"
+            icono={Trash2}
+            aria-label="Quitar"
+            onClick={async () => {
+              if (!(await confirmar({ titulo: "Quitar cuenta 2FA", mensaje: `Si quitas ${cuenta.emisor} ${cuenta.cuenta} y no tienes otro respaldo, podrías perder el acceso a esa cuenta.`, peligroso: true, textoExacto: cuenta.emisor || "QUITAR", boton: "Quitar" }))) return;
+              await api(`/api/2fa/items/${id}`, { metodo: "DELETE" }).catch(avisarError);
+              await recargarElementos();
+            }}
+          />
+        ) : null}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{cuenta.emisor || "Sin emisor"}</p>
-        <p className="truncate text-xs text-tenue">{cuenta.cuenta}</p>
-      </div>
-      <button
-        type="button"
-        className="font-mono text-2xl tracking-widest"
-        onClick={() => estado && void copiarSeguro(estado.codigo, "Código copiado").catch(avisarError)}
-        title="Copiar"
-      >
-        {estado ? `${estado.codigo.slice(0, mitad)} ${estado.codigo.slice(mitad)}` : "— —"}
+      <button type="button" onClick={copiar} title="Copiar" className={cx("flex items-center justify-between gap-2 text-left font-mono text-3xl tabular-nums tracking-[0.18em]", poco ? "text-peligro" : "text-texto")}>
+        <span>{estado ? `${estado.codigo.slice(0, mitad)} ${estado.codigo.slice(mitad)}` : "— —"}</span>
+        <Copy className="h-4 w-4 shrink-0 text-tenue" />
       </button>
-      <Boton tamano="icono" variante="fantasma" icono={Copy} aria-label="Copiar código" onClick={() => estado && void copiarSeguro(estado.codigo, "Código copiado").catch(avisarError)} />
-      {puede ? (
-        <Boton
-          tamano="icono"
-          variante="fantasma"
-          icono={Trash2}
-          aria-label="Borrar"
-          onClick={async () => {
-            if (!(await confirmar({ titulo: "Quitar cuenta 2FA", mensaje: `Si quitas ${cuenta.emisor} ${cuenta.cuenta} y no tienes otro respaldo, podrías perder el acceso a esa cuenta.`, peligroso: true, textoExacto: cuenta.emisor || "QUITAR", boton: "Quitar" }))) return;
-            await api(`/api/2fa/items/${id}`, { metodo: "DELETE" }).catch(avisarError);
-            await recargarElementos();
-          }}
-        />
-      ) : null}
+      <div className="flex items-center gap-2">
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-tarjeta">
+          <i className="block h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: poco ? "var(--error)" : "var(--acento)" }} />
+        </span>
+        <small className={cx("w-8 text-right text-xs tabular-nums", poco ? "text-peligro" : "text-tenue")}>{estado ? `${estado.restante}s` : ""}</small>
+      </div>
     </li>
   );
 }
@@ -225,6 +229,7 @@ function Contenido() {
   const puede = usePuede("autenticador", "escritura");
   const bloquear = useBoveda((s) => s.bloquear);
   const config = useConfigBoveda();
+  const forma = useForma();
   const { data, isLoading, error } = useElementos<CuentaTotp>("2fa");
   const [agregar, setAgregar] = useState(false);
   const [q, setQ] = useState("");
@@ -233,15 +238,20 @@ function Contenido() {
   const archivo = useRef<HTMLInputElement>(null);
   const lista = (data ?? []).filter((i) => !q || `${i.valor.emisor} ${i.valor.cuenta}`.toLowerCase().includes(q.toLowerCase()));
   const pgAu = usePaginado(lista, 12);
+  const lado = forma === "pc";
   return (
     <>
       <Encabezado
         titulo="Autenticador 2FA"
-        descripcion="Los códigos se calculan en este dispositivo; las claves están cifradas de extremo a extremo."
+        descripcion="Tus códigos de dos pasos en grande, listos para copiar. Se calculan en este equipo y las claves están cifradas."
         acciones={
           <>
-            <Boton tamano="sm" icono={Download} onClick={() => config.data && void exportar("2fa", config.data).then(() => avisar("Exportado (sigue cifrado)"), avisarError)}>Exportar</Boton>
-            <Boton tamano="sm" icono={Upload} onClick={() => archivo.current?.click()}>Importar</Boton>
+            <Boton tamano="sm" icono={Download} onClick={() => config.data && void exportar("2fa", config.data).then(() => avisar("Exportado (sigue cifrado)"), avisarError)}>
+              Exportar
+            </Boton>
+            <Boton tamano="sm" icono={Upload} onClick={() => archivo.current?.click()}>
+              Importar
+            </Boton>
             <input
               ref={archivo}
               type="file"
@@ -253,21 +263,51 @@ function Contenido() {
                 if (f) void f.text().then(setImportando);
               }}
             />
-            <Boton tamano="sm" icono={Lock} onClick={bloquear}>Bloquear</Boton>
-            {puede ? <Boton variante="primario" icono={Plus} onClick={() => setAgregar(true)}>Agregar</Boton> : null}
+            <Boton tamano="sm" icono={Lock} onClick={bloquear}>
+              Bloquear
+            </Boton>
+            {puede && !lado ? (
+              <Boton variante="primario" icono={Plus} onClick={() => setAgregar(true)}>
+                Agregar
+              </Boton>
+            ) : null}
           </>
         }
       />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando texto="Descifrando…" /> : null}
-      {data?.length ? <Entrada className="mb-3 max-w-sm" placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} /> : null}
-      {data?.length === 0 ? <Vacio icono={ShieldCheck} texto="Agrega tu primera cuenta con su QR o enlace otpauth." /> : null}
-      <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-        {pgAu.visibles.map((i) => (
-          <Codigo key={i.id} id={i.id} cuenta={i.valor} puede={puede} />
-        ))}
-      </ul>
-      {pgAu.paginas}
+      <div className={cx("grid grid-cols-1 gap-4", lado && "grid-cols-[minmax(0,1fr)_360px]")}>
+        <section className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-0 flex-1 sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-tenue" />
+              <Entrada className="pl-9" placeholder="Buscar cuenta 2FA" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <span className="flex items-center gap-1.5 text-xs text-tenue">
+              <Lock className="h-3.5 w-3.5" />
+              Se guardan cifrados en tu bóveda
+            </span>
+          </div>
+          {data?.length === 0 ? <Vacio icono={ShieldCheck} texto="Agrega tu primera cuenta con su QR o enlace otpauth." /> : null}
+          {data?.length && !lista.length ? <Vacio icono={Search} texto="Sin resultados." /> : null}
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
+            {pgAu.visibles.map((i) => (
+              <Codigo key={i.id} id={i.id} cuenta={i.valor} puede={puede} />
+            ))}
+          </ul>
+          {pgAu.paginas}
+        </section>
+        <aside className={cx("min-w-0 space-y-4", lado ? "self-start" : "grid gap-4 md:grid-cols-2 md:space-y-0")}>
+          {puede && lado ? (
+            <Tarjeta titulo="Agregar cuenta 2FA" icono={QrCode}>
+              <Agregar alTerminar={() => undefined} />
+            </Tarjeta>
+          ) : null}
+          <Tarjeta titulo="Generador de contraseñas" icono={Dices}>
+            <Generador compacto />
+          </Tarjeta>
+        </aside>
+      </div>
       <Modal abierto={agregar} titulo="Agregar cuenta 2FA" alCerrar={() => setAgregar(false)}>
         <Agregar alTerminar={() => setAgregar(false)} />
       </Modal>
@@ -288,7 +328,9 @@ function Contenido() {
           <Campo etiqueta="Clave maestra con la que se exportó el archivo">
             <Entrada type="password" value={claveArchivo} onChange={(e) => setClaveArchivo(e.target.value)} autoFocus />
           </Campo>
-          <Boton type="submit" variante="primario" className="w-full">Importar</Boton>
+          <Boton type="submit" variante="primario" className="w-full">
+            Importar
+          </Boton>
         </form>
       </Modal>
     </>
