@@ -36,14 +36,34 @@ interface Mensaje {
   fecha: string;
 }
 
+/** Foto en grande sobre todo (se cierra con la X, tocando fuera o con Esc). */
+function VisorFoto({ url, nombre, alCerrar }: { url: string; nombre: string; alCerrar: () => void }) {
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => e.key === "Escape" && alCerrar();
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, [alCerrar]);
+  return (
+    <div role="dialog" aria-label={nombre} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4" onClick={alCerrar}>
+      <img src={url} alt={nombre} className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+      <div className="absolute right-3 top-3 flex gap-2" style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}>
+        <Boton tamano="icono" variante="secundario" icono={FileDown} aria-label="Abrir o guardar" title="Abrir o guardar" onClick={(e) => (e.stopPropagation(), abrirExterno(url))} />
+        <Boton tamano="icono" variante="secundario" icono={X} aria-label="Cerrar" title="Cerrar" onClick={alCerrar} />
+      </div>
+    </div>
+  );
+}
+
 function ContenidoMensaje({ m }: { m: Mensaje }) {
   const url = m.archivoUrl ? urlServidor(m.archivoUrl) : null;
+  const [viendo, setViendo] = useState(false);
   if (m.tipo === "foto" && url) {
     return (
       <>
-        <button type="button" onClick={() => abrirExterno(url)} className="block">
+        <button type="button" onClick={() => setViendo(true)} className="block" aria-label="Ver foto en grande">
           <img src={url} alt={m.meta.nombre ?? "Foto"} className="max-h-72 rounded-xl object-cover" loading="lazy" />
         </button>
+        {viendo ? <VisorFoto url={url} nombre={m.meta.nombre ?? "Foto"} alCerrar={() => setViendo(false)} /> : null}
         {m.texto ? <p className="mt-1 whitespace-pre-wrap break-words">{m.texto}</p> : null}
       </>
     );

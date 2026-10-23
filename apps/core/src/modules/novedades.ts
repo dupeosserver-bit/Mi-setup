@@ -359,7 +359,7 @@ export function novedadesRoutes(deps: ModuleDeps) {
         return Array.isArray(lista) ? lista : [];
       });
       const activos = r.filter((g) => g.status === "Active");
-      const porPagina = 24;
+      const porPagina = 12;
       return {
         pagina,
         totalPaginas: Math.max(1, Math.ceil(activos.length / porPagina)),

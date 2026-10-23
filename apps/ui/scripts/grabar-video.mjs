@@ -11,10 +11,11 @@
  * que se ve mientras carga el video).
  */
 /* global document, history, dispatchEvent, PopStateEvent, setTimeout -- lo de evaluate() corre en el navegador */
+import { execFileSync } from "node:child_process";
 import { mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
-import { CARPETA_OFICIAL, SIN_AVISO, cargarPlaywright, servirDemo } from "./demo-local.mjs";
+import { CARPETA_OFICIAL, SIN_AVISO, buscarFfmpeg, cargarPlaywright, servirDemo } from "./demo-local.mjs";
 
 const ANCHO = 1440;
 const ALTO = 810;
@@ -34,9 +35,9 @@ const POR_ESCENA_MS = 4800;
 const ESCENARIO = `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}
 body{margin:0;width:${ANCHO}px;height:${ALTO}px;overflow:hidden;background:radial-gradient(1200px 600px at 30% 0%,#2a2350,#0b0d12 70%);font-family:system-ui,"Segoe UI",sans-serif;color:#eceff5}
-.pc{position:absolute;left:44px;top:70px;width:1088px;height:680px;border-radius:14px;overflow:hidden;border:1px solid #2b3140;background:#121212;box-shadow:0 30px 80px -20px rgba(124,92,255,.5)}
-.pc iframe{width:1280px;height:800px;border:0;transform:scale(.85);transform-origin:0 0}
-.cel{position:absolute;left:1078px;top:96px;width:322px;height:676px;border:9px solid #222633;border-radius:38px;overflow:hidden;background:#121212;box-shadow:0 30px 70px -10px rgba(0,0,0,.7)}
+.pc{position:absolute;left:44px;top:110px;width:960px;height:600px;border-radius:14px;overflow:hidden;border:1px solid #2b3140;background:#121212;box-shadow:0 30px 80px -20px rgba(124,92,255,.5)}
+.pc iframe{width:1280px;height:800px;border:0;transform:scale(.75);transform-origin:0 0}
+.cel{position:absolute;left:1074px;top:96px;width:322px;height:676px;border:9px solid #222633;border-radius:38px;overflow:hidden;background:#121212;box-shadow:0 30px 70px -10px rgba(0,0,0,.7)}
 .cel iframe{width:390px;height:844px;border:0;transform:scale(.78);transform-origin:0 0}
 .rotulo{position:absolute;left:44px;top:18px;font-size:22px;font-weight:700;letter-spacing:-.01em;transition:opacity .4s}
 .rotulo span{background:linear-gradient(90deg,#b49cff,#7dd3fc);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -60,6 +61,9 @@ const demo = await servirDemo({ "/escenario": ESCENARIO });
 const navegador = await chromium.launch();
 const contexto = await navegador.newContext({ viewport: { width: ANCHO, height: ALTO }, colorScheme: "dark", recordVideo: { dir: temporal, size: { width: ANCHO, height: ALTO } } });
 const pagina = await contexto.newPage();
+// El video empieza al crear la página: se mide para luego cortar lo que tarda en cargar.
+const inicio = Date.now();
+let entra = 0;
 await pagina.goto(`${demo.base}/escenario`);
 await pagina.waitForTimeout(4500);
 const marcos = ["pc", "cel"].map((n) => pagina.frame({ name: n }));
@@ -92,7 +96,10 @@ const rotulo = (texto) =>
 let poster = false;
 for (const [i, [rutaPc, rutaCel, texto]] of ESCENAS.entries()) {
   await Promise.all([ir(marcos[0], rutaPc), ir(marcos[1], rutaCel), rotulo(texto.replace(/^(\S+)/, "<span>$1</span>"))]);
-  if (i === 0) await pagina.evaluate(() => (document.getElementById("portada").style.opacity = "0"));
+  if (i === 0) {
+    await pagina.evaluate(() => (document.getElementById("portada").style.opacity = "0"));
+    entra = Date.now();
+  }
   await pagina.waitForTimeout(1800);
   if (!poster && i === 1) {
     await pagina.screenshot({ path: join(destino, "recorrido.png") });
@@ -108,7 +115,16 @@ const video = pagina.video();
 await contexto.close();
 const final = join(destino, "recorrido.webm");
 rmSync(final, { force: true });
-renameSync(await video.path(), final);
+// La app aparece al segundo: se corta la carga y queda menos de 1 s de portada al empezar
+// (el final también es la portada, así el bucle no se nota).
+const corte = Math.max(0, (entra - inicio) / 1000 - 0.8);
+const ffmpeg = buscarFfmpeg();
+if (ffmpeg && corte > 0) {
+  execFileSync(ffmpeg, ["-y", "-loglevel", "error", "-ss", corte.toFixed(2), "-i", await video.path(), "-an", "-c:v", "libvpx", "-b:v", "1800k", "-crf", "10", final]);
+} else {
+  if (!ffmpeg) process.stdout.write("Sin ffmpeg de Playwright: el video queda con la carga al inicio (npx playwright install ffmpeg).\n");
+  renameSync(await video.path(), final);
+}
 rmSync(temporal, { recursive: true, force: true });
 await navegador.close();
 demo.cerrar();

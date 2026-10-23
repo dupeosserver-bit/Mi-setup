@@ -10,14 +10,14 @@ import {
 } from "../src/index.js";
 
 describe("actualizaciones", () => {
-  it("solo quien no está vinculado a un VPS puede rechazarlas", () => {
-    expect(puedeRechazarActualizaciones(true)).toBe(false);
+  it("todos pueden elegir cómo actualizar (también el dueño del VPS)", () => {
+    expect(puedeRechazarActualizaciones(true)).toBe(true);
     expect(puedeRechazarActualizaciones(false)).toBe(true);
   });
 
-  it("vinculado a un VPS siempre se actualiza solo", () => {
-    expect(modoActualizacionEfectivo("no", true)).toBe("auto");
-    expect(modoActualizacionEfectivo("preguntar", true)).toBe("auto");
+  it("vinculado a un VPS respeta lo que eligió", () => {
+    expect(modoActualizacionEfectivo("no", true)).toBe("no");
+    expect(modoActualizacionEfectivo("preguntar", true)).toBe("preguntar");
   });
 
   it("sin VPS respeta lo elegido y usa auto si no hay nada válido", () => {

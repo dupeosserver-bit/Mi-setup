@@ -591,39 +591,11 @@ function Top({ sp, conectado }: { sp: ReturnType<typeof useSpotify>; conectado: 
   );
 }
 
-function MiniReproductor({ sp }: { sp: ReturnType<typeof useSpotify> }) {
-  const d = sp.estado.data;
-  const c = d?.cancion;
-  if (!c || !d?.conectado) return null;
-  return (
-    <div className="fixed bottom-2.5 left-2.5 right-[76px] z-30 flex items-center gap-2.5 rounded-[18px] border border-white/15 bg-[rgba(28,24,40,0.92)] p-2 pr-2.5 shadow-2xl backdrop-blur-xl safe-bottom">
-      <Portada src={c.portadaChica ?? c.portada} texto={c.nombre} tam={44} />
-      <span className="min-w-0 flex-1">
-        <b className="block truncate text-sm">{c.nombre}</b>
-        <small className="block truncate text-xs" style={{ color: VERDE }}>
-          {d.equipo ? `En: ${d.equipo}` : c.artistas}
-        </small>
-      </span>
-      {sp.puede ? (
-        <>
-          <button type="button" onClick={() => sp.corazon(c.id, !c.guardada)} aria-label={c.guardada ? "Quitar de tu biblioteca" : "Guardar en tu biblioteca"} className={cx("grid h-10 w-10 place-items-center rounded-xl", c.guardada ? "text-[#ff4d8d]" : "text-tenue")}>
-            <Heart className="h-5 w-5" fill={c.guardada ? "currentColor" : "none"} />
-          </button>
-          <button type="button" onClick={() => sp.control.mutate({ accion: d.sonando ? "pause" : "play" })} aria-label={d.sonando ? "Pausar" : "Reproducir"} className="grid h-10 w-10 place-items-center rounded-xl bg-acento text-black">
-            {d.sonando ? <Pause className="h-5 w-5" fill="currentColor" /> : <Play className="h-5 w-5" fill="currentColor" />}
-          </button>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 export default function Musica() {
   const sp = useSpotify();
-  const forma = useForma();
   const conectado = Boolean(sp.estado.data?.conectado);
   return (
-    <div className={cx(forma === "celular" && conectado && "pb-24")}>
+    <div>
       <Encabezado titulo="Música" descripcion="Tu Spotify y tu música en un solo lugar." />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -638,7 +610,6 @@ export default function Musica() {
           </div>
         </div>
       </div>
-      {forma === "celular" ? <MiniReproductor sp={sp} /> : null}
     </div>
   );
 }

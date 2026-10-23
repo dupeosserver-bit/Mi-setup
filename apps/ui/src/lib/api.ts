@@ -6,7 +6,7 @@ import type { LoginResponse, ReauthRequirement } from "@mi-setup/shared";
 import { guardarBlob } from "./guardar";
 import { escritorio } from "./plataforma";
 import { pedirReauth } from "./reauth";
-import { useSesion } from "./sesion";
+import { CLAVE_SESION, useSesion } from "./sesion";
 
 const CLAVE_SERVIDOR = "mi-setup.servidor";
 /** Servidor con el que se compiló la app (vacío en la versión web: usa el mismo sitio). */
@@ -61,7 +61,6 @@ export function origenServidor(texto: string): string | null {
 export const urlServidor = <T extends string | null | undefined>(ruta: T): T => (typeof ruta === "string" && ruta.startsWith("/") ? (`${API_BASE}${ruta}` as T) : ruta);
 
 const CLAVE_SESIONES = "mi-setup.sesiones-por-servidor";
-const CLAVE_SESION = "mi-setup.sesion";
 
 interface SesionGuardada {
   refreshToken: string;

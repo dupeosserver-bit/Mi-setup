@@ -214,10 +214,11 @@ function Previa({ contenido }: { contenido: string }) {
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l && !/^\|?\s*-{3,}/.test(l))
-    .slice(0, 7);
+    .slice(0, 5);
   if (!lineas.length) return <p className="text-xs italic text-tenue">Vacía</p>;
+  // Vista previa corta: la tarjeta queda chica aunque la nota sea larga (se abre para leerla completa).
   return (
-    <div className="space-y-1 text-[13px] leading-snug text-tenue">
+    <div className="max-h-32 space-y-1 overflow-hidden text-[13px] leading-snug text-tenue [mask-image:linear-gradient(to_bottom,black_75%,transparent)]">
       {lineas.map((l, i) => {
         const tarea = /^[-*] \[( |x|X)\]\s*(.*)$/.exec(l);
         if (tarea) {
@@ -225,13 +226,13 @@ function Previa({ contenido }: { contenido: string }) {
           return (
             <p key={i} className="flex items-start gap-1.5">
               <span className={cx("mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded border", hecha ? "border-acento bg-acento" : "border-tenue")} />
-              <span className={cx("min-w-0 break-words", hecha && "line-through opacity-70")}>{tarea[2] || "…"}</span>
+              <span className={cx("line-clamp-1 min-w-0 break-words", hecha && "line-through opacity-70")}>{tarea[2] || "…"}</span>
             </p>
           );
         }
         const texto = l.replace(/^#+\s*/, "").replace(/^[-*>]\s*/, "• ").replace(/[*_|`]/g, "");
         return (
-          <p key={i} className={cx("break-words", /^#/.test(l) && "font-semibold text-texto")}>
+          <p key={i} className={cx("line-clamp-2 break-words", /^#/.test(l) && "font-semibold text-texto")}>
             {texto}
           </p>
         );
@@ -251,7 +252,7 @@ function TarjetaNota({ nota, hijas, alAbrir }: { nota: Nota; hijas: number; alAb
     >
       <b className="mb-1.5 flex items-start gap-1.5 text-sm">
         <span className="shrink-0">{nota.icono ?? "📝"}</span>
-        <span className="min-w-0 break-words">{nota.titulo || "Sin título"}</span>
+        <span className="line-clamp-2 min-w-0 break-words">{nota.titulo || "Sin título"}</span>
         {nota.fijada ? <Pin className="ml-auto h-3.5 w-3.5 shrink-0 text-tenue" /> : null}
       </b>
       <Previa contenido={nota.contenido} />

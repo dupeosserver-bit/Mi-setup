@@ -41,10 +41,12 @@ export function registrarMetricasVps(deps: ModuleDeps, servidores: Servidores): 
         });
       }
       const r = await ejecutar(s.cliente, SCRIPT_METRICAS, { timeoutMs: 10_000, maxBytes: 128 * 1024 });
+      const primera = !s.previa;
       const { metricas, muestra } = parsearMetricas(r.salida, Date.now(), s.previa);
       s.previa = muestra;
       deps.hub.publicar(tema, metricas);
-      s.temporizador = setTimeout(() => void ciclo(id), 3_000);
+      // Procesador e Internet se calculan entre dos lecturas: la segunda va al segundo para no dejar «—».
+      s.temporizador = setTimeout(() => void ciclo(id), primera ? 1_000 : 3_000);
     } catch (err) {
       deps.hub.publicar(tema, { t: Date.now(), error: err instanceof Error ? err.message : "Error al leer métricas" });
       s.cliente?.end();

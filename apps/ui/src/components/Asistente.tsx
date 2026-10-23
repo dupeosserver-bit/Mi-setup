@@ -68,7 +68,7 @@ export function AsistenteFlotante({ modulo, sinBoton = false }: { modulo: Module
         aria-label="IA asistente"
         style={flotante.estilo}
         {...flotante.eventos}
-        className={cx("fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-acento text-black shadow-lg md:bottom-6", flotante.moviendo && "scale-110 ring-4 ring-acento/40")}
+        className={cx("fixed bottom-5 right-[5.5rem] z-40 flex h-12 w-12 items-center justify-center rounded-full bg-acento text-black shadow-lg md:bottom-6 md:right-4", flotante.moviendo && "scale-110 ring-4 ring-acento/40")}
       >
         {abierto ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         {cantidad > 0 && !abierto ? <span className="absolute -right-1 -top-1 rounded-full bg-peligro px-1.5 text-xs font-bold text-white">{cantidad}</span> : null}

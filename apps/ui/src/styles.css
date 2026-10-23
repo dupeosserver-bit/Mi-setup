@@ -6,6 +6,8 @@
 a:not([draggable="true"]),
 img:not([draggable="true"]) {
   -webkit-user-drag: none;
+  /* Celular: mantener presionada una imagen no saca su copia flotante ni el menú del sistema. */
+  -webkit-touch-callout: none;
 }
 
 /* Pósters, tarjetas y botones no se marcan al arrastrar el mouse (los campos y las notas sí). */

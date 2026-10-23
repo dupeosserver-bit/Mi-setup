@@ -5,10 +5,10 @@ export type ModoActualizacion = (typeof MODOS_ACTUALIZACION)[number];
 
 export const esModoActualizacion = (v: unknown): v is ModoActualizacion => typeof v === "string" && (MODOS_ACTUALIZACION as readonly string[]).includes(v);
 
-export const puedeRechazarActualizaciones = (vinculadoVps: boolean): boolean => !vinculadoVps;
+/** Desde 0.11.5b el dueño del VPS también elige (antes se le forzaba «Descargar solas»). */
+export const puedeRechazarActualizaciones = (_vinculadoVps: boolean): boolean => true;
 
-export function modoActualizacionEfectivo(elegido: unknown, vinculadoVps: boolean): ModoActualizacion {
-  if (vinculadoVps) return "auto";
+export function modoActualizacionEfectivo(elegido: unknown, _vinculadoVps: boolean): ModoActualizacion {
   return esModoActualizacion(elegido) ? elegido : "auto";
 }
 

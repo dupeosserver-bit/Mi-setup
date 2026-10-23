@@ -135,6 +135,10 @@ function PrimerServidor() {
           ¿Todavía no tienes Mi Setup?{" "}
           <a href="/instalar" className="underline hover:text-texto">
             Instálalo en tu VPS
+          </a>{" "}
+          o{" "}
+          <a href="/demo/" className="underline hover:text-texto">
+            prueba la demo
           </a>
         </p>
       </form>

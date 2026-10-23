@@ -4961,5 +4961,11 @@
 "Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Aggiornarsi da sola a ogni versione (la precedente resta nella cronologia delle versioni)",
 "No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Impossibile connettersi a {0}. Controlla l'indirizzo e che quel Mi Setup sia acceso.",
 "No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Impossibile connettersi a {0}. Controlla internet e che quel Mi Setup sia acceso.",
-"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify mostra solo i brani delle tue playlist o di quelle collaborative. Questa puoi comunque riprodurla tutta."
+"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify mostra solo i brani delle tue playlist o di quelle collaborative. Questa puoi comunque riprodurla tutta.",
+"Recomendado: «Descargar solas», así la app y tu servidor van a la par.": "Consigliato: «Scarica da sole», così l'app e il server restano allineati.",
+"Ocultar código": "Nascondi codice",
+"Ver código": "Mostra codice",
+"Abrir o guardar": "Apri o salva",
+"Ver foto en grande": "Vedi foto in grande",
+"prueba la demo": "prova la demo"
 }

@@ -150,7 +150,7 @@ function Enviar({ canales }: { canales: CanalDiscord[] }) {
       </Tarjeta>
       <div className="space-y-4">
         <Tarjeta titulo="Así se verá en Discord">
-          <div className="overflow-hidden rounded-xl bg-[#313338] text-sm text-[#dbdee1]">
+          <div className="sin-seleccion overflow-hidden rounded-xl bg-[#313338] text-sm text-[#dbdee1]">
             <div className="flex items-center gap-1.5 border-b border-black/30 px-3 py-2 text-xs text-[#949ba4]">
               <Hash className="h-3.5 w-3.5" />
               {elegido ? `${elegido.nombre} · ${elegido.servidor}` : "elige un canal"}

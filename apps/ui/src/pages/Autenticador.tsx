@@ -1,7 +1,7 @@
 import { usePaginado } from "../components/Paginas";
 import { useMutation } from "@tanstack/react-query";
 import jsQR from "jsqr";
-import { Copy, Dices, Download, ImageUp, Link2, Lock, Plus, QrCode, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { Copy, Dices, Download, Eye, EyeOff, ImageUp, Link2, Lock, Plus, QrCode, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Desbloqueo } from "../components/Desbloqueo";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
@@ -17,6 +17,13 @@ import { usePuede } from "../lib/consultas";
 
 function Codigo({ id, cuenta, puede }: { id: string; cuenta: CuentaTotp; puede: boolean }) {
   const [estado, setEstado] = useState<{ codigo: string; restante: number } | null>(null);
+  // Como Microsoft Authenticator: el código sale oculto y se ve con el ojo (se vuelve a ocultar en 30 s).
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(() => setVisible(false), 30_000);
+    return () => clearTimeout(t);
+  }, [visible]);
   useEffect(() => {
     let vivo = true;
     const tick = () => void codigoTotp(cuenta).then((e) => vivo && setEstado(e)).catch(() => vivo && setEstado(null));
@@ -57,10 +64,13 @@ function Codigo({ id, cuenta, puede }: { id: string; cuenta: CuentaTotp; puede: 
           />
         ) : null}
       </div>
-      <button type="button" onClick={copiar} title="Copiar" className={cx("flex items-center justify-between gap-2 text-left font-mono text-3xl tabular-nums tracking-[0.18em]", poco ? "text-peligro" : "text-texto")}>
-        <span>{estado ? `${estado.codigo.slice(0, mitad)} ${estado.codigo.slice(mitad)}` : "— —"}</span>
-        <Copy className="h-4 w-4 shrink-0 text-tenue" />
-      </button>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={copiar} title="Copiar" className={cx("flex min-w-0 flex-1 items-center justify-between gap-2 text-left font-mono text-3xl tabular-nums tracking-[0.18em]", poco ? "text-peligro" : "text-texto")}>
+          <span>{!estado ? "— —" : visible ? `${estado.codigo.slice(0, mitad)} ${estado.codigo.slice(mitad)}` : `${"•".repeat(mitad)} ${"•".repeat(estado.codigo.length - mitad)}`}</span>
+          <Copy className="h-4 w-4 shrink-0 text-tenue" />
+        </button>
+        <Boton tamano="icono" variante="fantasma" icono={visible ? EyeOff : Eye} aria-label={visible ? "Ocultar código" : "Ver código"} title={visible ? "Ocultar" : "Ver"} onClick={() => setVisible(!visible)} />
+      </div>
       <div className="flex items-center gap-2">
         <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-tarjeta">
           <i className="block h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: poco ? "var(--error)" : "var(--acento)" }} />

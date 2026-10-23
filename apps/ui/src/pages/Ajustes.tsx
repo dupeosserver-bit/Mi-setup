@@ -247,7 +247,8 @@ function Apariencia() {
   const { data: apariencia } = useApariencia();
   const esAdmin = usePuede("ajustes", "administrar");
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="columns-1 gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+      {/* En columnas que se acomodan solas: no queda hueco debajo de «Tema». */}
       <Tarjeta titulo="Tema">
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(TEMAS_APP) as TemaApp[]).map((t) => {
@@ -274,7 +275,6 @@ function Apariencia() {
           })}
         </div>
       </Tarjeta>
-      <div className="space-y-4">
         <Tarjeta titulo="Texto">
           <div className="space-y-4">
             <Campo etiqueta="Fuente">
@@ -410,7 +410,6 @@ function Apariencia() {
             )}
           </div>
         </Tarjeta>
-      </div>
     </div>
   );
 }

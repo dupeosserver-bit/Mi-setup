@@ -13,6 +13,8 @@ Tres instalaciones en el mismo VPS, edición pública sin nada de MexicanLand, p
 | 5 | Botón «Usar en el navegador» en la página oficial → `misetup.mexicanland.net/app`: escribes la dirección de tu Mi Setup, entras y en el celular la agregas a inicio. Cada instalación acepta esa página (variable `APP_WEB_ORIGEN`). |
 | 6 | Cierre: «Qué hay de nuevo», documentos, pruebas y versión 0.11.5b (Android `versionCode` 15). Los sitios ya no pueden llamarse `test` ni `pruebas`. |
 | 7 | Arreglos después de probarla: en la app de PC se cambia de servidor desde el inicio de sesión y Ajustes (antes solo desde Archivo copiando la dirección). Antes de cambiar se revisa que el otro Mi Setup conteste, y «Failed to fetch» ahora dice en español con qué servidor no se pudo conectar. El celular solo ofrece actualizar si el APK que se baja es más nuevo (antes anunciaba 0.11.5b y bajaba el 0.11.4b). La página oficial se pone al día sola con cada versión aunque esté publicada (lo de antes queda en el historial; se apaga en Sitios → Ajustes → «Actualizar sola»). |
+| 8 | Segunda ronda de arreglos: páginas de 5 en 5 que caben en su tarjeta; Juegos gratis de 12 en 12; códigos 2FA ocultos con botón de ojo; fotos del chat en grande; avisos que ya no se salen de su tarjeta; Procesador e Internet al segundo en Rendimiento; Apariencia sin hueco; elegir cómo actualizar también en la app vinculada al VPS; notas en tarjetas chicas; sin barra de abajo en Música del celular y el botón de IA al lado del +; aviso de versión que se queda cerrado; video de la página sin la espera del inicio y con el celular a un lado; /app ya no abre con la sesión de la demo y ofrece la demo. Android `versionCode` 16. |
+
 
 ## Memoria (RAM) de cada instalación
 

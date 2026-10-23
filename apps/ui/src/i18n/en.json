@@ -4961,5 +4961,11 @@
 "Actualizar sola con cada versión (lo de antes queda en el historial de versiones)": "Update by itself with each version (the previous one stays in the version history)",
 "No se pudo conectar con {0}. Revisa la dirección y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check the address and that this Mi Setup is running.",
 "No se pudo conectar con {0}. Revisa tu internet y que ese Mi Setup esté encendido.": "Couldn't connect to {0}. Check your internet and that this Mi Setup is running.",
-"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify only shows the songs of your own or collaborative playlists. You can still play this one in full."
+"Spotify solo deja ver las canciones de tus playlists o de las colaborativas. Esta sí la puedes reproducir completa.": "Spotify only shows the songs of your own or collaborative playlists. You can still play this one in full.",
+"Recomendado: «Descargar solas», así la app y tu servidor van a la par.": "Recommended: “Download automatically”, so the app and your server stay in sync.",
+"Ocultar código": "Hide code",
+"Ver código": "Show code",
+"Abrir o guardar": "Open or save",
+"Ver foto en grande": "View photo full size",
+"prueba la demo": "try the demo"
 }

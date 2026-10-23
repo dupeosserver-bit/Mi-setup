@@ -36,7 +36,14 @@ export function useHayVersionNueva(): boolean {
 export function AvisoActualizacion() {
   const q = useActualizacion();
   const { efectivo } = useModoActualizacion();
-  const [cerrado, setCerrado] = useState(false);
+  // Cerrado para esa versión: no vuelve a salir arriba hasta que haya una más nueva.
+  const [cerradoEn, setCerradoEn] = useState(() => {
+    try {
+      return localStorage.getItem("mi-setup.aviso-actualizacion-cerrado") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const apk = q.data?.apk;
   const version = q.data?.version ?? "";
   const nueva = Boolean(apk) && q.data !== undefined && compararVersiones(version, __VERSION_APP__) > 0;
@@ -45,7 +52,7 @@ export function AvisoActualizacion() {
     marcarDescargada(version);
     abrirExterno(absoluta(apk.url));
   }, [nueva, apk, efectivo, version]);
-  if (!esMovil() || !nueva || cerrado || !apk || !q.data || efectivo === "no") return null;
+  if (!esMovil() || !nueva || cerradoEn === version || !apk || !q.data || efectivo === "no") return null;
   return (
     <div className="flex items-center gap-2 border-b px-4 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--acento) 40%, transparent)", background: "color-mix(in srgb, var(--acento) 10%, transparent)" }}>
       <Download className="h-4 w-4 shrink-0 text-acento" />
@@ -62,7 +69,14 @@ export function AvisoActualizacion() {
       >
         Actualizar
       </Boton>
-      <button type="button" aria-label="Cerrar aviso" className="p-1 text-tenue" onClick={() => setCerrado(true)}>
+      <button type="button" aria-label="Cerrar aviso" className="p-1 text-tenue" onClick={() => {
+          setCerradoEn(version);
+          try {
+            localStorage.setItem("mi-setup.aviso-actualizacion-cerrado", version);
+          } catch {
+            /* sin almacenamiento: solo se cierra por ahora */
+          }
+        }}>
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -114,7 +128,7 @@ export function SeccionActualizaciones() {
           );
         })}
       </div>
-      {vinculado ? <p className="text-xs text-tenue">Tu app está vinculada a tu VPS: se actualiza siempre sola para que la app y el servidor vayan a la par.</p> : null}
+      {vinculado ? <p className="text-xs text-tenue">Recomendado: «Descargar solas», así la app y tu servidor van a la par.</p> : null}
       <div className="flex flex-wrap gap-2">
         <Boton
           tamano="sm"

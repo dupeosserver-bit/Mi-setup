@@ -167,9 +167,10 @@ export function FaltaConfigurar({ variable, detalle }: { variable: string; detal
   // La demo no tiene servidor: pedir claves del .env ahí solo confunde.
   if (import.meta.env.VITE_DEMO === "1") return null;
   return (
-    <div className="flex items-start gap-3 rounded-tarjeta border border-aviso/40 bg-aviso/10 p-4 text-sm">
+    <div className="flex min-w-0 max-w-full items-start gap-3 rounded-tarjeta border border-aviso/40 bg-aviso/10 p-4 text-sm">
       <Settings2 className="mt-0.5 h-4 w-4 shrink-0 text-aviso" />
-      <div>
+      {/* Los nombres largos (GOOGLE_CLIENT_ID…) se parten: el aviso no se sale de su tarjeta. */}
+      <div className="min-w-0 [overflow-wrap:anywhere]">
         <p className="font-medium text-aviso">Falta configurar: {variable}</p>
         <p className="mt-1 text-tenue">
           {detalle ?? "Agrega esta variable al archivo .env del servidor y vuelve a desplegar. Consulta docs/USO.md."}
@@ -185,9 +186,9 @@ export function ErrorCaja({ error }: { error: unknown }) {
     return <FaltaConfigurar variable={String(error.datos?.["variable"] ?? error.message.replace("Falta configurar: ", ""))} />;
   }
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-peligro/40 bg-peligro/10 px-3 py-2 text-sm text-peligro">
+    <div className="flex min-w-0 max-w-full items-start gap-2 rounded-xl border border-peligro/40 bg-peligro/10 px-3 py-2 text-sm text-peligro">
       <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{mensajeDeError(error)}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{mensajeDeError(error)}</span>
     </div>
   );
 }

@@ -5,9 +5,10 @@
  * Playwright se busca en este orden: la variable PLAYWRIGHT (carpeta del paquete),
  * el proyecto y la instalación global de @playwright/cli.
  */
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, extname, join, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,19 @@ export function cargarPlaywright() {
   }
   process.stderr.write("No encuentro Playwright. Instálalo con: npm i -g @playwright/cli && npx playwright install chromium ffmpeg\n");
   process.exit(1);
+}
+
+/** El ffmpeg que trae Playwright (para cortar el video); null si no está. */
+export function buscarFfmpeg() {
+  if (process.env.FFMPEG && existsSync(process.env.FFMPEG)) return process.env.FFMPEG;
+  const raices = [process.env.PLAYWRIGHT_BROWSERS_PATH, process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "ms-playwright"), join(homedir(), ".cache", "ms-playwright"), join(homedir(), "Library", "Caches", "ms-playwright")];
+  for (const raiz of raices) {
+    if (!raiz || !existsSync(raiz)) continue;
+    for (const d of readdirSync(raiz).filter((n) => n.startsWith("ffmpeg-"))) {
+      for (const exe of ["ffmpeg-win64.exe", "ffmpeg-linux", "ffmpeg-mac"]) if (existsSync(join(raiz, d, exe))) return join(raiz, d, exe);
+    }
+  }
+  return null;
 }
 
 const TIPOS = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
