@@ -3,7 +3,7 @@
  * ayuda de la app (apps/ui/src/lib/ayuda.ts), solo con los apartados de la
  * edición pública y sin mencionar cosas de la edición personal.
  *
- *   pnpm --filter @mi-setup/core exec tsx scripts/wiki-sitio.ts
+ *   pnpm --filter @mi-setup/core exec tsx --conditions=development scripts/wiki-sitio.ts
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

@@ -7,10 +7,10 @@ Mi Setup se instala en tu propio VPS y lo usas desde la **PC (Windows)**, el **c
 > Versión actual: **0.11.4b** · Código abierto (MIT) · Guía completa en [`docs/USO.md`](docs/USO.md)
 
 <p align="center">
-  <img src="apps/core/sitio-oficial/capturas/finanzas.png" alt="Mis finanzas en la PC" width="68%">
-  &nbsp;
-  <img src="apps/core/sitio-oficial/capturas/notas-celular.png" alt="Notas en el celular" width="22%">
+  <img src="apps/core/sitio-oficial/video/recorrido.png" alt="Mi Setup en la PC y en el celular" width="100%">
 </p>
+
+> 🎬 En la [página oficial](https://misetup.mexicanland.net) hay un video del recorrido y la app para usar en el navegador, sin descargar nada.
 
 > 🤖 **Hecho con inteligencia artificial.** El código de Mi Setup fue escrito con ayuda de IA (Claude). El autor no pide créditos por él. Este es el repositorio **oficial**: descarga solo desde aquí o desde la página oficial, que tiene una **demo en vivo** (datos de ejemplo, nada se guarda), una **wiki** y la **comunidad**.
 

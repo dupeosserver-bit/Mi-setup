@@ -141,16 +141,6 @@
      "«Respaldos automáticos»: elige qué, cada día o cada semana, la hora y cuántos guardar; los viejos se borran solos."
     ],
     "nota": "Un respaldo en el mismo VPS no te salva si el VPS se pierde: descarga los importantes a tu PC."
-   },
-   {
-    "id": "vps-agentes",
-    "titulo": "Agentes de IA",
-    "pasos": [
-     "Elige tu servidor y toca «Instalar» en el agente que quieras (Claude Code, Gemini CLI, Aider, Llama o Qwen locales, Open WebUI, n8n…). Se pide tu contraseña o huella y escribir el nombre del servidor.",
-     "Los de terminal se usan en VPS → Terminal (ej. «claude»). Los paneles web quedan en 127.0.0.1: ábrelos con un túnel SSH o un subdominio.",
-     "Abajo buscas más en GitHub por páginas; «Instalar con ayuda de la IA» le pide a la IA que revise el proyecto y te proponga los comandos para aprobarlos."
-    ],
-    "nota": "Revisa la RAM antes de instalar varios; los modelos locales piden de 3 a 6 GB."
    }
   ]
  },
@@ -179,6 +169,13 @@
     "pasos": [
      "Anota ingresos y gastos con categoría.",
      "Las gráficas muestran el resultado por mes y por categoría."
+    ]
+   },
+   {
+    "id": "negocio",
+    "titulo": "Mejoras del negocio",
+    "pasos": [
+     "Guarda ideas y mejoras para tu negocio con su estado (pendiente, en proceso, hecho)."
     ]
    }
   ]
@@ -388,7 +385,9 @@
      "Bloques de Mi Setup: producto con carrito (pedidos por WhatsApp), lista desde tabla, formulario, contador, clima, último video, en vivo, estado de servidores e inicio de sesión.",
      "Imágenes: sube fotos (se optimizan solas), recórtalas, quítales el fondo o créalas con IA. Datos: tablas tipo Excel que el sitio muestra solo.",
      "Publicar: los visitantes ven lo nuevo solo al tocar Publicar. Cada publicación queda en el historial por si quieres regresar.",
-     "Mensajes y pedidos, estadísticas y cuentas del área privada están en sus pestañas; en Ajustes: dominio propio, SEO, app instalable, quién puede editar y exportar en ZIP."
+     "Mensajes y pedidos, estadísticas y cuentas del área privada están en sus pestañas; en Ajustes: dominio propio, SEO, app instalable, quién puede editar y exportar en ZIP.",
+     "«Importar sitio»: sube un sitio exportado de otro Mi Setup o uno que ya tengas hecho (.zip con sus páginas .html o un .html suelto). Llega como borrador, sin publicar.",
+     "Comunidad (Ajustes del sitio): los visitantes suben proyectos (enlace de GitHub o .zip) y comentan, con su nombre o como anónimos. Se bloquean groserías, tu nombre oficial queda reservado y cada archivo se revisa con antivirus; en la pestaña «Comunidad» apruebas, rechazas y respondes como oficial."
     ],
     "nota": "Subdominios: pon tu token de Cloudflare en Ajustes → Servicios y claves y, en la tarjeta «¿Abre desde internet?» del sitio, crea el registro DNS por ti. Plantilla «Tienda de hosting»: vende planes y cada pedido se vuelve cliente con cobro."
    }
@@ -477,6 +476,16 @@
      "«Detector de IA»: pega un texto y te dice qué tan probable es que lo haya escrito una IA y qué frases lo delatan.",
      "«Hacer más natural»: reescribe tu texto para que suene como lo dirías tú, sin cambiar lo que dice."
     ]
+   },
+   {
+    "id": "vps-agentes",
+    "titulo": "Agentes de IA",
+    "pasos": [
+     "Elige tu servidor y toca «Instalar» en el agente que quieras (Claude Code, Gemini CLI, Aider, Llama o Qwen locales, Open WebUI, n8n…). Se pide tu contraseña o huella y escribir el nombre del servidor.",
+     "Los de terminal se usan en VPS → Terminal (ej. «claude»). Los paneles web quedan en 127.0.0.1: ábrelos con un túnel SSH o un subdominio.",
+     "Abajo buscas más en GitHub por páginas; «Instalar con ayuda de la IA» le pide a la IA que revise el proyecto y te proponga los comandos para aprobarlos."
+    ],
+    "nota": "Revisa la RAM antes de instalar varios; los modelos locales piden de 3 a 6 GB."
    }
   ]
  },
@@ -490,7 +499,9 @@
      "Cuenta: nombre, foto, contraseña y tus servidores de Mi Setup (cambia entre ellos sin volver a entrar).",
      "Apariencia: tema, fondo (y uno para la PC), cómo se acomoda la imagen y los botones flotantes del celular.",
      "Mis claves: pon tus propias claves de IA, Gemini, TMDB o CurseForge y decide si las compartes (con aviso).",
-     "Servicios y claves (cuenta maestra o con permiso): las claves de API del servidor."
+     "Servicios y claves (cuenta maestra o con permiso): las claves de API del servidor.",
+     "Idioma: español, inglés, portugués, francés, alemán o italiano (también se elige al entrar).",
+     "Letras más legibles (Apariencia): contraste de las explicaciones, color de las letras y sombra suave, para leer bien encima del fondo de pantalla."
     ]
    }
   ]

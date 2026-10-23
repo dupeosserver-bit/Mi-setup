@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @mi-setup/core --filter @mi-setup/ui dev",
     "branding": "node scripts/branding.mjs",
+    "al-dia": "node scripts/al-dia.mjs",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
