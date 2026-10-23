@@ -143,3 +143,54 @@ export function descargaPermitida(url: string): boolean {
     return false;
   }
 }
+
+export function nombreBlueprintAceptado(nombre: string): boolean {
+  const base = nombre.trim().split(/[\\/]/).pop() ?? "";
+  const punto = base.lastIndexOf(".");
+  if (punto <= 0) return true;
+  return /^\.(blueprint|zip)$/i.test(base.slice(punto));
+}
+
+export function repoDeExtension(e: Pick<ExtensionTienda, "id" | "pagina">): string | null {
+  if (e.id.startsWith("gh:")) return e.id.slice(3);
+  const m = /^https:\/\/github\.com\/([\w.-]{1,100})\/([\w.-]{1,100})(?:\/|$|\.git)/.exec(e.pagina);
+  return m ? `${m[1]}/${m[2]!.replace(/\.git$/, "")}` : null;
+}
+
+export type Resolutor = (repo: string) => Promise<string | null | undefined>;
+
+export async function soloDescargables(lista: ExtensionTienda[], resolver: Resolutor, opciones: { limite?: number; simultaneas?: number } = {}): Promise<{ extensiones: ExtensionTienda[]; incompleta: boolean }> {
+  const candidatas = lista.slice(0, opciones.limite ?? 60);
+  const salida: (ExtensionTienda | null)[] = new Array(candidatas.length).fill(null);
+  let incompleta = lista.length > candidatas.length;
+  let siguiente = 0;
+  const trabajar = async () => {
+    while (siguiente < candidatas.length) {
+      const i = siguiente++;
+      const e = candidatas[i]!;
+      if (e.descarga) {
+        salida[i] = e;
+        continue;
+      }
+      const repo = repoDeExtension(e);
+      if (!repo) continue;
+      const url = await resolver(repo).catch(() => undefined);
+      if (url === undefined) incompleta = true;
+      if (url) salida[i] = { ...e, descarga: url };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, opciones.simultaneas ?? 6) }, trabajar));
+  return { extensiones: salida.filter((e): e is ExtensionTienda => e !== null), incompleta };
+}
+
+const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[^a-z0-9]/g, "");
+
+export function marcarInstaladas<T extends Pick<ExtensionTienda, "id" | "nombre">>(lista: T[], mapa: Record<string, string>, instaladas: { id: string; nombre: string }[]): (T & { instalada: boolean })[] {
+  const ids = new Set(instaladas.map((e) => e.id.toLowerCase()));
+  const nombres = new Set(instaladas.flatMap((e) => [normalizar(e.id), normalizar(e.nombre)]).filter(Boolean));
+  return lista.map((e) => {
+    const identificador = mapa[e.id];
+    const instalada = (identificador !== undefined && ids.has(identificador.toLowerCase())) || nombres.has(normalizar(e.nombre));
+    return { ...e, instalada };
+  });
+}

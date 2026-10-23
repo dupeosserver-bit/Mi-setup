@@ -13,7 +13,8 @@ import { clientInfo, type ModuleDeps } from "./common.js";
 import type { PteroClient } from "./ptero.js";
 import type { Servidores } from "./vps/servidores.js";
 import { randomBytes } from "node:crypto";
-import { MAX_BLUEPRINT, compatibilidad, descargaPermitida, interpretarGithub, interpretarTiendaOficial, revisarBlueprint, type ExtensionTienda, type InfoBlueprint } from "./blueprint-tienda.js";
+import { MAX_BLUEPRINT, compatibilidad, descargaPermitida, interpretarGithub, interpretarTiendaOficial, marcarInstaladas, nombreBlueprintAceptado, revisarBlueprint, soloDescargables, type ExtensionTienda, type InfoBlueprint } from "./blueprint-tienda.js";
+import { getSetting, setSetting } from "./settings.js";
 import { conCache } from "./novedades.js";
 import { pedirJson } from "./redes/oauth.js";
 import { abrirSftp, citar, ejecutar } from "./vps/ssh.js";
@@ -324,13 +325,15 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
     });
 
     // ---- instalar: primero se revisa el archivo (subido o bajado de la tienda) y luego se confirma
-    const revisados = new Map<string, { buf: Buffer; info: InfoBlueprint; vence: number }>();
-    const guardarRevisado = (buf: Buffer, info: InfoBlueprint) => {
+    const revisados = new Map<string, { buf: Buffer; info: InfoBlueprint; vence: number; tiendaId: string | null }>();
+    const guardarRevisado = (buf: Buffer, info: InfoBlueprint, tiendaId: string | null) => {
       for (const [k, v] of revisados) if (v.vence < Date.now()) revisados.delete(k);
       const token = randomBytes(18).toString("base64url");
-      revisados.set(token, { buf, info, vence: Date.now() + 15 * 60_000 });
+      revisados.set(token, { buf, info, vence: Date.now() + 15 * 60_000, tiendaId });
       return token;
     };
+    const CLAVE_TIENDA = "blueprint-tienda-instaladas";
+    const mapaTienda = async () => (await getSetting<Record<string, string>>(deps.db, CLAVE_TIENDA)) ?? {};
 
     /** Baja un .blueprint solo de GitHub o de la página oficial, revisando cada redirección. */
     async function bajarBlueprint(url: string): Promise<Buffer> {
@@ -351,6 +354,14 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
       throw new HttpError(502, "Demasiadas redirecciones");
     }
 
+    async function descargaDeRepo(repo: string): Promise<string | null> {
+      const r = await pedirJson<{ assets?: { name: string; browser_download_url: string }[] }>("GitHub", `https://api.github.com/repos/${repo}/releases/latest`, { headers: { accept: "application/vnd.github+json" } }).catch((err: unknown) => {
+        if (err instanceof HttpError && /respondió 404/.test(err.message)) return { assets: [] };
+        throw err;
+      });
+      return r.assets?.find((a) => a.name.toLowerCase().endsWith(".blueprint") && descargaPermitida(a.browser_download_url))?.browser_download_url ?? null;
+    }
+
     /** Busca el .blueprint en la última versión publicada de un repositorio de GitHub. */
     async function blueprintDeRepo(repo: string): Promise<string> {
       const r = await pedirJson<{ assets?: { name: string; browser_download_url: string }[] }>("GitHub", `https://api.github.com/repos/${repo}/releases/latest`, { headers: { accept: "application/vnd.github+json" } }).catch(() => ({ assets: [] }));
@@ -365,15 +376,23 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
 
     app.post("/api/ptero/admin/blueprint/revisar", { ...leer, bodyLimit: MAX_BLUEPRINT + 1024 * 1024 }, async (request) => {
       let buf: Buffer;
+      let tiendaId: string | null = null;
       if (request.isMultipart()) {
         const archivo = await request.file({ limits: { fileSize: MAX_BLUEPRINT, files: 1 } });
         if (!archivo) throw new HttpError(400, "Elige el archivo .blueprint");
+        if (!nombreBlueprintAceptado(archivo.filename)) {
+          archivo.file.resume();
+          throw new HttpError(400, `«${archivo.filename}» no es un archivo .blueprint`);
+        }
         buf = await archivo.toBuffer();
         if (archivo.file.truncated) throw new HttpError(413, "La extensión pasa de 50 MB");
       } else {
-        const d = z.object({ url: z.string().url().max(500).optional(), repo: z.string().regex(/^[\w.-]{1,100}\/[\w.-]{1,100}$/).optional() }).parse(request.body);
+        const d = z
+          .object({ url: z.string().url().max(500).optional(), repo: z.string().regex(/^[\w.-]{1,100}\/[\w.-]{1,100}$/).optional(), tiendaId: z.string().max(220).optional() })
+          .parse(request.body);
         if (!d.url && !d.repo) throw new HttpError(400, "Falta el archivo o la extensión");
         buf = await bajarBlueprint(d.url ?? (await blueprintDeRepo(d.repo!)));
+        tiendaId = d.tiendaId ?? null;
       }
       const info = revisarBlueprint(buf);
       const { servidorId } = z.object({ servidorId: z.string().uuid().optional() }).parse(request.query);
@@ -381,7 +400,7 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
       const r = await servidores.usar(s.id, (c) => ejecutar(c, SCRIPT_EXTENSIONES, { timeoutMs: 20_000 }));
       const estado = leerExtensiones(r.salida);
       return {
-        token: guardarRevisado(buf, info),
+        token: guardarRevisado(buf, info, tiendaId),
         info,
         tamano: buf.length,
         blueprint: estado.blueprint,
@@ -415,6 +434,7 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
       const despues = await servidores.usar(s.id, (c) => ejecutar(c, SCRIPT_EXTENSIONES, { timeoutMs: 20_000 }));
       const quedo = leerExtensiones(despues.salida).extensiones.some((e) => e.id === id);
       await auditar(request, "ptero_blueprint_instalada", id, { version: revisado.info.version, quedo });
+      if (quedo && revisado.tiendaId) await setSetting(deps.db, CLAVE_TIENDA, { ...(await mapaTienda()), [revisado.tiendaId]: id }, deps.now());
       if (!quedo) throw new HttpError(502, `Blueprint no instaló ${revisado.info.nombre}: ${salida.trim().split("\n").slice(-3).join(" ").slice(0, 300)}`);
       return { ok: true, salida };
     });
@@ -422,7 +442,12 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
     // ---- tienda: extensiones gratis de la página oficial y de GitHub, con páginas
     app.get("/api/ptero/admin/blueprint/tienda", leer, async (request) => {
       const q = z
-        .object({ q: z.string().trim().max(60).default(""), origen: z.enum(["todas", "blueprint", "github"]).default("todas"), pagina: z.coerce.number().int().min(1).max(30).default(1) })
+        .object({
+          q: z.string().trim().max(60).default(""),
+          origen: z.enum(["todas", "blueprint", "github"]).default("todas"),
+          pagina: z.coerce.number().int().min(1).max(30).default(1),
+          instaladas: z.string().max(4000).default(""),
+        })
         .parse(request.query);
       const avisos: string[] = [];
       const oficial =
@@ -444,21 +469,28 @@ export function pteroAdminRoutes(deps: ModuleDeps, ptero: PteroClient, servidore
             });
       const filtro = q.q.toLowerCase();
       const todas = [...oficial.filter((e) => !filtro || `${e.nombre} ${e.resumen} ${e.autor}`.toLowerCase().includes(filtro)), ...github].sort((a, b) => b.popularidad - a.popularidad);
+      const { extensiones: descargables, incompleta } = await soloDescargables(todas, (repo) => conCache(`blueprint-descarga:${repo}`, 24 * 60 * 60_000, () => descargaDeRepo(repo)));
+      if (incompleta) avisos.push("Faltan extensiones por revisar (GitHub limita las consultas); vuelve en un rato para ver más.");
       const porPagina = 12;
-      // Recomendadas: las más usadas y con cambios en el último año.
       const haceUnAnio = Date.now() - 365 * 86_400_000;
       const recomendadas = new Set(
-        todas
+        descargables
           .filter((e) => !e.actualizada || Date.parse(e.actualizada) > haceUnAnio)
           .slice(0, 5)
           .map((e) => e.id),
       );
+      const instaladas = q.instaladas
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .map((x) => ({ id: x, nombre: x }));
+      const pagina = marcarInstaladas(descargables.slice((q.pagina - 1) * porPagina, q.pagina * porPagina), await mapaTienda(), instaladas);
       return {
-        total: todas.length,
-        paginas: Math.max(1, Math.ceil(todas.length / porPagina)),
+        total: descargables.length,
+        paginas: Math.max(1, Math.ceil(descargables.length / porPagina)),
         pagina: q.pagina,
         avisos,
-        extensiones: todas.slice((q.pagina - 1) * porPagina, q.pagina * porPagina).map((e) => ({ ...e, recomendada: recomendadas.has(e.id) })),
+        extensiones: pagina.map((e) => ({ ...e, recomendada: recomendadas.has(e.id) })),
       };
     });
   };
