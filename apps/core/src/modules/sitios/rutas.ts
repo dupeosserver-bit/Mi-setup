@@ -21,7 +21,7 @@ import { carpetaArchivos } from "../herramientas.js";
 import { generarConGemini } from "../imagenes.js";
 import { calcularCosto, clienteAnthropic, clienteOllama, type ClienteIa } from "../ia/servicio.js";
 import { SLUG_VALIDO, SLUGS_RESERVADOS, type DetectorSitios } from "./detector.js";
-import { armarPagina, type AjustesSitio, type PaginaPublicada } from "./publico.js";
+import { armarPagina, VIDEO_EN_LINEA, type AjustesSitio, type PaginaPublicada } from "./publico.js";
 import { RUNTIME } from "./runtime.js";
 import type { ServicioComunidad } from "./comunidad.js";
 import { actualizarSitioOficial, SLUG_OFICIAL } from "./oficial.js";
@@ -278,7 +278,7 @@ export function sitiosRoutes(deps: ModuleDeps, detector: DetectorSitios, cliente
       if (!a) throw new HttpError(404, "No encontrado");
       const datos = await readFile(join(dirSitio(id), a.storedName)).catch(() => null);
       if (!datos) throw new HttpError(404, "No encontrado");
-      if (!TIPOS_IMAGEN.test(a.mime)) reply.header("content-disposition", `attachment; filename="${a.name.replace(/[^\w. -]/g, "_")}"`);
+      if (!TIPOS_IMAGEN.test(a.mime) && !VIDEO_EN_LINEA.test(a.mime)) reply.header("content-disposition", `attachment; filename="${a.name.replace(/[^\w. -]/g, "_")}"`);
       return reply.type(a.mime).header("cache-control", "public, max-age=86400").header("x-content-type-options", "nosniff").send(datos);
     });
 

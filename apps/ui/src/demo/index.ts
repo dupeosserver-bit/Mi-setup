@@ -4,6 +4,7 @@
  * datos de ejemplo); nada se guarda y no hay ningún VPS detrás.
  */
 import { MODULE_IDS, type ModuleId } from "@mi-setup/shared";
+import { VERSION_NOVEDADES } from "../components/QueHayDeNuevo";
 import { useSesion } from "../lib/sesion";
 import datos from "./datos.json";
 
@@ -62,7 +63,8 @@ export function activarDemo(): void {
   try {
     const id = (u as { id: string }).id;
     localStorage.setItem(`mi-setup.tutorial.${id}`, "1");
-    localStorage.setItem(`mi-setup.tutorial.${id}.0.11.2b`, "1");
+    // Las novedades de la versión no tapan la demo (ni el video de la página oficial).
+    localStorage.setItem(`mi-setup.tutorial.${id}.${VERSION_NOVEDADES}`, "1");
   } catch {
     /* sin almacenamiento */
   }

@@ -4,7 +4,8 @@
  * funciones, descargas, instalar, wiki, demo y comunidad.
  *
  * - Todo lo que dice es de la edición pública (nada de la edición personal).
- * - Las capturas salen de la demo (datos de ejemplo): apps/ui/scripts/capturas-sitio.mjs.
+ * - Las capturas y el video del inicio salen de la demo (datos de ejemplo):
+ *   apps/ui/scripts/capturas-sitio.mjs y apps/ui/scripts/grabar-video.mjs.
  * - La wiki sale de la ayuda de la app: scripts/wiki-sitio.ts.
  * - Con cada versión nueva se vuelve a generar, solo si nadie lo editó.
  */
@@ -72,6 +73,9 @@ h2{font-size:clamp(26px,4vw,36px);margin:0 0 8px}
 .ventana{border-radius:16px;border:1px solid #252b37;background:#111;overflow:hidden;box-shadow:0 30px 80px -24px rgba(124,92,255,.45)}
 .ventana .barra{height:28px;background:#181a22;display:flex;align-items:center;gap:6px;padding:0 12px}
 .ventana .barra i{width:10px;height:10px;border-radius:50%;background:#ffffff30}
+.recorrido{margin-top:44px;border-radius:18px;overflow:hidden;border:1px solid #252b37;background:#0b0d12;box-shadow:0 30px 80px -24px rgba(124,92,255,.45)}
+.recorrido video,.recorrido img{width:100%;height:auto;aspect-ratio:16/9;display:block}
+.heroe-texto{max-width:760px}
 .telefono{border:8px solid #222633;border-radius:34px;overflow:hidden;max-width:240px;margin:0 auto}
 .galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
 .pie-foto{text-align:center;color:#98a2b6;font-size:13px;margin-top:8px}
@@ -132,6 +136,13 @@ const ventana = (src: string, alt: string) => `<div class="ventana"><div class="
 const CAPTURA_TEMA: Record<string, string> = { "finanzas-personales": "finanzas", notas: "notas", calendario: "calendario", sitios: "sitios", "editor-fotos": "editor-fotos", herramientas: "herramientas", ia: "ia" };
 
 export function armarSitioOficial(img: (nombre: string) => string | null, wiki: Wiki, version: string) {
+  // El inicio enseña el video del recorrido (PC y celular); sin video, la captura de siempre.
+  const recorrido = () => {
+    const src = img("recorrido");
+    if (!src) return "";
+    const poster = img("recorrido-foto");
+    return `<div class="recorrido"><video src="${src}"${poster ? ` poster="${poster}"` : ""} autoplay muted loop playsinline preload="metadata" aria-label="Recorrido de Mi Setup en la PC y en el celular"></video></div>`;
+  };
   const foto = (n: string, alt: string) => {
     const src = img(n);
     return src ? ventana(src, alt) : "";
@@ -143,11 +154,11 @@ export function armarSitioOficial(img: (nombre: string) => string | null, wiki: 
   const tarjeta = (icono: string, titulo: string, texto: string) => `<div class="tarjeta"><div class="icono">${icono}</div><h3>${titulo}</h3><p>${texto}</p></div>`;
 
   const paginas: Record<IdPagina, string> = {
-    inicio: `<div class="heroe"><div><span class="etiqueta">Código abierto · MIT · v${esc(version)}</span>
+    inicio: `${img("recorrido") ? `<div class="heroe-texto">` : `<div class="heroe"><div>`}<span class="etiqueta">Código abierto · MIT · v${esc(version)}</span>
 <h1>Tu servidor, tus apps y tu día <span>en un solo lugar</span></h1>
 <p class="sub">Mi Setup se instala en tu propio VPS y lo usas desde la PC, el celular o el navegador: terminal, archivos, sitios web, finanzas, notas e IA. Tus datos se quedan contigo.</p>
 <div class="fila" style="margin-top:24px"><a class="boton primario" href="/descargas">⬇ Descargar gratis</a><a class="boton" href="/demo-en-vivo">Probar la demo</a></div></div>
-<div>${foto("inicio", "Inicio de Mi Setup en la PC")}</div></div>
+${img("recorrido") ? recorrido() : `<div>${foto("inicio", "Inicio de Mi Setup en la PC")}</div></div>`}
 <div class="rejilla" style="margin-top:70px">
 ${tarjeta("🔒", "Privado de verdad", "Corre en tu VPS. Contraseñas cifradas, 2FA, huella y avisos de inicio de sesión.")}
 ${tarjeta("📱", "PC, celular y web", "App de Windows, app de Android y navegador, todo sincronizado.")}
@@ -297,7 +308,14 @@ export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
   await setSetting(db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
 }
 
-const IMAGENES = ["logo", "inicio", "finanzas", "notas", "calendario", "ia", "sitios", "herramientas", "editor-fotos", "finanzas-celular", "notas-celular"];
+const CAPTURAS = ["inicio", "finanzas", "notas", "calendario", "ia", "sitios", "herramientas", "editor-fotos", "finanzas-celular", "notas-celular"];
+/** Archivos del sitio: [nombre, ruta dentro de sitio-oficial, tipo]. */
+const ARCHIVOS: [string, string, string][] = [
+  ["logo", "logo.png", "image/png"],
+  ...CAPTURAS.map((n): [string, string, string] => [n, `capturas/${n}.png`, "image/png"]),
+  ["recorrido", "video/recorrido.webm", "video/webm"],
+  ["recorrido-foto", "video/recorrido.png", "image/png"],
+];
 const rutaDe = (nombre: string, i: number) =>
   i === 0
     ? "/"
@@ -314,11 +332,12 @@ async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSele
   await mkdir(dir, { recursive: true });
   const previas = await db.select().from(siteAssets).where(eq(siteAssets.siteId, sitio.id));
   const ids = new Map<string, string>();
-  for (const nombre of IMAGENES) {
-    const ruta = nombre === "logo" ? join(CARPETA_OFICIAL, "logo.png") : join(CARPETA_OFICIAL, "capturas", `${nombre}.png`);
+  for (const [nombre, relativa, mime] of ARCHIVOS) {
+    const ruta = join(CARPETA_OFICIAL, relativa);
     if (!existsSync(ruta)) continue;
     const datos = readFileSync(ruta);
-    const previa = previas.find((a) => a.name === `${nombre}.png`);
+    const archivo = `${nombre}${relativa.slice(relativa.lastIndexOf("."))}`;
+    const previa = previas.find((a) => a.name === archivo);
     if (previa) {
       await writeFile(join(dir, previa.storedName), datos);
       await db.update(siteAssets).set({ size: datos.length }).where(eq(siteAssets.id, previa.id));
@@ -326,7 +345,7 @@ async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSele
     } else {
       const interno = crypto.randomUUID();
       await writeFile(join(dir, interno), datos);
-      const [a] = await db.insert(siteAssets).values({ siteId: sitio.id, name: `${nombre}.png`, storedName: interno, mime: "image/png", size: datos.length }).returning();
+      const [a] = await db.insert(siteAssets).values({ siteId: sitio.id, name: archivo, storedName: interno, mime, size: datos.length }).returning();
       ids.set(nombre, a!.id);
     }
   }

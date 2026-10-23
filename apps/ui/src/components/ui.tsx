@@ -164,6 +164,8 @@ export function Vacio({ icono: Icono = Info, texto, accion }: { icono?: LucideIc
 }
 
 export function FaltaConfigurar({ variable, detalle }: { variable: string; detalle?: string }) {
+  // La demo no tiene servidor: pedir claves del .env ahí solo confunde.
+  if (import.meta.env.VITE_DEMO === "1") return null;
   return (
     <div className="flex items-start gap-3 rounded-tarjeta border border-aviso/40 bg-aviso/10 p-4 text-sm">
       <Settings2 className="mt-0.5 h-4 w-4 shrink-0 text-aviso" />
