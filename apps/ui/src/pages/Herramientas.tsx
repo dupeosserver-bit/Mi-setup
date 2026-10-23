@@ -181,7 +181,7 @@ const PANELES: { id: PanelQr; texto: string; icono: typeof QrCode }[] = [
   { id: "mios", texto: "Mis diseños", icono: Bookmark },
 ];
 
-const MUESTRA = "https://setup.mexicanland.net";
+const MUESTRA = "https://ejemplo.com";
 
 function Miniatura({ estilo, activo, texto, alElegir }: { estilo: EstiloQr; activo: boolean; texto: string; alElegir: () => void }) {
   const svg = useMemo(() => svgQr(MUESTRA, 76, { ...estilo, logo: null, marco: "ninguno" }), [estilo]);

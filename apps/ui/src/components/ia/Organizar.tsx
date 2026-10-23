@@ -159,7 +159,7 @@ export function EditarProyecto({ p, alCerrar, alCreado }: { p: Proyecto | null; 
           guardar.mutate();
         }}
       >
-        <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej. MexicanLand, Tareas de la escuela)" maxLength={80} autoFocus />
+        <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre (ej. Mi negocio, Tareas de la escuela)" maxLength={80} autoFocus />
         <div>
           <p className="mb-1 text-xs font-semibold text-tenue">Instrucciones personalizadas</p>
           <AreaTexto

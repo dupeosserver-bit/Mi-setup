@@ -61,7 +61,7 @@ function Nuevo({ alTerminar }: { alTerminar: () => void }) {
         </>
       ) : (
         <Campo etiqueta="Dominio">
-          <Entrada value={d.objetivo} onChange={(e) => setD({ ...d, objetivo: e.target.value })} required placeholder={d.tipo === "ssl" ? "setup.mexicanland.net" : "mexicanland.net"} />
+          <Entrada value={d.objetivo} onChange={(e) => setD({ ...d, objetivo: e.target.value })} required placeholder={d.tipo === "ssl" ? "setup.tudominio.com" : "tudominio.com"} />
         </Campo>
       )}
       <Campo etiqueta="Avisar con (días de anticipación)">

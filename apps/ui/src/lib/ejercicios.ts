@@ -113,7 +113,7 @@ export const EJERCICIOS: Ejercicio[] = [
     funcion: "saludar",
     casos: [
       { args: ["Ana"], esperado: "Hola, Ana!" },
-      { args: ["MexicanLand"], esperado: "Hola, MexicanLand!" },
+      { args: ["Mi Setup"], esperado: "Hola, Mi Setup!" },
     ],
   },
   {
@@ -230,7 +230,7 @@ export const EJERCICIOS: Ejercicio[] = [
     funcion: "invertir",
     casos: [
       { args: ["hola"], esperado: "aloh" },
-      { args: ["MexicanLand"], esperado: "dnaLnacixeM" },
+      { args: ["MiSetup"], esperado: "puteSiM" },
       { args: [""], esperado: "" },
     ],
   },
@@ -457,7 +457,7 @@ export const EJERCICIOS: Ejercicio[] = [
     casos: [
       { args: ["aab"], esperado: { a: 2, b: 1 } },
       { args: [""], esperado: {} },
-      { args: ["mexicanland"], esperado: { m: 1, e: 1, x: 1, i: 1, c: 1, a: 2, n: 2, l: 1, d: 1 } },
+      { args: ["banana"], esperado: { b: 1, a: 3, n: 2 } },
     ],
   },
   {

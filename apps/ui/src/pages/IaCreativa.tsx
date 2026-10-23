@@ -403,7 +403,7 @@ function CrearImagenes() {
   };
   const ideas = [
     "Logo para una pastelería llamada «Dulce Hogar», estilo acuarela, tonos rosa y crema",
-    "Banner para un servidor de Minecraft llamado MexicanLand, estilo épico, atardecer",
+    "Banner para un servidor de Minecraft llamado Aventura, estilo épico, atardecer",
     "Pastel de chocolate con fresas en una mesa de madera, foto profesional",
   ];
   const ultima = hechas[0];

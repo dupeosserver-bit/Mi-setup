@@ -230,9 +230,9 @@ function NombreApp() {
     onError: avisarError,
   });
   return (
-    <Campo etiqueta="Nombre de la app" ayuda="Se ve arriba del menú, en el inicio de sesión y en el título. Vacío = MexicanLand.">
+    <Campo etiqueta="Nombre de la app" ayuda={PUBLICA ? "Se ve arriba del menú, en el inicio de sesión y en el título. Vacío = Mi Setup." : "Se ve arriba del menú, en el inicio de sesión y en el título. Vacío = MexicanLand."}>
       <div className="flex gap-2">
-        <Entrada value={actual} maxLength={40} onChange={(e) => setNombre(e.target.value)} placeholder="MexicanLand" />
+        <Entrada value={actual} maxLength={40} onChange={(e) => setNombre(e.target.value)} placeholder={PUBLICA ? "Mi Setup" : "MexicanLand"} />
         <Boton variante="primario" cargando={guardar.isPending} disabled={nombre === null || nombre === (data?.nombre ?? "")} onClick={() => guardar.mutate()}>
           Guardar
         </Boton>
@@ -498,11 +498,11 @@ function TerminalAjustes() {
             fontSize: t.tamano,
           }}
         >
-          <span style={{ color: tema.green ?? tema.foreground }}>root@mexicanland</span>:<span style={{ color: tema.blue ?? tema.foreground }}>~</span>$ docker ps{"\n"}
+          <span style={{ color: tema.green ?? tema.foreground }}>{PUBLICA ? "root@miservidor" : "root@mexicanland"}</span>:<span style={{ color: tema.blue ?? tema.foreground }}>~</span>$ docker ps{"\n"}
           misetup-core Up 2 hours{"\n"}
           misetup-db Up 2 hours (healthy){"\n"}
           <span style={{ color: tema.red ?? tema.foreground }}>error</span>: ejemplo de color{"\n"}
-          <span style={{ color: tema.green ?? tema.foreground }}>root@mexicanland</span>
+          <span style={{ color: tema.green ?? tema.foreground }}>{PUBLICA ? "root@miservidor" : "root@mexicanland"}</span>
           :~$ <span style={{ background: tema.cursor }}> </span>
         </pre>
         <p className="mt-2 text-xs text-tenue">Se aplica a las terminales que abras desde VPS → Terminal.</p>

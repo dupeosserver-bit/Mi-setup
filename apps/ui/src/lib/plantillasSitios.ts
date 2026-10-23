@@ -55,8 +55,8 @@ export const PLANTILLAS_SITIOS: PlantillaSitio[] = [
     nombre: "Servidor de Minecraft",
     descripcion: "IP con botón de copiar, estado de tus servidores en vivo, reglas, tienda y Discord.",
     emoji: "⛏️",
-    html: `<section class="heroe"><div class="contenedor"><h1>MexicanLand</h1><p>El servidor de Minecraft de la comunidad. Survival, minijuegos y eventos.</p>
-<div class="ip"><code id="ip">play.mexicanland.net</code><button class="boton" onclick="navigator.clipboard.writeText(document.getElementById('ip').textContent);this.textContent='¡Copiada!'">Copiar IP</button></div>
+    html: `<section class="heroe"><div class="contenedor"><h1>MiServidor</h1><p>El servidor de Minecraft de la comunidad. Survival, minijuegos y eventos.</p>
+<div class="ip"><code id="ip">play.miservidor.net</code><button class="boton" onclick="navigator.clipboard.writeText(document.getElementById('ip').textContent);this.textContent='¡Copiada!'">Copiar IP</button></div>
 <div class="estado" data-ms-bloque="servidores">Cargando estado…</div></div></section>
 <section><div class="contenedor rejilla">
 <div class="tarjeta"><h3>🌲 Survival</h3><p>Mundo con protecciones, economía y tiendas.</p></div>
@@ -64,7 +64,7 @@ export const PLANTILLAS_SITIOS: PlantillaSitio[] = [
 <div class="tarjeta"><h3>🎁 Recompensas</h3><p>Vota por el servidor y gana llaves y rangos.</p></div></div></section>
 <section class="oscura"><div class="contenedor"><h2>Reglas</h2><ol><li>Respeta a todos los jugadores.</li><li>Nada de hacks ni exploits.</li><li>No griefing ni robos.</li><li>Diviértete.</li></ol></div></section>
 <section><div class="contenedor centro"><h2>Únete a la comunidad</h2><a class="boton discord" href="https://discord.gg/">Entrar al Discord</a></div></section>
-<footer class="pie">MexicanLand · No afiliado a Mojang</footer>`,
+<footer class="pie">MiServidor · No afiliado a Mojang</footer>`,
     css: `${BASE}
 body{background:#0e1116;color:#e5e7eb}.heroe{background:radial-gradient(circle at top,#1f3d2b,#0e1116);text-align:center;padding:100px 0}.heroe h1{font-size:3.4rem;color:#7ee787;text-shadow:0 4px 0 #14532d}
 .ip{display:inline-flex;gap:10px;align-items:center;background:#161b22;padding:10px 12px;border-radius:999px;margin:18px 0}.ip code{font-size:1.1rem;padding:0 8px}.ip .boton{background:#7ee787;color:#0e1116}

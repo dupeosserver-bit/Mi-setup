@@ -59,7 +59,7 @@ export default function Negocio() {
       <Encabezado titulo="Mejoras del negocio" acciones={puede ? <Boton variante="primario" icono={Plus} onClick={() => setNueva(true)}>Nueva</Boton> : null} />
       <ErrorCaja error={error} />
       {isLoading ? <Cargando /> : null}
-      {data?.length === 0 ? <Vacio icono={Lightbulb} texto="Anota ideas para MexicanLand y llévalas a 'Hecho'." /> : null}
+      {data?.length === 0 ? <Vacio icono={Lightbulb} texto="Anota ideas para tu negocio y llévalas a 'Hecho'." /> : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {COLUMNAS.map((c, ci) => (
           <section key={c.id} className="rounded-tarjeta border border-borde bg-superficie p-3">

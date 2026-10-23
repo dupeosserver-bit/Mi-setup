@@ -139,7 +139,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
   },
   sitios: {
     pasos: [
-      "«Nuevo sitio»: ponle nombre y dirección (nombre.mexicanland.net) y elige una plantilla (pastelería, servidor de Minecraft, streamer, landing, link in bio, invitación) o «Hazlo con IA».",
+      "«Nuevo sitio»: ponle nombre y dirección (nombre.tudominio.com) y elige una plantilla (pastelería, servidor de Minecraft, streamer, landing, link in bio, invitación) o «Hazlo con IA».",
       "Editor: arrastra bloques (cuadritos) a la página. Selecciona algo y cambia su estilo (pincel), sus propiedades (engrane) o mira las capas. «Libre» te deja mover todo como en FancyMenu.",
       "Bloques de Mi Setup: producto con carrito (pedidos por WhatsApp), lista desde tabla, formulario, contador, clima, último video, en vivo, estado de servidores e inicio de sesión.",
       "Imágenes: sube fotos (se optimizan solas), recórtalas, quítales el fondo o créalas con IA. Datos: tablas tipo Excel que el sitio muestra solo.",
@@ -276,7 +276,7 @@ export const AYUDA: Record<ModuleId, Ayuda> = {
     pasos: ["Anota ingresos y gastos con categoría.", "Las gráficas muestran el resultado por mes y por categoría."],
   },
   negocio: {
-    pasos: ["Guarda ideas y mejoras para MexicanLand con su estado (pendiente, en proceso, hecho)."],
+    pasos: ["Guarda ideas y mejoras para tu negocio con su estado (pendiente, en proceso, hecho)."],
   },
   respaldos: {
     pasos: [
