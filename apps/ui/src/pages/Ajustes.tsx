@@ -1109,10 +1109,14 @@ function ServidoresMiSetup() {
 
 // ---------------------------------------------------------------- página
 
-type Pestana = "cuenta" | "apariencia" | "terminal" | "voz" | "seguridad" | "apps" | "claves" | "servicios";
+const PESTANAS = ["cuenta", "apariencia", "terminal", "voz", "seguridad", "apps", "claves", "servicios"] as const;
+type Pestana = (typeof PESTANAS)[number];
 
 export default function Ajustes() {
-  const [pestana, setPestana] = useState<Pestana>("cuenta");
+  const [pestana, setPestana] = useState<Pestana>(() => {
+    const pedida = new URLSearchParams(window.location.search).get("pestana");
+    return PESTANAS.find((x) => x === pedida) ?? "cuenta";
+  });
   const { data: me } = useMe();
   const esMaestra = me?.usuario.role === "maestra";
   const misClaves = useQuery({

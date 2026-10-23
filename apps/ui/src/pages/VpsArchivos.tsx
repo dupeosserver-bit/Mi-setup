@@ -1,6 +1,7 @@
 /** Explorador SFTP: navegar, descargar, subir (varios a la vez), crear carpetas, renombrar y borrar. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUp, Download, Eraser, File, FileEdit, Folder, FolderPlus, FolderTree, Link2, Pencil, Save, Search, Send, Trash2, Upload, Wand2, X } from "lucide-react";
+import { ArrowUp, Download, Eraser, File, FileEdit, Folder, FolderPlus, FolderTree, Link2, Pencil, Save, Search, Send, TerminalSquare, Trash2, Upload, Wand2, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useRef, useState, type FormEvent } from "react";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Modal, Selector, Vacio, avisar, avisarError } from "../components/ui";
 import { api, descargar } from "../lib/api";
@@ -355,8 +356,10 @@ function Limpiar({ base, ruta, alCerrar, alTerminar }: { base: string; ruta: str
 }
 
 export default function VpsArchivos() {
-  const [servidor, setServidor] = useState<string | null>(null);
-  const [ruta, setRuta] = useState("/root");
+  const [params] = useSearchParams();
+  const [servidor, setServidor] = useState<string | null>(() => params.get("servidor"));
+  const [ruta, setRuta] = useState(() => params.get("ruta") || "/root");
+  const navegar = useNavigate();
   const [nuevaCarpeta, setNuevaCarpeta] = useState(false);
   const [renombrar, setRenombrar] = useState<Entrada | null>(null);
   const [editar, setEditar] = useState<string | null>(null);
@@ -433,6 +436,7 @@ export default function VpsArchivos() {
               }}
             />
             <Boton tamano="icono" icono={Search} aria-label="Buscar archivos" title="Buscar por nombre" onClick={() => setLupa((v) => !v)} disabled={!servidor} />
+            <Boton tamano="icono" icono={TerminalSquare} aria-label="Abrir terminal aquí" title="Abrir terminal aquí" onClick={() => servidor && navegar(`/vps/terminal?servidor=${servidor}&cd=${encodeURIComponent(ruta)}`)} disabled={!servidor} />
             {puedeEscribir ? (
               <>
                 <input

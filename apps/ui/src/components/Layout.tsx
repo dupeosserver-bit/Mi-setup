@@ -471,7 +471,7 @@ export function Layout() {
 
       <div className="flex min-h-0 flex-1">
         {lateralVisible ? (
-          <BarraLateral grupos={grupos} compacta={forma === "tablet" || compacta} riel={forma === "tablet"} alternar={forma === "tablet" ? () => setPanel(true) : alternarLateral} />
+          <BarraLateral grupos={grupos} compacta={forma === "tablet" || compacta || modo === "pleno"} riel={forma === "tablet"} alternar={forma === "tablet" ? () => setPanel(true) : alternarLateral} />
         ) : null}
         <main className={cx("min-w-0 flex-1 overflow-x-hidden", sinScroll ? "overflow-y-hidden" : "overflow-y-auto")}>
           <div
@@ -496,7 +496,7 @@ export function Layout() {
       <PanelMovil abierto={panel} alCerrar={() => setPanel(false)} grupos={grupos} visibles={visibles} />
       {flotantesVisibles && forma === "celular" && actual?.id !== "ia" ? <BotonMas visibles={visibles} /> : null}
       <Buscador abierto={buscar} alCerrar={() => setBuscar(false)} visibles={visibles} />
-      {flotantesVisibles && visibles.has("ia") && actual?.id !== "ia" ? <AsistenteFlotante modulo={actual?.id ?? null} /> : null}
+      {visibles.has("ia") && actual?.id !== "ia" ? <AsistenteFlotante modulo={actual?.id ?? null} sinBoton={!flotantesVisibles} /> : null}
       <Tutorial grupos={grupos} />
     </div>
   );

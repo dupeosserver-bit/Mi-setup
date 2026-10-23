@@ -120,6 +120,12 @@ export const preferenciasSchema = z.object({
       tema: z.enum(claves(TEMAS_TERMINAL)).default("mi-setup"),
       fuente: z.enum(claves(FUENTES_TERMINAL)).default("jetbrains"),
       tamano: z.number().int().min(10).max(24).default(13),
+      teclas: z
+        .object({
+          fila1: z.array(z.string().max(16)).max(60).nullable().default(null),
+          fila2: z.array(z.string().max(16)).max(60).nullable().default(null),
+        })
+        .default({}),
     })
     .default({}),
   voz: z

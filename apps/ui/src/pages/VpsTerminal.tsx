@@ -1,27 +1,28 @@
-/**
- * Terminal tipo Termius: lista de servidores, pestañas y xterm.js sobre el
- * WebSocket. Pegar con Ctrl+V o clic derecho, copiar lo seleccionado, barra
- * de comandos con "/nombre" para ejecutar comandos guardados, historial de
- * comandos sincronizado y tema/fuente de Ajustes → Terminal.
- */
 import "@xterm/xterm/css/xterm.css";
 import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, Eye, EyeOff, History, KeyRound, Laptop, Pencil, Plug, Plus, Send, Server, ShieldAlert, TerminalSquare, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Punto, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
+import { ChevronLeft, ClipboardPaste, Columns2, Eye, EyeOff, FolderTree, History, House, KeyRound, Laptop, PanelRight, Plus, Radio, Search, Send, Server, Settings, Sparkles, SquareSplitHorizontal, TerminalSquare, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { AreaTexto, Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { Desbloqueo } from "../components/Desbloqueo";
+import { useAsistente } from "../components/Asistente";
+import { BarraTeclas, type PanelBarra } from "../components/terminal/BarraTeclas";
+import { Paleta, type OpcionPaleta } from "../components/terminal/Paleta";
+import { normalizarNombre, SECCIONES, VistaHosts, type ComandoGuardado, type EntradaHistorial, type SeccionHosts } from "../components/terminal/Hosts";
 import { api, ApiError } from "../lib/api";
 import { useElementos } from "../lib/boveda/estado";
 import { codigoTotp, type CuentaTotp } from "../lib/boveda/totp";
 import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
+import { useAcostado, useForma, useModoPagina, useTactil } from "../lib/marco";
 import { escritorio, esMovil } from "../lib/plataforma";
 import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { pedirReauth } from "../lib/reauth";
+import { aplicarModificadores, type Modificadores } from "../lib/teclasTerminal";
 import { tiempoReal } from "../lib/tiempo-real";
 import { useServidores, type Servidor } from "../lib/vps";
 import { atajosPortapapeles, ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
@@ -33,21 +34,6 @@ function base64aBytes(b64: string): Uint8Array {
   return bytes;
 }
 
-interface ComandoGuardado {
-  id: string;
-  nombre: string;
-  comando: string;
-  descripcion: string;
-  peligroso: boolean;
-}
-
-interface EntradaHistorial {
-  servidorId: string;
-  comando: string;
-  fecha: string;
-}
-
-/** Guarda en el historial (sin esperar; un fallo no interrumpe la terminal). */
 function anotar(servidorId: string, comando: string) {
   const c = comando.trim();
   if (!c) return;
@@ -56,9 +42,9 @@ function anotar(servidorId: string, comando: string) {
     .catch(() => undefined);
 }
 
-/** Pestañas que el usuario cerró con la X: esas sí cierran la sesión SSH; las demás solo se sueltan. */
 const cierresExplicitos = new Set<string>();
 
+type Enviar = (texto: string, enfocar?: boolean) => void;
 
 function Consola({
   clave,
@@ -67,6 +53,8 @@ function Consola({
   visible,
   registrar,
   alId,
+  inicial,
+  alTeclear,
 }: {
   clave: string;
   servidor: Servidor;
@@ -74,8 +62,10 @@ function Consola({
   sesionInicial?: string;
   visible: boolean;
   /** Entrega al padre una función para escribir en esta sesión (barra de comandos). */
-  registrar: (enviar: ((texto: string) => void) | null) => void;
+  registrar: (enviar: ((texto: string, enfocar?: boolean) => void) | null) => void;
   alId: (id: string) => void;
+  inicial?: string;
+  alTeclear?: (datos: string) => void;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const ajuste = useRef<FitAddon | null>(null);
@@ -83,13 +73,16 @@ function Consola({
   const prefs = usePreferencias();
   const opciones = opcionesTerminal(prefs);
   const opcionesIniciales = useRef(opciones);
+  const teclear = useRef(alTeclear);
+  teclear.current = alTeclear;
+  const comandoInicial = useRef(inicial);
 
   useEffect(() => {
     const contenedor = caja.current;
     if (!contenedor) return;
     // En el celular el teclado (Gboard, Samsung…) autocompleta y xterm duplica el texto:
     // ahí se escribe desde la barra de abajo y la terminal solo muestra.
-    const movil = esMovil();
+    const movil = esMovil() || Boolean(window.matchMedia?.("(pointer: coarse)").matches);
     const term = new Terminal({ ...opcionesIniciales.current, cursorBlink: true, disableStdin: movil });
     terminal.current = term;
     const fit = new FitAddon();
@@ -118,6 +111,9 @@ function Consola({
         if (m.ref !== ref) return;
         id = m.id;
         alId(m.id);
+        const primero = comandoInicial.current;
+        comandoInicial.current = undefined;
+        if (primero) setTimeout(() => id && tiempoReal.enviar({ tipo: "terminal.entrada", id, datos: `${primero}\r` }), 600);
       }),
       tiempoReal.on("terminal.reanudada", (m) => {
         if (m.id === id) term.writeln("\x1b[90m[sesión retomada]\x1b[0m");
@@ -149,6 +145,7 @@ function Consola({
     let fiable = true;
     const entrada = term.onData((datos) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos });
+      teclear.current?.(datos);
       for (const ch of datos) {
         if (ch === "\r") {
           if (fiable) anotar(servidor.id, linea);
@@ -162,9 +159,9 @@ function Consola({
         else if (ch >= " ") linea += ch;
       }
     });
-    registrar((texto) => {
+    registrar((texto, enfocar = true) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.entrada", id, datos: texto });
-      if (!movil) term.focus();
+      if (enfocar && !movil) term.focus();
     });
     const tamano = term.onResize(({ cols, rows }) => {
       if (id) tiempoReal.enviar({ tipo: "terminal.tamano", id, cols, rows });
@@ -240,62 +237,83 @@ function CodigosParaTerminal({ alElegir }: { alElegir: (codigo: string) => void 
   );
 }
 
-/** Teclas especiales para el celular (la terminal no recibe el teclado ahí). */
-const TECLAS: [string, string][] = [
-  ["Enter", "\r"],
-  ["Tab", "\t"],
-  ["Esc", "\x1b"],
-  ["Ctrl+C", "\x03"],
-  ["↑", "\x1b[A"],
-  ["↓", "\x1b[B"],
-  ["←", "\x1b[D"],
-  ["→", "\x1b[C"],
-  ["Borrar", "\x7f"],
-  ["Ctrl+D", "\x04"],
-];
+function useComandos() {
+  const puede = usePuede("vps_comandos", "lectura");
+  return useQuery({ queryKey: ["vps", "comandos"], queryFn: () => api<ComandoGuardado[]>("/api/vps/comandos"), enabled: puede });
+}
 
-const normalizar = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-");
+function useHistorial(servidorId: string | null) {
+  return useQuery({
+    queryKey: ["vps", "historial", servidorId],
+    queryFn: () => api<EntradaHistorial[]>(`/api/vps/historial${servidorId ? `?servidorId=${servidorId}` : ""}`),
+  });
+}
 
-/** Barra de comandos: escribe un comando o "/nombre" de un comando guardado y Enter lo ejecuta en la pestaña activa. */
-function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: string) => void) | null; servidorId: string | null; texto: string; setTexto: (t: string) => void }) {
-  const puedeComandos = usePuede("vps_comandos", "lectura");
+async function revisarYEnviar(enviar: Enviar | null, comando: string, servidorId: string | null, nombre?: string, guardar = true): Promise<boolean> {
+  if (!enviar) {
+    avisar("Abre primero una sesión de terminal", "info");
+    return false;
+  }
+  const analisis = analizarComando(comando);
+  if (analisis.peligroso) {
+    const ok = await confirmar({ titulo: "Comando peligroso", mensaje: analisis.motivos.join(" · "), detalle: comando, peligroso: true, textoExacto: nombre ?? "EJECUTAR", boton: "Ejecutar" });
+    if (!ok) return false;
+  }
+  enviar(`${comando}\r`);
+  if (guardar && servidorId) anotar(servidorId, comando);
+  return true;
+}
+
+function CajaComando({
+  enviar,
+  servidorId,
+  texto,
+  setTexto,
+  mods,
+  setMods,
+  entrada,
+  tactil,
+}: {
+  enviar: Enviar | null;
+  servidorId: string | null;
+  texto: string;
+  setTexto: (t: string) => void;
+  mods: Modificadores;
+  setMods: (m: Modificadores) => void;
+  entrada: RefObject<HTMLInputElement>;
+  tactil: boolean;
+}) {
   const [oculto, setOculto] = useState(false);
-  const movil = esMovil();
-  const comandos = useQuery({ queryKey: ["vps", "comandos"], queryFn: () => api<ComandoGuardado[]>("/api/vps/comandos"), enabled: puedeComandos });
-  const busqueda = texto.startsWith("/") ? normalizar(texto.slice(1)) : null;
-  const sugerencias = busqueda !== null ? (comandos.data ?? []).filter((c) => normalizar(c.nombre).includes(busqueda)).slice(0, 6) : [];
+  const comandos = useComandos();
+  const historial = useHistorial(servidorId);
+  const busqueda = texto.startsWith("/") ? normalizarNombre(texto.slice(1)) : null;
+  const sugerencias = useMemo(() => {
+    if (oculto) return [];
+    if (busqueda !== null) return (comandos.data ?? []).filter((c) => normalizarNombre(c.nombre).includes(busqueda)).slice(0, 6).map((c) => ({ clave: c.id, texto: c.comando, etiqueta: `/${normalizarNombre(c.nombre)}`, peligroso: c.peligroso, nombre: c.nombre }));
+    const t = texto.trim();
+    if (t.length < 2) return [];
+    const vistos = new Set<string>();
+    return (historial.data ?? [])
+      .filter((h) => h.comando.startsWith(t) && h.comando !== t && !vistos.has(h.comando) && Boolean(vistos.add(h.comando)))
+      .slice(0, 5)
+      .map((h) => ({ clave: `${h.fecha}${h.comando}`, texto: h.comando, etiqueta: "historial", peligroso: false, nombre: undefined as string | undefined }));
+  }, [busqueda, comandos.data, historial.data, texto, oculto]);
 
   const ejecutar = async (comando: string, nombre?: string) => {
-    if (!enviar) return avisar("Abre primero una sesión de terminal", "info");
-    const analisis = analizarComando(comando);
-    if (analisis.peligroso) {
-      const ok = await confirmar({
-        titulo: "Comando peligroso",
-        mensaje: analisis.motivos.join(" · "),
-        detalle: comando,
-        peligroso: true,
-        textoExacto: nombre ?? "EJECUTAR",
-        boton: "Ejecutar",
-      });
-      if (!ok) return;
+    if (await revisarYEnviar(enviar, comando, servidorId, nombre, !oculto)) {
+      setTexto("");
+      setOculto(false);
     }
-    enviar(`${comando}\r`);
-    // Lo escrito en modo oculto (contraseñas) nunca va al historial; lo de tu PC tampoco sale de ella.
-    if (!oculto && servidorId) anotar(servidorId, comando);
-    setTexto("");
-    setOculto(false);
   };
 
   const alEnviar = async (e: FormEvent) => {
     e.preventDefault();
     if (busqueda !== null) {
-      const exacto = (comandos.data ?? []).find((c) => normalizar(c.nombre) === busqueda) ?? sugerencias[0];
+      const exacto = (comandos.data ?? []).find((c) => normalizarNombre(c.nombre) === busqueda) ?? (comandos.data ?? []).find((c) => normalizarNombre(c.nombre).includes(busqueda));
       if (!exacto) return avisar(`No hay un comando guardado que se llame "${texto.slice(1)}"`, "error");
-      await ejecutar(exacto.comando, exacto.nombre);
-      return;
+      return ejecutar(exacto.comando, exacto.nombre);
     }
     if (oculto) {
-      // Contraseña o respuesta a un script: se manda tal cual, sin revisar ni guardar.
       if (!enviar) return;
       enviar(`${texto}\r`);
       setTexto("");
@@ -303,108 +321,103 @@ function BarraComandos({ enviar, servidorId, texto, setTexto }: { enviar: ((t: s
       return;
     }
     if (texto.trim()) await ejecutar(texto);
-    // En el celular, Enter con la barra vacía manda un Enter (p. ej. "Presiona ENTER para continuar").
-    else if (movil && enviar) enviar("\r");
+    else if (tactil && enviar) enviar("\r");
   };
 
   return (
-    <div className="relative border-t border-borde bg-superficie p-2">
-      {sugerencias.length > 0 ? (
-        <div className="absolute bottom-full left-2 right-2 mb-1 overflow-hidden rounded-xl border border-borde bg-superficie shadow-2xl">
+    <div className="relative shrink-0 border-t border-borde bg-superficie px-2 py-2">
+      {sugerencias.length ? (
+        <div className="absolute bottom-full left-2 right-2 z-10 mb-1 overflow-hidden rounded-xl border border-borde bg-superficie shadow-2xl">
           {sugerencias.map((c) => (
-            <button key={c.id} type="button" onClick={() => void ejecutar(c.comando, c.nombre)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-tarjeta">
-              <span className="font-medium">/{normalizar(c.nombre)}</span>
-              {c.peligroso ? <Insignia tono="peligro">peligroso</Insignia> : null}
-              <span className="truncate font-mono text-tenue">{c.comando}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {movil ? (
-        <div className="mb-2 flex gap-1 overflow-x-auto pb-1">
-          {TECLAS.map(([etiqueta, secuencia]) => (
             <button
-              key={etiqueta}
+              key={c.clave}
               type="button"
-              disabled={!enviar}
-              onClick={() => enviar?.(secuencia)}
-              className="shrink-0 rounded-lg border border-borde bg-fondo px-3 py-1.5 font-mono text-xs disabled:opacity-50"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => (busqueda !== null ? void ejecutar(c.texto, c.nombre) : setTexto(c.texto))}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-tarjeta"
             >
-              {etiqueta}
+              <span className="shrink-0 font-medium text-acento">{c.etiqueta}</span>
+              {c.peligroso ? <Insignia tono="peligro">peligroso</Insignia> : null}
+              <span className="truncate font-mono text-tenue">{c.texto}</span>
             </button>
           ))}
         </div>
       ) : null}
-      <form className="flex gap-2" onSubmit={(e) => void alEnviar(e)}>
-        <Boton
-          tamano="icono"
-          variante={oculto ? "primario" : "secundario"}
-          icono={oculto ? EyeOff : Eye}
-          onClick={() => setOculto((v) => !v)}
-          aria-label={oculto ? "Modo oculto activado" : "Escribir oculto (contraseñas)"}
-          title="Modo oculto: para contraseñas; no se muestra ni se guarda en el historial"
-        />
-        <Entrada
-          value={texto}
-          type={oculto ? "password" : "text"}
-          onChange={(e) => setTexto(e.target.value)}
-          placeholder={oculto ? "Contraseña o respuesta (oculta)" : movil ? "Escribe aquí y pulsa Enter" : "Escribe un comando o /nombre de un comando guardado y pulsa Enter"}
-          className="h-9 font-mono text-xs"
-          disabled={!enviar}
-          autoCapitalize="off"
-          autoCorrect="off"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <Boton type="submit" tamano="icono" icono={Send} aria-label="Ejecutar" disabled={!enviar || (!movil && !texto.trim())} />
+      <form className="flex items-center gap-2" onSubmit={(e) => void alEnviar(e)}>
+        <Boton tamano="icono" variante={oculto ? "primario" : "fantasma"} icono={oculto ? EyeOff : Eye} onClick={() => setOculto((v) => !v)} aria-label={oculto ? "Modo oculto activado" : "Escribir oculto (contraseñas)"} title="Modo oculto: para contraseñas; no se muestra ni se guarda" />
+        <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[10px] border border-borde bg-fondo pl-3 pr-1 focus-within:border-acento">
+          <span className="font-mono text-[13px] text-acento">{mods.ctrl ? "ctrl" : mods.alt ? "alt" : "$"}</span>
+          <input
+            ref={entrada}
+            value={texto}
+            type={oculto ? "password" : "text"}
+            onChange={(e) => {
+              const nuevo = e.target.value;
+              if ((mods.ctrl || mods.alt) && nuevo.length === texto.length + 1 && nuevo.startsWith(texto) && enviar) {
+                enviar(aplicarModificadores(nuevo.slice(-1), mods), false);
+                setMods({ ctrl: false, alt: false });
+                return;
+              }
+              setTexto(nuevo);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Tab" && sugerencias[0] && busqueda === null) {
+                e.preventDefault();
+                setTexto(sugerencias[0].texto);
+              }
+            }}
+            placeholder={oculto ? "Contraseña o respuesta (oculta)" : tactil ? "Escribe un comando o /nombre…" : "Escribe un comando o /nombre de un comando guardado y pulsa Enter"}
+            className="h-full min-w-0 flex-1 bg-transparent font-mono text-[13px] outline-none placeholder:text-tenue"
+            disabled={!enviar}
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            enterKeyHint="send"
+          />
+          <Boton type="submit" tamano="icono" variante="primario" icono={Send} className="h-8 w-8" aria-label="Ejecutar" disabled={!enviar || (!tactil && !texto.trim())} />
+        </div>
       </form>
     </div>
   );
 }
 
-function Historial({ servidorId, alElegir }: { servidorId: string | null; alElegir: (comando: string) => void }) {
-  const historial = useQuery({
-    queryKey: ["vps", "historial", servidorId],
-    queryFn: () => api<EntradaHistorial[]>(`/api/vps/historial${servidorId ? `?servidorId=${servidorId}` : ""}`),
-  });
-  const borrar = useMutation({
-    mutationFn: () => api("/api/vps/historial", { metodo: "DELETE" }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["vps", "historial"] }),
-    onError: avisarError,
-  });
+function ListaComandos({ enviar, servidorId, alCaja }: { enviar: Enviar | null; servidorId: string | null; alCaja: (t: string) => void }) {
+  const comandos = useComandos();
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs text-tenue">
+        <span>Escribe /nombre</span>
+        <Link to="/vps/comandos" className="text-acento">Administrar</Link>
+      </div>
+      {comandos.data?.length === 0 ? <p className="text-xs text-tenue">Aún no guardas comandos.</p> : null}
+      {(comandos.data ?? []).map((c) => (
+        <div key={c.id} className="rounded-xl border border-borde bg-fondo p-2.5">
+          <b className="flex items-center gap-2 font-mono text-xs">/{normalizarNombre(c.nombre)} {c.peligroso ? <Insignia tono="peligro">peligroso</Insignia> : null}</b>
+          {c.descripcion ? <p className="text-xs text-tenue">{c.descripcion}</p> : null}
+          <code className="mt-1 block truncate font-mono text-[11px] text-tenue">{c.comando}</code>
+          <div className="mt-2 flex gap-1.5">
+            <Boton tamano="sm" icono={TerminalSquare} onClick={() => void revisarYEnviar(enviar, c.comando, servidorId, c.nombre)}>Ejecutar</Boton>
+            <Boton tamano="sm" variante="fantasma" onClick={() => alCaja(c.comando)}>Poner en la caja</Boton>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ListaHistorial({ servidorId, alElegir }: { servidorId: string | null; alElegir: (comando: string) => void }) {
+  const historial = useHistorial(servidorId);
   const lista = historial.data ?? [];
   return (
-    <div className="rounded-tarjeta border border-borde bg-superficie p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="flex items-center gap-2 text-sm font-medium">
-          <History className="h-4 w-4 text-tenue" /> Historial {servidorId ? "de esta sesión" : ""}
-        </p>
-        {lista.length ? (
-          <Boton
-            tamano="sm"
-            variante="fantasma"
-            onClick={async () => {
-              if (await confirmar({ titulo: "Borrar historial", mensaje: "Se borra el historial de todos tus servidores." })) borrar.mutate();
-            }}
-          >
-            Borrar
-          </Boton>
-        ) : null}
-      </div>
-      {lista.length === 0 ? <p className="text-xs text-tenue">Aquí aparecen los comandos que ejecutas. Tócalos para usarlos de nuevo.</p> : null}
-      <div className="max-h-64 space-y-1 overflow-y-auto">
-        {lista.slice(0, 100).map((h) => (
-          <button
-            key={`${h.fecha}-${h.comando}`}
-            type="button"
-            onClick={() => alElegir(h.comando)}
-            className="block w-full truncate rounded-lg px-2 py-1 text-left font-mono text-xs hover:bg-tarjeta"
-            title={`${h.comando} · ${haceCuanto(h.fecha)}`}
-          >
-            {h.comando}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-1">
+      <p className="text-xs text-tenue">{servidorId ? "Historial de este servidor" : "Historial"}</p>
+      {lista.length === 0 ? <p className="text-xs text-tenue">Aquí salen los comandos que ejecutes. Tócalos para usarlos otra vez.</p> : null}
+      {lista.slice(0, 60).map((h) => (
+        <button key={`${h.fecha}-${h.comando}`} type="button" onClick={() => alElegir(h.comando)} className="block w-full truncate rounded-lg px-2 py-1.5 text-left font-mono text-xs hover:bg-tarjeta" title={`${h.comando} · ${haceCuanto(h.fecha)}`}>
+          {h.comando}
+        </button>
+      ))}
     </div>
   );
 }
@@ -500,23 +513,64 @@ function FormularioServidor({ inicial, alTerminar }: { inicial: Servidor | null;
 }
 
 type Pestana =
-  | { clave: string; tipo: "ssh"; servidor: Servidor; sesion?: string }
+  | { clave: string; tipo: "ssh"; servidor: Servidor; sesion?: string; inicial?: string }
   | { clave: string; tipo: "local"; nombre: string; shell: string; pty?: string };
+
+type Lado = "comandos" | "historial" | "2fa";
+
+const nombreDe = (p: Pestana) => (p.tipo === "ssh" ? p.servidor.nombre : p.nombre);
 
 export default function VpsTerminal() {
   const { data, isLoading, error } = useServidores();
+  const servidores = useMemo(() => data ?? [], [data]);
   const esAdmin = usePuede("vps_terminal", "administrar");
-  const [pestanas, setPestanas] = useState<Pestana[]>([]);
+  const forma = useForma();
+  const acostado = useAcostado();
+  const tactil = useTactil();
+  const navegar = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const abrirIa = useAsistente((e) => e.poner);
   const local = escritorio()?.terminalLocal ?? null;
   const [shells, setShells] = useState<{ id: string; nombre: string }[]>([]);
-  /** ptys de esta PC que ya tienen pestaña. */
   const conocidasLocales = useRef(new Set<string>());
   const yaPorDefecto = useRef(false);
-  const [verCodigos, setVerCodigos] = useState(false);
-  /** ids de sesión ya mostradas en una pestaña (para no duplicarlas al retomar). */
   const conocidas = useRef(new Set<string>());
+  const [pestanas, setPestanas] = useState<Pestana[]>([]);
+  const [activa, setActiva] = useState<string | null>(null);
+  const [vista, setVista] = useState<"hosts" | "sesion">("hosts");
+  const [seccion, setSeccion] = useState<SeccionHosts>("hosts");
+  const [editando, setEditando] = useState<Servidor | null | "nuevo">(null);
+  const [verCodigos, setVerCodigos] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [dividida, setDividida] = useState(false);
+  const [segunda, setSegunda] = useState<string | null>(null);
+  const [enLasDos, setEnLasDos] = useState(false);
+  const [lado, setLado] = useState<Lado | null>(null);
+  const [paleta, setPaleta] = useState(false);
+  const [mods, setMods] = useState<Modificadores>({ ctrl: false, alt: false });
+  const [panelBarra, setPanelBarra] = useState<PanelBarra>(null);
+  const [cajaVisible, setCajaVisible] = useState(true);
+  const caja = useRef<HTMLInputElement>(null);
+  const enviadores = useRef(new Map<string, Enviar>());
+  const [, refrescar] = useState(0);
+  const celular = forma === "celular";
+  const enSesion = vista === "sesion" && pestanas.length > 0;
+  useModoPagina(enSesion && (celular || acostado) ? "completa" : "pleno");
 
-  // Al entrar a Terminal se piden las sesiones que siguen abiertas en el servidor y se retoman.
+  const registros = useRef(new Map<string, (enviar: Enviar | null) => void>());
+  const registroDe = useCallback((clave: string) => {
+    let fn = registros.current.get(clave);
+    if (!fn) {
+      fn = (enviar) => {
+        if (enviar) enviadores.current.set(clave, enviar);
+        else enviadores.current.delete(clave);
+        refrescar((n) => n + 1);
+      };
+      registros.current.set(clave, fn);
+    }
+    return fn;
+  }, []);
+
   useEffect(() => {
     const pedir = () => tiempoReal.enviar({ tipo: "terminal.lista" });
     pedir();
@@ -540,40 +594,29 @@ export default function VpsTerminal() {
     ];
     return () => offs.forEach((off) => off());
   }, [data]);
-  const [activa, setActiva] = useState<string | null>(null);
-  const [editando, setEditando] = useState<Servidor | null | "nuevo">(null);
-  const [texto, setTexto] = useState("");
-  const enviadores = useRef(new Map<string, (t: string) => void>());
-  const [, refrescar] = useState(0);
 
-  // Una función de registro estable por pestaña (si cambiara, la consola se reconectaría).
-  const registros = useRef(new Map<string, (enviar: ((t: string) => void) | null) => void>());
-  const registroDe = useCallback((clave: string) => {
-    let fn = registros.current.get(clave);
-    if (!fn) {
-      fn = (enviar) => {
-        if (enviar) enviadores.current.set(clave, enviar);
-        else enviadores.current.delete(clave);
-        refrescar((n) => n + 1);
-      };
-      registros.current.set(clave, fn);
-    }
-    return fn;
-  }, []);
-
-  const abrir = (servidor: Servidor) => {
+  const abrir = useCallback((servidor: Servidor, inicial?: string) => {
     const clave = crypto.randomUUID();
-    setPestanas((p) => [...p, { clave, tipo: "ssh", servidor }]);
+    setPestanas((p) => [...p, { clave, tipo: "ssh", servidor, ...(inicial ? { inicial } : {}) }]);
     setActiva(clave);
-  };
-  const abrirLocal = (shell: string, nombre: string, pty?: string) => {
+    setVista("sesion");
+  }, []);
+  const abrirLocal = useCallback((shell: string, nombre: string, pty?: string) => {
     const clave = crypto.randomUUID();
     setPestanas((p) => [...p, { clave, tipo: "local", shell, nombre, ...(pty ? { pty } : {}) }]);
     setActiva((a) => (pty ? (a ?? clave) : clave));
-  };
+    if (!pty) setVista("sesion");
+  }, []);
 
-  // En la app de PC: se retoman las terminales de esta PC que siguen abiertas y,
-  // si no hay ninguna, se abre PowerShell de una vez (la terminal por defecto).
+  useEffect(() => {
+    const id = params.get("servidor");
+    if (!id || !data) return;
+    const s = data.find((x) => x.id === id);
+    const cd = params.get("cd");
+    setParams({}, { replace: true });
+    if (s) abrir(s, cd ? `cd '${cd.replace(/'/g, "'\\''")}'` : undefined);
+  }, [params, data, abrir, setParams]);
+
   useEffect(() => {
     if (!local) return;
     let vigente = true;
@@ -595,26 +638,70 @@ export default function VpsTerminal() {
     return () => {
       vigente = false;
     };
-  }, [local]);
+  }, [local, abrirLocal]);
+
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPaleta(true);
+      }
+    };
+    window.addEventListener("keydown", tecla, true);
+    return () => window.removeEventListener("keydown", tecla, true);
+  }, []);
+
   const cerrar = (clave: string) => {
     if (pestanas.find((x) => x.clave === clave)?.tipo === "local") cierresLocales.add(clave);
-    // La X sí termina la sesión SSH (cambiar de pantalla solo la deja en pausa).
     cierresExplicitos.add(clave);
     registros.current.delete(clave);
     setPestanas((p) => {
       const resto = p.filter((x) => x.clave !== clave);
       if (activa === clave) setActiva(resto.at(-1)?.clave ?? null);
+      if (segunda === clave) setSegunda(resto.find((x) => x.clave !== activa)?.clave ?? null);
+      if (!resto.length) setVista("hosts");
       return resto;
     });
   };
+
   const pestanaActiva = pestanas.find((p) => p.clave === activa) ?? null;
-  const servidorActivo = pestanaActiva?.tipo === "ssh" ? pestanaActiva.servidor.id : null;
+  const servidorActivo = pestanaActiva?.tipo === "ssh" ? pestanaActiva.servidor : null;
   const enviarActiva = activa ? (enviadores.current.get(activa) ?? null) : null;
+  const otra = dividida && segunda && segunda !== activa && pestanas.some((p) => p.clave === segunda) ? segunda : null;
+  const partida = Boolean(otra) && !celular;
+
+  const espejo = (clave: string, datos: string) => {
+    if (!enLasDos || !partida || !otra) return;
+    const destino = clave === activa ? otra : clave === otra ? activa : null;
+    if (destino) enviadores.current.get(destino)?.(datos, false);
+  };
+  const enviarTodas: Enviar | null = enviarActiva
+    ? (t, enfocar) => {
+        enviarActiva(t, enfocar);
+        if (enLasDos && partida && otra) enviadores.current.get(otra)?.(t, false);
+      }
+    : null;
+
+  const dividir = () => {
+    if (pestanas.length < 2) return avisar("Abre dos sesiones para verlas lado a lado.", "info");
+    setDividida((v) => {
+      if (!v) setSegunda((s) => (s && s !== activa ? s : (pestanas.find((p) => p.clave !== activa)?.clave ?? null)));
+      else setEnLasDos(false);
+      return !v;
+    });
+  };
 
   const pegar = async () => {
     const t = await navigator.clipboard.readText().catch(() => "");
     if (!t) return avisar("No hay texto en el portapapeles", "info");
-    if (enviarActiva) enviarActiva(t);
+    enviarTodas?.(t);
+  };
+
+  const ponerEnCaja = (t: string) => {
+    setTexto(t);
+    setCajaVisible(true);
+    requestAnimationFrame(() => caja.current?.focus());
   };
 
   const probar = async (s: Servidor) => {
@@ -643,115 +730,267 @@ export default function VpsTerminal() {
     await api(`/api/vps/servidores/${s.id}`, { metodo: "DELETE" }).then(() => queryClient.invalidateQueries({ queryKey: ["vps"] }), avisarError);
   };
 
-  return (
-    <>
-      <Encabezado
-        titulo="Terminal"
-        descripcion={local ? "PowerShell o CMD de esta PC y sesiones SSH a tus servidores. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado." : "Sesiones SSH desde el servidor de Mi Setup. Pega con Ctrl+V o clic derecho; escribe /nombre para un comando guardado. Root pide confirmar tu identidad."}
-        acciones={esAdmin ? <Boton variante="primario" icono={Plus} onClick={() => setEditando("nuevo")}>Servidor</Boton> : null}
-      />
-      <ErrorCaja error={error} />
-      {isLoading ? <Cargando /> : null}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
-        <div className="space-y-2">
-          {local && shells.length ? (
-            <div className="rounded-tarjeta border border-borde bg-superficie p-3">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Laptop className="h-4 w-4 text-tenue" /> Esta PC
-              </p>
-              <p className="text-xs text-tenue">Terminal de Windows en tu computadora.</p>
-              <div className="mt-3 flex flex-wrap gap-1">
-                {shells.map((s) => (
-                  <Boton key={s.id} tamano="sm" variante={s.id === "powershell" ? "primario" : "secundario"} icono={TerminalSquare} onClick={() => abrirLocal(s.id, s.nombre)}>
-                    {s.nombre}
-                  </Boton>
-                ))}
-              </div>
-            </div>
+  const comandos = useComandos();
+  const opcionesPaleta: OpcionPaleta[] = [
+    ...(comandos.data ?? []).map((c) => ({
+      id: `c-${c.id}`,
+      grupo: "Comandos guardados",
+      titulo: `/${normalizarNombre(c.nombre)}`,
+      detalle: c.comando,
+      icono: TerminalSquare,
+      hacer: () => void revisarYEnviar(enviarTodas, c.comando, servidorActivo?.id ?? null, c.nombre),
+      alTab: () => ponerEnCaja(c.comando),
+    })),
+    ...servidores.map((s) => ({ id: `h-${s.id}`, grupo: "Hosts", titulo: s.nombre, detalle: `${s.usuario}@${s.host}:${s.puerto}`, icono: Server, hacer: () => abrir(s) })),
+    ...shells.map((sh) => ({ id: `l-${sh.id}`, grupo: "Hosts", titulo: sh.nombre, detalle: "Terminal de esta PC", icono: Laptop, hacer: () => abrirLocal(sh.id, sh.nombre) })),
+    { id: "a-hosts", grupo: "Acciones", titulo: "Ver todos los hosts", icono: House, hacer: () => setVista("hosts") },
+    ...(pestanas.length > 1 && !celular ? [{ id: "a-dividir", grupo: "Acciones", titulo: dividida ? "Una sola pantalla" : "Dividir pantalla", icono: Columns2, hacer: dividir }] : []),
+    ...(partida ? [{ id: "a-dos", grupo: "Acciones", titulo: enLasDos ? "Dejar de escribir en las 2" : "Escribir en las 2 a la vez", icono: Radio, hacer: () => setEnLasDos((v) => !v) }] : []),
+    ...(servidorActivo ? [{ id: "a-sftp", grupo: "Acciones", titulo: "Abrir archivos (SFTP)", detalle: servidorActivo.nombre, icono: FolderTree, hacer: () => navegar(`/vps/archivos?servidor=${servidorActivo.id}`) }] : []),
+    ...(enviarActiva ? [{ id: "a-2fa", grupo: "Acciones", titulo: "Escribir un código 2FA", icono: KeyRound, hacer: () => setVerCodigos(true) }] : []),
+    ...(enviarActiva ? [{ id: "a-pegar", grupo: "Acciones", titulo: "Pegar", icono: ClipboardPaste, hacer: () => void pegar() }] : []),
+    { id: "a-historial", grupo: "Acciones", titulo: "Historial", icono: History, hacer: () => (tactil ? setPanelBarra("historial") : setLado("historial")) },
+    { id: "a-ia", grupo: "Acciones", titulo: "Preguntarle a la IA", icono: Sparkles, hacer: () => abrirIa(true) },
+    { id: "a-apariencia", grupo: "Acciones", titulo: "Apariencia de la terminal", detalle: "Ajustes → Terminal", icono: Settings, hacer: () => navegar("/ajustes?pestana=terminal") },
+  ];
+
+  const contenidoLado = (cual: Lado | "teclas" | null) =>
+    cual === "comandos" ? (
+      <ListaComandos enviar={enviarTodas} servidorId={servidorActivo?.id ?? null} alCaja={ponerEnCaja} />
+    ) : cual === "historial" ? (
+      <ListaHistorial servidorId={servidorActivo?.id ?? null} alElegir={ponerEnCaja} />
+    ) : cual === "2fa" ? (
+      <Desbloqueo>
+        <CodigosParaTerminal alElegir={(codigo) => enviarActiva?.(`${codigo}\r`)} />
+      </Desbloqueo>
+    ) : null;
+
+  const pestanaBoton = (p: Pestana, compacta = false) => {
+    const sel = vista === "sesion" && activa === p.clave;
+    return (
+      <div key={p.clave} className={cx("flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] pl-3 text-[13px] font-medium", sel ? "bg-[color-mix(in_srgb,var(--ok)_14%,transparent)] text-ok shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--ok)_35%,transparent)]" : otra === p.clave ? "bg-tarjeta text-texto" : "bg-tarjeta text-tenue")}>
+        <button
+          type="button"
+          className="flex items-center gap-1.5"
+          onClick={() => {
+            setActiva(p.clave);
+            setVista("sesion");
+            if (segunda === p.clave) setSegunda(activa);
+          }}
+        >
+          {p.tipo === "local" ? <Laptop className="h-3.5 w-3.5" /> : <span className={cx("h-2 w-2 rounded-full", p.servidor.estado === "caido" ? "bg-peligro" : "bg-ok")} />}
+          <span className={cx(compacta && "max-w-[7rem] truncate")}>{nombreDe(p)}</span>
+        </button>
+        <button type="button" onClick={() => cerrar(p.clave)} className="grid h-8 w-7 place-items-center text-tenue hover:text-texto" aria-label={`Cerrar ${nombreDe(p)}`}>
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  const barraSuperior =
+    enSesion && (celular || acostado) ? (
+      <div className="safe-top flex shrink-0 items-center gap-1.5 border-b border-borde bg-[#16131f] px-2 py-1.5">
+        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => setVista("hosts")} aria-label="Ver hosts">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none]">{pestanas.map((p) => pestanaBoton(p, true))}</div>
+        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => setPaleta(true)} aria-label="Buscar">
+          <Search className="h-5 w-5" />
+        </button>
+        <button type="button" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] text-tenue" onClick={() => abrirIa(true)} aria-label="IA">
+          <Sparkles className="h-5 w-5" />
+        </button>
+      </div>
+    ) : (
+      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-borde bg-fondo px-2 py-1.5 [scrollbar-width:none]">
+        <button type="button" onClick={() => setVista("hosts")} className={cx("flex h-8 shrink-0 items-center gap-2 rounded-[9px] px-3 text-[13px] font-medium", vista === "hosts" ? "bg-tarjeta text-texto" : "text-tenue")}>
+          <Server className="h-4 w-4" />
+          <span className={cx(celular && "hidden")}>Hosts</span>
+        </button>
+        <Link to={servidorActivo ? `/vps/archivos?servidor=${servidorActivo.id}` : "/vps/archivos"} className="flex h-8 shrink-0 items-center gap-2 rounded-[9px] px-3 text-[13px] font-medium text-tenue">
+          <FolderTree className="h-4 w-4" />
+          <span className={cx(celular && "hidden")}>SFTP</span>
+        </Link>
+        {pestanas.length ? <span className="mx-0.5 h-5 w-px shrink-0 bg-borde" /> : null}
+        {pestanas.map((p) => pestanaBoton(p))}
+        <button type="button" onClick={() => { setVista("hosts"); setSeccion("hosts"); }} className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] text-tenue hover:bg-tarjeta" aria-label="Nueva sesión">
+          <Plus className="h-4 w-4" />
+        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <button type="button" onClick={() => setPaleta(true)} className="flex h-[30px] items-center gap-2 rounded-[9px] border border-borde px-2.5 text-xs text-tenue">
+            <Search className="h-4 w-4" />
+            <span className="hidden md:inline">Buscar</span>
+            <kbd className="hidden rounded-md border border-borde px-1.5 font-mono text-[11px] lg:inline">Ctrl K</kbd>
+          </button>
+          {enSesion && !celular ? (
+            <>
+              <Boton tamano="icono" variante={dividida ? "secundario" : "fantasma"} icono={SquareSplitHorizontal} onClick={dividir} aria-label="Dividir pantalla" title="Dividir pantalla" />
+              {partida ? <Boton tamano="icono" variante={enLasDos ? "secundario" : "fantasma"} icono={Radio} className={cx(enLasDos && "text-aviso")} onClick={() => setEnLasDos((v) => !v)} aria-label="Escribir en las 2" title="Escribir en las 2 a la vez" /> : null}
+              <Boton tamano="icono" variante="fantasma" icono={Sparkles} onClick={() => abrirIa(true)} aria-label="IA" title="IA: solo propone" />
+              {tactil ? null : <Boton tamano="icono" variante={lado ? "secundario" : "fantasma"} icono={PanelRight} onClick={() => setLado((l) => (l ? null : "comandos"))} aria-label="Panel" title="Comandos, historial y 2FA" />}
+            </>
           ) : null}
-          {data?.length === 0 ? <Vacio icono={Server} texto="Agrega tu VPS con su llave SSH." /> : null}
-          {data?.map((s) => (
-            <div key={s.id} className="rounded-tarjeta border border-borde bg-superficie p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-2 truncate text-sm font-medium">
-                    {s.nombre} {s.esRoot ? <Insignia tono="aviso">root</Insignia> : null}
-                  </p>
-                  <p className="truncate text-xs text-tenue">
-                    {s.usuario}@{s.host}:{s.puerto}
-                  </p>
-                </div>
-                <Punto conectado={s.estado === "arriba"} />
-              </div>
-              {!s.huella ? <p className="mt-2 flex items-center gap-1 text-[11px] text-tenue"><ShieldAlert className="h-3 w-3" /> La huella se acepta en la primera conexión.</p> : null}
-              <div className="mt-3 flex flex-wrap gap-1">
-                <Boton tamano="sm" variante="primario" icono={TerminalSquare} onClick={() => abrir(s)}>Abrir</Boton>
-                <Boton tamano="sm" icono={Plug} onClick={() => void probar(s)}>Probar</Boton>
-                {esAdmin ? (
-                  <>
-                    <Boton tamano="icono" variante="fantasma" icono={Pencil} onClick={() => setEditando(s)} aria-label="Editar" />
-                    <Boton tamano="icono" variante="fantasma" icono={Trash2} onClick={() => void borrar(s)} aria-label="Quitar" />
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ))}
-          <Historial servidorId={servidorActivo} alElegir={setTexto} />
-        </div>
-        <div className="flex h-[72vh] min-h-96 flex-col overflow-hidden rounded-tarjeta border border-borde bg-fondo">
-          <div className="flex items-center gap-1 overflow-x-auto border-b border-borde bg-superficie p-1">
-            {pestanas.map((p) => (
-              <div key={p.clave} className={cx("flex items-center gap-1 rounded-lg pl-3 text-xs", activa === p.clave ? "bg-tarjeta" : "text-tenue")}>
-                <button type="button" onClick={() => setActiva(p.clave)} className="flex items-center gap-1 py-1.5">
-                  {p.tipo === "local" ? <Laptop className="h-3 w-3" /> : null}
-                  {p.tipo === "ssh" ? p.servidor.nombre : p.nombre}
-                </button>
-                <button type="button" onClick={() => cerrar(p.clave)} className="p-1.5 hover:text-texto" aria-label="Cerrar pestaña">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-            {pestanas.length === 0 ? <span className="px-3 py-1.5 text-xs text-tenue">Sin sesiones abiertas</span> : null}
-            {enviarActiva ? (
-              <>
-                <Boton tamano="sm" variante="fantasma" icono={KeyRound} className="ml-auto" onClick={() => setVerCodigos(true)}>
-                  2FA
-                </Boton>
-                <Boton tamano="sm" variante="fantasma" icono={ClipboardPaste} onClick={() => void pegar()}>
-                  Pegar
-                </Boton>
-              </>
-            ) : null}
-          </div>
-          <div className="relative min-h-0 flex-1">
-            {pestanas.map((p) => (
-              <div key={p.clave} className={cx("absolute inset-0", activa !== p.clave && "pointer-events-none opacity-0")}>
-                {p.tipo === "ssh" ? (
-                  <Consola
-                    clave={p.clave}
-                    servidor={p.servidor}
-                    {...(p.sesion ? { sesionInicial: p.sesion } : {})}
-                    visible={activa === p.clave}
-                    registrar={registroDe(p.clave)}
-                    alId={(id) => conocidas.current.add(id)}
-                  />
-                ) : (
-                  <ConsolaLocal
-                    clave={p.clave}
-                    shell={p.shell}
-                    {...(p.pty ? { ptyInicial: p.pty } : {})}
-                    visible={activa === p.clave}
-                    registrar={registroDe(p.clave)}
-                    alId={(id) => conocidasLocales.current.add(id)}
-                  />
-                )}
-              </div>
-            ))}
-            {pestanas.length === 0 ? <Vacio icono={TerminalSquare} texto="Elige un servidor y pulsa Abrir." /> : null}
-          </div>
-          <BarraComandos enviar={enviarActiva} servidorId={servidorActivo} texto={texto} setTexto={setTexto} />
+          <Link to="/ajustes?pestana=terminal" className="grid h-9 w-9 place-items-center rounded-xl text-tenue hover:bg-tarjeta" aria-label="Apariencia" title="Apariencia (Ajustes → Terminal)">
+            <Settings className="h-4 w-4" />
+          </Link>
         </div>
       </div>
+    );
+
+  const paneles = (
+    <div
+      className={cx("relative min-h-0 min-w-0 flex-1 gap-px bg-borde", vista === "sesion" ? "grid" : "hidden")}
+      style={{ gridTemplateColumns: partida ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)", gridTemplateRows: "minmax(0,1fr)" }}
+    >
+      {pestanas.map((p) => {
+        const enA = activa === p.clave;
+        const enB = partida && otra === p.clave;
+        const visible = vista === "sesion" && (enA || enB);
+        return (
+          <div key={p.clave} className={cx("relative min-h-0 min-w-0", !visible && "hidden")} style={{ gridColumn: enB ? 2 : 1, gridRow: 1 }}>
+            {partida ? (
+              <span className={cx("absolute right-2.5 top-2 z-[1] rounded-full px-2 py-0.5 font-mono text-[11px]", enA ? "bg-[color-mix(in_srgb,var(--acento)_20%,transparent)] text-acento" : "bg-tarjeta text-tenue")}>
+                {nombreDe(p)}
+                {enLasDos ? " · las 2" : ""}
+              </span>
+            ) : null}
+            {p.tipo === "ssh" ? (
+              <Consola
+                clave={p.clave}
+                servidor={p.servidor}
+                {...(p.sesion ? { sesionInicial: p.sesion } : {})}
+                {...(p.inicial ? { inicial: p.inicial } : {})}
+                visible={visible}
+                registrar={registroDe(p.clave)}
+                alId={(id) => conocidas.current.add(id)}
+                alTeclear={(d) => espejo(p.clave, d)}
+              />
+            ) : (
+              <ConsolaLocal
+                clave={p.clave}
+                shell={p.shell}
+                {...(p.pty ? { ptyInicial: p.pty } : {})}
+                visible={visible}
+                registrar={registroDe(p.clave)}
+                alId={(id) => conocidasLocales.current.add(id)}
+                alTeclear={(d) => espejo(p.clave, d)}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const navSecciones = (
+    <nav className="hidden w-[200px] shrink-0 flex-col gap-0.5 border-r border-borde bg-superficie p-2 md:flex max-lg:w-16">
+      {SECCIONES.map(([id, Icono, nombre]) => (
+        <button key={id} type="button" onClick={() => setSeccion(id)} title={nombre} className={cx("flex h-[38px] items-center gap-2.5 rounded-[10px] px-3 text-left text-[13px] font-medium max-lg:justify-center max-lg:px-0", seccion === id ? "bg-tarjeta text-texto" : "text-tenue hover:text-texto")}>
+          <Icono className="h-4 w-4 shrink-0" />
+          <span className="truncate max-lg:hidden">{nombre}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
+  const navAbajo = (
+    <nav className="safe-bottom flex shrink-0 justify-around border-t border-borde bg-superficie md:hidden">
+      {SECCIONES.map(([id, Icono, nombre]) => (
+        <button key={id} type="button" onClick={() => setSeccion(id)} className={cx("flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-semibold", seccion === id ? "text-acento" : "text-tenue")}>
+          <Icono className="h-5 w-5" />
+          <span className="max-w-full truncate">{nombre === "Hosts conocidos" ? "Conocidos" : nombre}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-superficie">
+      {barraSuperior}
+      {vista === "hosts" || !pestanas.length ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ErrorCaja error={error} />
+          {isLoading ? <Cargando /> : null}
+          <div className="flex min-h-0 flex-1">
+            {navSecciones}
+            <VistaHosts
+              seccion={seccion}
+              servidores={servidores}
+              shells={shells}
+              esAdmin={esAdmin}
+              alAbrir={(s) => abrir(s)}
+              alAbrirLocal={(sh, n) => abrirLocal(sh, n)}
+              alProbar={(s) => void probar(s)}
+              alEditar={setEditando}
+              alBorrar={(s) => void borrar(s)}
+              alNuevo={() => setEditando("nuevo")}
+              alUsarComando={(c) => {
+                if (enviarActiva) {
+                  setVista("sesion");
+                  void revisarYEnviar(enviarTodas, c.comando, servidorActivo?.id ?? null, c.nombre);
+                } else avisar("Abre primero una sesión de terminal", "info");
+              }}
+              alUsarTexto={(t) => {
+                if (!pestanas.length) return avisar("Abre primero una sesión de terminal", "info");
+                setVista("sesion");
+                ponerEnCaja(t);
+              }}
+            />
+          </div>
+          {navAbajo}
+        </div>
+      ) : null}
+      {pestanas.length ? (
+        <div className={cx("min-h-0 flex-1 flex-col", vista === "sesion" ? "flex" : "hidden")}>
+          <div className="flex min-h-0 flex-1">
+            {paneles}
+            {lado && !tactil ? (
+              <aside className="flex w-[300px] shrink-0 flex-col border-l border-borde bg-superficie max-md:hidden">
+                <div className="flex gap-1 border-b border-borde p-1.5">
+                  {(["comandos", "historial", "2fa"] as const).map((l) => (
+                    <button key={l} type="button" onClick={() => setLado(l)} className={cx("h-8 flex-1 rounded-lg text-xs font-medium", lado === l ? "bg-tarjeta text-texto" : "text-tenue")}>
+                      {l === "comandos" ? "Comandos" : l === "historial" ? "Historial" : "2FA"}
+                    </button>
+                  ))}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">{contenidoLado(lado)}</div>
+              </aside>
+            ) : null}
+          </div>
+          {!tactil || cajaVisible ? (
+            <CajaComando enviar={enviarTodas} servidorId={servidorActivo?.id ?? null} texto={texto} setTexto={setTexto} mods={mods} setMods={setMods} entrada={caja} tactil={tactil} />
+          ) : null}
+          {tactil ? (
+            <BarraTeclas
+              enviar={enviarTodas}
+              mods={mods}
+              setMods={setMods}
+              panel={panelBarra}
+              setPanel={setPanelBarra}
+              cajaVisible={cajaVisible}
+              alCaja={() => setCajaVisible((v) => !v)}
+              alTeclado={() => {
+                setCajaVisible(true);
+                requestAnimationFrame(() => caja.current?.focus());
+              }}
+              alPegar={() => void pegar()}
+              contenidoPanel={contenidoLado(panelBarra === "teclas" ? null : panelBarra)}
+            />
+          ) : (
+            <div className="flex h-7 shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-borde bg-superficie px-3 font-mono text-[11px] text-tenue">
+              <span className="flex items-center gap-1.5">
+                <span className={cx("h-2 w-2 rounded-full", pestanaActiva ? "bg-ok" : "bg-tenue")} />
+                {pestanaActiva ? (pestanaActiva.tipo === "ssh" ? `${pestanaActiva.servidor.nombre} · ${pestanaActiva.servidor.usuario}@${pestanaActiva.servidor.host}` : `${pestanaActiva.nombre} · esta PC`) : "Sin sesión"}
+              </span>
+              {enLasDos && partida ? <span className="text-aviso">Escribiendo en las 2</span> : null}
+              <span className="ml-auto">Ctrl K: comandos y acciones</span>
+              <span className="max-md:hidden">UTF-8</span>
+            </div>
+          )}
+        </div>
+      ) : null}
+      <Paleta abierta={paleta} alCerrar={() => setPaleta(false)} opciones={opcionesPaleta} />
       <Modal abierto={verCodigos} titulo="Escribir un código 2FA en la terminal" alCerrar={() => setVerCodigos(false)}>
         {verCodigos ? (
           <Desbloqueo>
@@ -768,6 +1007,6 @@ export default function VpsTerminal() {
       <Modal abierto={editando !== null} titulo={editando === "nuevo" ? "Nuevo servidor" : "Editar servidor"} alCerrar={() => setEditando(null)}>
         {editando !== null ? <FormularioServidor inicial={editando === "nuevo" ? null : editando} alTerminar={() => setEditando(null)} /> : null}
       </Modal>
-    </>
+    </div>
   );
 }

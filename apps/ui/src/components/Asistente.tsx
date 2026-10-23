@@ -3,6 +3,7 @@ import type { ModuleId } from "@mi-setup/shared";
 import { useMutation } from "@tanstack/react-query";
 import { Paperclip, Sparkles, Volume2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { create } from "zustand";
 import { api } from "../lib/api";
 import { queryClient } from "../lib/consultas";
 import { HERRAMIENTAS_DIAGNOSTICO, mensajeAnalizar, TarjetaPropuesta, usePropuestas, useUsoIa, type Propuesta, type RespuestaChat } from "../lib/ia";
@@ -18,8 +19,14 @@ interface Linea {
   propuestas?: Propuesta[];
 }
 
-export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
-  const [abierto, setAbierto] = useState(false);
+export const useAsistente = create<{ abierto: boolean; poner(v: boolean | ((a: boolean) => boolean)): void }>()((set) => ({
+  abierto: false,
+  poner: (v) => set((e) => ({ abierto: typeof v === "function" ? v(e.abierto) : v })),
+}));
+
+export function AsistenteFlotante({ modulo, sinBoton = false }: { modulo: ModuleId | null; sinBoton?: boolean }) {
+  const abierto = useAsistente((e) => e.abierto);
+  const setAbierto = useAsistente((e) => e.poner);
   const [conversacion, setConversacion] = useState<string | undefined>();
   const [lineas, setLineas] = useState<Linea[]>([]);
   const fin = useRef<HTMLDivElement>(null);
@@ -54,7 +61,7 @@ export function AsistenteFlotante({ modulo }: { modulo: ModuleId | null }) {
 
   return (
     <>
-      {flotante.oculto && !abierto ? null : (
+      {(flotante.oculto || sinBoton) && !abierto ? null : (
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}

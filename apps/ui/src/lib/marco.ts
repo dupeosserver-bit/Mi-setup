@@ -79,3 +79,15 @@ export function useAltoVisible() {
     };
   }, []);
 }
+
+export function useTactil(): boolean {
+  const [tactil, setTactil] = useState(() => coincide("(pointer: coarse)"));
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const l = window.matchMedia("(pointer: coarse)");
+    const alCambiar = () => setTactil(l.matches);
+    l.addEventListener?.("change", alCambiar);
+    return () => l.removeEventListener?.("change", alCambiar);
+  }, []);
+  return tactil;
+}

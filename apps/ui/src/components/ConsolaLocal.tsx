@@ -57,17 +57,19 @@ export function ConsolaLocal({
   alId,
   cwd,
   comando,
+  alTeclear,
 }: {
   clave: string;
   shell: string;
   /** Sesión que sigue viva en la app (se retoma con lo último que mostró). */
   ptyInicial?: string;
   visible: boolean;
-  registrar: (enviar: ((texto: string) => void) | null) => void;
+  registrar: (enviar: ((texto: string, enfocar?: boolean) => void) | null) => void;
   alId: (id: string) => void;
   /** Carpeta donde abre (pantalla Código) y comando que escribe al empezar. */
   cwd?: string;
   comando?: string;
+  alTeclear?: (datos: string) => void;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const ajuste = useRef<FitAddon | null>(null);
@@ -75,6 +77,8 @@ export function ConsolaLocal({
   const prefs = usePreferencias();
   const opciones = opcionesTerminal(prefs);
   const opcionesIniciales = useRef(opciones);
+  const teclear = useRef(alTeclear);
+  teclear.current = alTeclear;
 
   useEffect(() => {
     const contenedor = caja.current;
@@ -120,10 +124,11 @@ export function ConsolaLocal({
 
     const entrada = term.onData((datos) => {
       if (id) puente.escribir(id, datos);
+      teclear.current?.(datos);
     });
-    registrar((texto) => {
+    registrar((texto, enfocar = true) => {
       if (id) puente.escribir(id, texto);
-      term.focus();
+      if (enfocar) term.focus();
     });
     const tamano = term.onResize(({ cols, rows }) => {
       if (id) puente.tamano(id, cols, rows);
