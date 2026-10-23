@@ -1,7 +1,8 @@
-/** Discord con tu bot: enviar mensajes o tarjetas, ver/editar/borrar/fijar mensajes, reaccionar y ver tus servidores. */
 import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Pencil, Pin, PinOff, RefreshCw, Send, SmilePlus, Trash2, Users } from "lucide-react";
+import { Hash, Pencil, Pin, PinOff, RefreshCw, Send, SmilePlus, Sparkles, Trash2, Users } from "lucide-react";
+import { useAsistente } from "../components/Asistente";
+import { EtiquetaInvitados } from "../components/CuentaRed";
 import { useState } from "react";
 import { AreaTexto, Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, FaltaConfigurar, Insignia, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { api } from "../lib/api";
@@ -33,7 +34,10 @@ interface Servidor {
 }
 
 function useCanales() {
-  return useQuery({ queryKey: ["redes", "discord"], queryFn: () => api<{ configurado: boolean; canales: CanalDiscord[] }>("/api/discord/canales") });
+  return useQuery({
+    queryKey: ["redes", "discord"],
+    queryFn: () => api<{ configurado: boolean; canales: CanalDiscord[] }>("/api/discord/canales"),
+  });
 }
 
 function SelectorCanal({ valor, alCambiar, canales }: { valor: string; alCambiar: (id: string) => void; canales: CanalDiscord[] }) {
@@ -61,8 +65,15 @@ function Enviar({ canales }: { canales: CanalDiscord[] }) {
   const [canal, setCanal] = useState("");
   const [texto, setTexto] = useState("");
   const [conTarjeta, setConTarjeta] = useState(false);
-  const [t, setT] = useState({ titulo: "", descripcion: "", color: "#5865f2", imagen: "", url: "" });
+  const [t, setT] = useState({
+    titulo: "",
+    descripcion: "",
+    color: "#5865f2",
+    imagen: "",
+    url: "",
+  });
   const elegido = canales.find((c) => c.id === canal);
+  const abrirIa = useAsistente((x) => x.poner);
   const enviar = useMutation({
     mutationFn: async () => {
       const ok = await confirmar({
@@ -81,18 +92,27 @@ function Enviar({ canales }: { canales: CanalDiscord[] }) {
             ...(t.url ? { url: t.url } : {}),
           }
         : undefined;
-      return api("/api/discord/enviar", { metodo: "POST", cuerpo: { canalId: canal, texto, ...(embed ? { embed } : {}) } });
+      return api("/api/discord/enviar", {
+        metodo: "POST",
+        cuerpo: { canalId: canal, texto, ...(embed ? { embed } : {}) },
+      });
     },
     onSuccess: (r) => {
       if (!r) return;
       setTexto("");
-      setT({ titulo: "", descripcion: "", color: t.color, imagen: "", url: "" });
+      setT({
+        titulo: "",
+        descripcion: "",
+        color: t.color,
+        imagen: "",
+        url: "",
+      });
       avisar("Mensaje enviado");
     },
     onError: avisarError,
   });
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <Tarjeta titulo="Nuevo mensaje">
         <div className="space-y-3">
           <Campo etiqueta="Canal">
@@ -116,26 +136,55 @@ function Enviar({ canales }: { canales: CanalDiscord[] }) {
             </div>
           ) : null}
           {puede ? (
-            <Boton variante="primario" icono={Send} disabled={!canal || (!texto.trim() && !(conTarjeta && (t.titulo || t.descripcion || t.imagen)))} cargando={enviar.isPending} onClick={() => enviar.mutate()}>
+            <Boton
+              variante="primario"
+              icono={Send}
+              disabled={!canal || (!texto.trim() && !(conTarjeta && (t.titulo || t.descripcion || t.imagen)))}
+              cargando={enviar.isPending}
+              onClick={() => enviar.mutate()}
+            >
               Enviar
             </Boton>
           ) : null}
         </div>
       </Tarjeta>
-      <Tarjeta titulo="Vista previa">
-        <div className="rounded-xl bg-[#313338] p-4 text-sm text-[#dbdee1]">
-          <p className="mb-1 text-xs font-semibold text-white">Tu bot <span className="rounded bg-[#5865f2] px-1 text-[10px]">BOT</span></p>
-          {texto ? <p className="whitespace-pre-wrap">{texto}</p> : null}
-          {conTarjeta && (t.titulo || t.descripcion || t.imagen) ? (
-            <div className="mt-2 max-w-md rounded border-l-4 bg-[#2b2d31] p-3" style={{ borderColor: t.color }}>
-              {t.titulo ? <p className="font-semibold text-white">{t.titulo}</p> : null}
-              {t.descripcion ? <p className="mt-1 whitespace-pre-wrap">{t.descripcion}</p> : null}
-              {t.imagen.startsWith("https://") ? <img src={t.imagen} alt="" className="mt-2 max-h-48 rounded" referrerPolicy="no-referrer" /> : null}
+      <div className="space-y-4">
+        <Tarjeta titulo="Así se verá en Discord">
+          <div className="overflow-hidden rounded-xl bg-[#313338] text-sm text-[#dbdee1]">
+            <div className="flex items-center gap-1.5 border-b border-black/30 px-3 py-2 text-xs text-[#949ba4]">
+              <Hash className="h-3.5 w-3.5" />
+              {elegido ? `${elegido.nombre} · ${elegido.servidor}` : "elige un canal"}
             </div>
-          ) : null}
-          {!texto && !conTarjeta ? <p className="text-[#949ba4]">Escribe algo para ver cómo se verá.</p> : null}
-        </div>
-      </Tarjeta>
+            <div className="flex gap-3 p-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5865f2] text-sm font-bold text-white">B</span>
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 text-xs font-semibold text-white">
+                  Tu bot <span className="rounded bg-[#5865f2] px-1 text-[10px]">BOT</span> <span className="font-normal text-[#949ba4]">hoy</span>
+                </p>
+                {texto ? <p className="whitespace-pre-wrap break-words">{texto}</p> : null}
+                {conTarjeta && (t.titulo || t.descripcion || t.imagen) ? (
+                  <div className="mt-2 max-w-md rounded border-l-4 bg-[#2b2d31] p-3" style={{ borderColor: t.color }}>
+                    {t.titulo ? <p className="font-semibold text-white">{t.titulo}</p> : null}
+                    {t.descripcion ? <p className="mt-1 whitespace-pre-wrap break-words">{t.descripcion}</p> : null}
+                    {t.imagen.startsWith("https://") ? <img src={t.imagen} alt="" className="mt-2 max-h-48 rounded" referrerPolicy="no-referrer" /> : null}
+                  </div>
+                ) : null}
+                {!texto && !conTarjeta ? <p className="text-[#949ba4]">Escribe algo para ver cómo se verá.</p> : null}
+              </div>
+            </div>
+          </div>
+        </Tarjeta>
+        <section className="flex items-start gap-3 rounded-tarjeta border border-borde bg-[color-mix(in_srgb,var(--acento)_8%,var(--superficie))] p-4">
+          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-acento" />
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-semibold">La IA te ayuda a redactar</p>
+            <p className="mt-0.5 text-xs text-tenue">Pídele un anuncio o una respuesta; ella propone el mensaje y solo se envía cuando tú apruebas.</p>
+          </div>
+          <Boton tamano="sm" onClick={() => abrirIa(true)}>
+            Pedir a la IA
+          </Boton>
+        </section>
+      </div>
     </div>
   );
 }
@@ -212,8 +261,19 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
                   variante="fantasma"
                   icono={Trash2}
                   onClick={async () => {
-                    if (await confirmar({ titulo: "Borrar mensaje", mensaje: `¿Borrar el mensaje de ${m.autor}? No se puede deshacer.`, detalle: m.texto.slice(0, 300), boton: "Borrar" })) {
-                      accion.mutate(() => api(`/api/discord/canales/${canal}/mensajes/${m.id}`, { metodo: "DELETE" }));
+                    if (
+                      await confirmar({
+                        titulo: "Borrar mensaje",
+                        mensaje: `¿Borrar el mensaje de ${m.autor}? No se puede deshacer.`,
+                        detalle: m.texto.slice(0, 300),
+                        boton: "Borrar",
+                      })
+                    ) {
+                      accion.mutate(() =>
+                        api(`/api/discord/canales/${canal}/mensajes/${m.id}`, {
+                          metodo: "DELETE",
+                        }),
+                      );
                     }
                   }}
                 >
@@ -242,7 +302,12 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!editando) return;
-            accion.mutate(() => api(`/api/discord/canales/${canal}/mensajes/${editando.id}`, { metodo: "PATCH", cuerpo: { texto: nuevoTexto } }));
+            accion.mutate(() =>
+              api(`/api/discord/canales/${canal}/mensajes/${editando.id}`, {
+                metodo: "PATCH",
+                cuerpo: { texto: nuevoTexto },
+              }),
+            );
             setEditando(null);
           }}
         >
@@ -257,20 +322,30 @@ function Mensajes({ canales }: { canales: CanalDiscord[] }) {
 }
 
 function Servidores() {
-  const lista = useQuery({ queryKey: ["redes", "discord", "servidores"], queryFn: () => api<Servidor[]>("/api/discord/servidores") });
+  const lista = useQuery({
+    queryKey: ["redes", "discord", "servidores"],
+    queryFn: () => api<Servidor[]>("/api/discord/servidores"),
+  });
   return (
     <div className="space-y-3">
       {lista.isLoading ? <Cargando /> : null}
       <ErrorCaja error={lista.error} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.data?.map((s) => (
-          <div key={s.id} className="flex items-center gap-3 rounded-tarjeta border border-borde bg-superficie p-4">
-            {s.icono ? <img src={s.icono} alt="" className="h-12 w-12 rounded-full" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tarjeta font-semibold">{s.nombre.slice(0, 1)}</div>}
-            <div>
-              <p className="font-medium">{s.nombre}</p>
-              <p className="flex items-center gap-1 text-xs text-tenue">
-                <Users className="h-3 w-3" /> {s.miembros ?? "—"} miembros · {s.conectados ?? "—"} conectados
-              </p>
+          <div key={s.id} className="overflow-hidden rounded-tarjeta border border-borde bg-superficie">
+            <div className="h-14 bg-[linear-gradient(135deg,#5865f2,color-mix(in_srgb,var(--acento)_60%,#1e1f22))]" />
+            <div className="-mt-7 flex items-end gap-3 px-4 pb-4">
+              {s.icono ? (
+                <img src={s.icono} alt="" className="h-14 w-14 rounded-2xl border-4 border-superficie" />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-superficie bg-tarjeta text-lg font-semibold">{s.nombre.slice(0, 1)}</div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate font-medium">{s.nombre}</p>
+                <p className="flex items-center gap-1 text-xs text-tenue">
+                  <Users className="h-3 w-3" /> {s.miembros ?? "—"} miembros · {s.conectados ?? "—"} conectados
+                </p>
+              </div>
             </div>
           </div>
         ))}
@@ -285,7 +360,7 @@ export default function Discord() {
   const [pestana, setPestana] = useState<"enviar" | "mensajes" | "servidores">("enviar");
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Discord" descripcion="Todo con tu bot. La IA también puede redactar mensajes; se envían solo cuando apruebas." />
+      <Encabezado titulo="Discord" descripcion="Todo con tu bot. La IA también puede redactar mensajes; se envían solo cuando apruebas." acciones={<EtiquetaInvitados />} />
       {datos.isLoading ? <Cargando /> : null}
       <ErrorCaja error={datos.error} />
       {datos.data && !datos.data.configurado ? <FaltaConfigurar variable="DISCORD_BOT_TOKEN" detalle="La cuenta maestra lo pone en Ajustes → Servicios y claves." /> : null}

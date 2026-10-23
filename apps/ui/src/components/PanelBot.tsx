@@ -1,14 +1,10 @@
-/**
- * Editor de un bot de Discord: encender/apagar/reiniciar y la configuración de todos sus módulos (bienvenida,
- * moderación, niveles, economía, tickets, roles con botones, comandos propios, registros y mensajes programados).
- * Lo usan tanto tú (con tu cuenta) como el dueño del bot (con su enlace): por eso recibe las funciones de guardar.
- */
 import { CONFIG_BOT_INICIAL, type BotConfig } from "@mi-setup/shared";
 import { useMutation } from "@tanstack/react-query";
-import { Bot, ExternalLink, Plus, Power, RefreshCw, Save, Square, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Bot, ExternalLink, Maximize2, Plus, Power, RefreshCw, Save, Square, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { abrirExterno } from "../lib/plataforma";
-import { AreaTexto, Boton, Campo, Entrada, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
+import { AreaTexto, Boton, Campo, Entrada, Insignia, Interruptor, Selector, Tarjeta, avisar, avisarError, cx } from "./ui";
+import { useForma, useModoPagina } from "../lib/marco";
 import { localeActual } from "../lib/idioma";
 
 export interface Servidor {
@@ -60,8 +56,6 @@ const slug = (t: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 30) || "item";
 const lineas = (t: string) => t.split("\n").map((x) => x.trim()).filter(Boolean);
-
-// ---------------------------------------------------------------- selectores con los canales y roles del servidor
 
 interface Ctx {
   servidor: Servidor | null;
@@ -116,13 +110,145 @@ const Variables = ({ texto }: { texto: string }) => <p className="text-[11px] te
 
 // ---------------------------------------------------------------- el panel
 
+function activoDe(tab: Tab, c: BotConfig): boolean {
+  switch (tab) {
+    case "general":
+      return true;
+    case "bienvenida":
+      return c.bienvenida.activa;
+    case "moderacion":
+      return c.moderacion.activa;
+    case "niveles":
+      return c.niveles.activo;
+    case "economia":
+      return c.economia.activa;
+    case "tickets":
+      return c.tickets.activo;
+    case "roles":
+      return c.roles.paneles.length > 0;
+    case "comandos":
+      return c.comandos.length > 0;
+    case "registros":
+      return Boolean(c.registros.canalId);
+    case "programados":
+      return c.programados.length > 0;
+  }
+}
+
+function Partes({ tab, alCambiar, c, horizontal }: { tab: Tab; alCambiar: (t: Tab) => void; c: BotConfig; horizontal: boolean }) {
+  return (
+    <nav className={cx(horizontal ? "flex gap-2 overflow-x-auto pb-1" : "h-fit space-y-1 rounded-tarjeta border border-borde bg-superficie p-2")}>
+      {TABS.map((t) => {
+        const on = activoDe(t.id, c);
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => alCambiar(t.id)}
+            className={cx(
+              "flex items-center gap-2 rounded-xl text-sm transition-colors",
+              horizontal ? "shrink-0 border px-3 py-1.5" : "w-full px-3 py-2 text-left",
+              tab === t.id
+                ? horizontal
+                  ? "border-acento bg-tarjeta text-texto"
+                  : "bg-[color-mix(in_srgb,var(--acento)_14%,transparent)] text-texto"
+                : horizontal
+                  ? "border-borde text-tenue"
+                  : "text-tenue hover:bg-tarjeta hover:text-texto",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate">{t.texto}</span>
+            <span className={cx("h-2 w-2 shrink-0 rounded-full", on ? "bg-ok" : "bg-borde")} aria-label={on ? "Activo" : "Apagado"} />
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function conVariables(t: string) {
+  return t.replaceAll("{usuario}", "@Nuevo").replaceAll("{servidor}", "Mi servidor").replaceAll("{miembros}", "128");
+}
+
+function Mensaje({ texto, color, marco, titulo }: { texto: string; color: string; marco: boolean; titulo?: string }) {
+  return (
+    <div className="flex gap-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#5865f2] text-xs font-bold text-white">B</span>
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 text-xs font-semibold text-white">
+          Tu bot <span className="rounded bg-[#5865f2] px-1 text-[10px]">BOT</span>
+        </p>
+        {marco ? (
+          <div className="rounded border-l-4 bg-[#2b2d31] p-3" style={{ borderColor: color }}>
+            {titulo ? <p className="mb-1 font-semibold text-white">{titulo}</p> : null}
+            <p className="whitespace-pre-wrap break-words">{texto}</p>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap break-words">{texto}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VistaDiscord({ tab, c, comando }: { tab: Tab; c: BotConfig; comando: number }) {
+  const k = c.comandos[comando] ?? c.comandos[0];
+  const panel = c.roles.paneles[0];
+  let cuerpo: ReactNode;
+  if (tab === "bienvenida") cuerpo = <Mensaje texto={conVariables(c.bienvenida.mensaje)} color={c.general.colorEmbeds} marco={c.bienvenida.conEmbed} titulo="¡Bienvenido!" />;
+  else if (tab === "comandos" && k)
+    cuerpo = (
+      <div className="space-y-3">
+        <p className="text-xs text-[#949ba4]">{`Tú usaste /${k.nombre}`}</p>
+        <Mensaje texto={conVariables(k.respuesta)} color={c.general.colorEmbeds} marco={k.conEmbed} />
+        {k.privado ? <p className="text-[11px] text-[#949ba4]">Solo tú puedes ver esto</p> : null}
+      </div>
+    );
+  else if (tab === "programados" && c.programados[0]) cuerpo = <Mensaje texto={c.programados[0].texto} color={c.general.colorEmbeds} marco={false} />;
+  else if (tab === "roles" && panel)
+    cuerpo = (
+      <div className="space-y-2">
+        <Mensaje texto={panel.texto} color={c.general.colorEmbeds} marco titulo={panel.titulo} />
+        <div className="flex flex-wrap gap-1.5 pl-12">
+          {panel.roles.map((r, i) => (
+            <span key={i} className="rounded bg-[#4e5058] px-2.5 py-1 text-xs text-white">
+              {r.emoji} {r.etiqueta}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  else cuerpo = <p className="text-[#949ba4]">Elige Bienvenida, Roles, Comandos o Programados para ver cómo responde tu bot.</p>;
+  return (
+    <Tarjeta titulo="Así se ve en Discord">
+      <div className="rounded-xl bg-[#313338] p-4 text-sm text-[#dbdee1]">{cuerpo}</div>
+    </Tarjeta>
+  );
+}
+
+function PantallaCompleta({ titulo, alCerrar, acciones, children }: { titulo: string; alCerrar: () => void; acciones: ReactNode; children: ReactNode }) {
+  useModoPagina("completa");
+  return (
+    <div className="flex h-[var(--alto-app,100dvh)] flex-col bg-fondo">
+      <header className="flex items-center gap-2 border-b border-borde px-3 py-2">
+        <Boton variante="fantasma" tamano="icono" icono={ArrowLeft} aria-label="Volver" onClick={alCerrar} />
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold">{titulo}</p>
+        {acciones}
+      </header>
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 export function PanelBot({ bot, api, cliente = false }: { bot: BotDetalle; api: ApiBot; cliente?: boolean }) {
   const [config, setConfig] = useState<BotConfig>(bot.config);
   const [sucio, setSucio] = useState(false);
   const [tab, setTab] = useState<Tab>("general");
   const [guildId, setGuildId] = useState<string>("");
+  const [completo, setCompleto] = useState(false);
+  const [comando, setComando] = useState(0);
+  const forma = useForma();
   useEffect(() => {
-    // Los cambios del servidor no pisan lo que estás editando.
     if (!sucio) setConfig(bot.config);
   }, [bot.config, sucio]);
   const servidor = bot.servidores.find((s) => s.id === guildId) ?? bot.servidores[0] ?? null;
@@ -206,9 +332,18 @@ export function PanelBot({ bot, api, cliente = false }: { bot: BotDetalle; api: 
         {!servidor ? <p className="mt-2 text-xs text-tenue">Con el bot encendido y dentro de tu servidor, los canales y roles se eligen de una lista; si no, escribe su ID (en Discord: Ajustes → Avanzado → Modo desarrollador, y clic derecho → Copiar ID).</p> : null}
       </Tarjeta>
 
-      <Pestanas valor={tab} alCambiar={setTab} opciones={TABS} />
-
-      <Tarjeta titulo={TABS.find((t) => t.id === tab)!.texto}>
+      <div className={cx("grid gap-4", forma === "pc" ? "grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[200px_minmax(0,1fr)_minmax(0,0.8fr)]" : "grid-cols-1")}>
+        <Partes tab={tab} alCambiar={setTab} c={c} horizontal={forma !== "pc"} />
+        <Tarjeta
+          titulo={TABS.find((t) => t.id === tab)!.texto}
+          acciones={
+            tab === "comandos" ? (
+              <Boton tamano="sm" icono={Maximize2} onClick={() => setCompleto(true)}>
+                Abrir a pantalla completa
+              </Boton>
+            ) : null
+          }
+        >
         {tab === "general" ? (
           <div className="space-y-4">
             <Fila>
@@ -597,6 +732,112 @@ export function PanelBot({ bot, api, cliente = false }: { bot: BotDetalle; api: 
           </div>
         ) : null}
       </Tarjeta>
+        <div className={cx(forma === "pc" ? "hidden 2xl:block" : "")}>
+          <VistaDiscord tab={tab} c={c} comando={comando} />
+        </div>
+      </div>
+
+      {completo ? (
+        <div className="fixed inset-0 z-[60]">
+          <PantallaCompleta
+            titulo="Comandos del bot"
+            alCerrar={() => setCompleto(false)}
+            acciones={
+              <Boton variante="primario" tamano="sm" icono={Save} cargando={guardar.isPending} disabled={!sucio} onClick={() => guardar.mutate()}>
+                Guardar
+              </Boton>
+            }
+          >
+            <div className={cx("h-full", forma === "pc" ? "grid grid-cols-[240px_minmax(0,1fr)_minmax(0,0.9fr)]" : "overflow-y-auto")}>
+              <aside className={cx("p-3", forma === "pc" ? "space-y-1 overflow-y-auto border-r border-borde" : "flex gap-2 overflow-x-auto border-b border-borde")}>
+                {c.comandos.map((k, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setComando(i)}
+                    className={cx(
+                      "rounded-xl px-3 py-2 text-left font-mono text-sm",
+                      forma === "pc" ? "block w-full" : "shrink-0",
+                      comando === i ? "bg-[color-mix(in_srgb,var(--acento)_14%,transparent)] text-acento" : "text-tenue hover:bg-tarjeta",
+                    )}
+                  >
+                    /{k.nombre}
+                  </button>
+                ))}
+                <Boton
+                  tamano="sm"
+                  variante="fantasma"
+                  icono={Plus}
+                  disabled={c.comandos.length >= 25}
+                  onClick={() => {
+                    cambiar((x) => ({ ...x, comandos: [...x.comandos, { nombre: `comando${x.comandos.length + 1}`, descripcion: "Mi comando", respuesta: "¡Hola {usuario}!", conEmbed: false, privado: false }] }));
+                    setComando(c.comandos.length);
+                  }}
+                >
+                  Nuevo
+                </Boton>
+              </aside>
+              {c.comandos[comando] ? (
+                <section className="flex min-h-0 flex-col gap-3 p-4">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+                    <Campo etiqueta="Comando">
+                      <Entrada
+                        value={c.comandos[comando]!.nombre}
+                        onChange={(e) => cambiar((x) => ({ ...x, comandos: x.comandos.map((y, j) => (j === comando ? { ...y, nombre: slug(e.target.value).replace(/-+$/, "") } : y)) }))}
+                      />
+                    </Campo>
+                    <Campo etiqueta="Qué hace (lo ven al escribir /)">
+                      <Entrada
+                        value={c.comandos[comando]!.descripcion}
+                        maxLength={100}
+                        onChange={(e) => cambiar((x) => ({ ...x, comandos: x.comandos.map((y, j) => (j === comando ? { ...y, descripcion: e.target.value } : y)) }))}
+                      />
+                    </Campo>
+                  </div>
+                  <label className="flex min-h-[12rem] flex-1 flex-col gap-1 text-sm">
+                    <span className="text-xs text-tenue">{`Respuesta (${c.comandos[comando]!.respuesta.length} de 2000 letras)`}</span>
+                    <textarea
+                      value={c.comandos[comando]!.respuesta}
+                      maxLength={2000}
+                      onChange={(e) => cambiar((x) => ({ ...x, comandos: x.comandos.map((y, j) => (j === comando ? { ...y, respuesta: e.target.value } : y)) }))}
+                      className="min-h-0 flex-1 resize-none rounded-xl border border-borde bg-superficie p-3 text-base leading-relaxed outline-none focus:border-acento"
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Interruptor
+                      activo={c.comandos[comando]!.conEmbed}
+                      alCambiar={(v) => cambiar((x) => ({ ...x, comandos: x.comandos.map((y, j) => (j === comando ? { ...y, conEmbed: v } : y)) }))}
+                      etiqueta="Con marco"
+                    />
+                    <Interruptor
+                      activo={c.comandos[comando]!.privado}
+                      alCambiar={(v) => cambiar((x) => ({ ...x, comandos: x.comandos.map((y, j) => (j === comando ? { ...y, privado: v } : y)) }))}
+                      etiqueta="Solo lo ve quien lo usa"
+                    />
+                    <Boton
+                      tamano="sm"
+                      variante="fantasma"
+                      icono={Trash2}
+                      className="ml-auto"
+                      onClick={() => {
+                        cambiar((x) => ({ ...x, comandos: x.comandos.filter((_, j) => j !== comando) }));
+                        setComando(0);
+                      }}
+                    >
+                      Quitar
+                    </Boton>
+                  </div>
+                </section>
+              ) : (
+                <p className="p-6 text-sm text-tenue">Crea tu primer comando con «Nuevo».</p>
+              )}
+              <div className={cx("p-4", forma === "pc" ? "overflow-y-auto border-l border-borde" : "border-t border-borde")}>
+                <VistaDiscord tab="comandos" c={c} comando={comando} />
+              </div>
+            </div>
+          </PantallaCompleta>
+        </div>
+      ) : null}
 
       <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-tarjeta border border-borde bg-superficie p-3 shadow-lg">
         <Boton variante="primario" icono={Save} cargando={guardar.isPending} disabled={!sucio} onClick={() => guardar.mutate()}>

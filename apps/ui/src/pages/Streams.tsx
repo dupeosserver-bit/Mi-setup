@@ -1,9 +1,8 @@
-/** Streams: título y juego/categoría en Twitch, YouTube y Kick. */
 import { usePaginado } from "../components/Paginas";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Save, Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { EstadoCuenta, useCuentas, type CuentaRed } from "../components/CuentaRed";
+import { EstadoCuenta, EtiquetaInvitados, useCuentas, type CuentaRed } from "../components/CuentaRed";
 import { ClipsPanel } from "../components/ClipsPanel";
 import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Pestanas, Tarjeta, avisar, avisarError } from "../components/ui";
 import { api } from "../lib/api";
@@ -90,6 +89,8 @@ function Editor({ c }: { c: CuentaRed }) {
   );
 }
 
+const COLOR: Record<string, string> = { twitch: "#9146ff", youtube: "#e62117", kick: "#2fb34a" };
+
 export default function Streams() {
   const cuentas = useCuentas();
   const [pestana, setPestana] = useState<"streams" | "clips">("streams");
@@ -97,7 +98,11 @@ export default function Streams() {
   const pgClips = usePaginado(lista, 12);
   return (
     <div className="space-y-4">
-      <Encabezado titulo="Streams" descripcion="Cambia el título y el juego de tus transmisiones, y saca clips para TikTok. La IA también puede proponer; tú apruebas." />
+      <Encabezado
+        titulo="Streams"
+        descripcion="Cambia el título y el juego de tus transmisiones, y saca clips para TikTok. La IA también puede proponer; tú apruebas."
+        acciones={<EtiquetaInvitados />}
+      />
       <Pestanas
         valor={pestana}
         alCambiar={setPestana}
@@ -111,7 +116,17 @@ export default function Streams() {
       <ErrorCaja error={cuentas.error} />
       <div className={pestana === "streams" ? "grid grid-cols-1 gap-4 lg:grid-cols-3" : "hidden"}>
         {pgClips.visibles.map((c) => (
-          <Tarjeta key={c.plataforma} titulo={c.nombre}>
+          <Tarjeta
+            key={c.plataforma}
+            titulo={
+              <span className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-xl text-[11px] font-bold text-white" style={{ background: COLOR[c.plataforma] ?? "var(--acento)" }}>
+                  {c.nombre.slice(0, 2).toUpperCase()}
+                </span>
+                {c.nombre}
+              </span>
+            }
+          >
             <EstadoCuenta c={c} />
             {c.cuenta ? <Editor c={c} /> : null}
           </Tarjeta>
