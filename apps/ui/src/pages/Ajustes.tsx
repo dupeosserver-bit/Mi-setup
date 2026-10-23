@@ -19,18 +19,22 @@ import {
   type TemaTerminal,
 } from "@mi-setup/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, Plus, RotateCcw, Save, Server, ShieldCheck, Volume2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Fingerprint, Globe2, GraduationCap, ImagePlus, KeyRound, LogOut, Minus, MonitorSmartphone, Palette, Plug, Plus, RefreshCw, RotateCcw, Save, Server, ShieldCheck, SquareTerminal, UserRound, Volume2, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { cerrarSesion } from "../components/Layout";
 import { Logo, useAparienciaPublica } from "../components/Logo";
 import { abrirTutorial } from "../components/Tutorial";
 import { DescargasApps } from "../components/DescargasApps";
+import { SeccionActualizaciones, useHayVersionNueva } from "../components/Actualizaciones";
+import { PUBLICA } from "../edicion";
+import { cambiarServidorConservando } from "../lib/actualizaciones";
+import { useForma } from "../lib/marco";
 import { CodigoQr } from "../components/CodigoQr";
 import { InsigniaRol } from "./Cuentas";
-import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Pestanas, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
+import { Boton, Campo, Cargando, Encabezado, Entrada, ErrorCaja, Insignia, Interruptor, Selector, Tarjeta, avisar, avisarError, cx } from "../components/ui";
 import { confirmar } from "../lib/confirmar";
-import { PUEDE_CAMBIAR_SERVIDOR, api, cambiarServidor, olvidarServidor, servidoresRecordados } from "../lib/api";
+import { API_BASE, PUEDE_CAMBIAR_SERVIDOR, api, olvidarServidor, servidoresRecordados } from "../lib/api";
 import { useModelosExtra } from "../lib/ia-modelos";
 import { biometriaDisponible, biometriaSoportada, inscribirBiometria, quitarBiometria } from "../lib/biometria";
 import { queryClient, useApariencia, useMe, usePuede } from "../lib/consultas";
@@ -1047,18 +1051,57 @@ function BotonesFlotantes() {
   );
 }
 
-// ---------------------------------------------------------------- servidores de Mi Setup
+const SE_QUEDA = ["Tu tema, letra y zoom", "Letras más legibles y fondo", "Idioma", "Apariencia de la terminal", "Tu voz", "Las sesiones de otros servidores en este aparato"];
+const CAMBIA = ["Las funciones del menú: las que tenga ese servidor", "Tus datos: notas, recordatorios, finanzas…", "Tu cuenta y permisos en ese servidor", "Servidores, sitios y claves de ese servidor"];
 
-/** Cambiar entre tu Mi Setup y otros (de tu familia, de un cliente) sin volver a iniciar sesión. */
+function CajaCambio({ titulo, lista, tono }: { titulo: string; lista: string[]; tono: "ok" | "aviso" }) {
+  const color = tono === "ok" ? "var(--ok, #3ddc84)" : "var(--aviso, #f5c451)";
+  return (
+    <div className="rounded-2xl border p-3" style={{ borderColor: `color-mix(in srgb, ${color} 45%, transparent)`, background: `color-mix(in srgb, ${color} 8%, transparent)` }}>
+      <p className="mb-2 text-sm font-semibold" style={{ color }}>
+        {titulo}
+      </p>
+      <ul className="space-y-1 text-sm">
+        {lista.map((t) => (
+          <li key={t} className="flex gap-2">
+            <span aria-hidden style={{ color }}>
+              •
+            </span>
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ServidoresMiSetup() {
   const [lista, setLista] = useState(() => servidoresRecordados());
   const [nuevo, setNuevo] = useState("");
-  if (!PUEDE_CAMBIAR_SERVIDOR) return null;
+  const ir = (url: string | null) =>
+    void confirmar({
+      titulo: `Cambiar a ${url ? new URL(url).host : "el servidor principal"}`,
+      mensaje: "La app se recarga con las funciones de ese servidor. Tu apariencia, idioma y terminal se quedan igual.",
+    }).then((ok) => ok && cambiarServidorConservando(url));
+  const cajas = (
+    <div className="grid gap-3 md:grid-cols-2">
+      <CajaCambio titulo="Se queda" lista={SE_QUEDA} tono="ok" />
+      <CajaCambio titulo="Cambia" lista={CAMBIA} tono="aviso" />
+    </div>
+  );
+  if (!PUEDE_CAMBIAR_SERVIDOR)
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-tenue">En el navegador cada servidor tiene su propia dirección: ábrela en otra pestaña. En la app de PC y del celular cambias aquí mismo.</p>
+        {cajas}
+      </div>
+    );
   return (
-    <Tarjeta titulo="Servidores de Mi Setup" icono={Server}>
-      <ul className="space-y-1">
+    <div className="space-y-4">
+      <ul className="overflow-hidden rounded-2xl border border-borde">
         {lista.map((s) => (
-          <li key={s.url} className="flex flex-wrap items-center gap-2 rounded-xl bg-fondo px-3 py-2 text-sm">
+          <li key={s.url} className="flex flex-wrap items-center gap-2 border-b border-borde bg-tarjeta px-4 py-3 text-sm last:border-b-0">
+            <Server className="h-4 w-4 shrink-0 text-acento" />
             <span className="min-w-0 flex-1 truncate">
               {new URL(s.url).host}
               {s.nombre ? <span className="text-xs text-tenue"> · {s.nombre}</span> : null}
@@ -1067,7 +1110,7 @@ function ServidoresMiSetup() {
               <Insignia tono="ok">En uso</Insignia>
             ) : (
               <>
-                <Boton tamano="sm" onClick={() => cambiarServidor(s.url)}>
+                <Boton tamano="sm" onClick={() => ir(s.url)}>
                   Cambiar
                 </Boton>
                 <Boton
@@ -1087,13 +1130,13 @@ function ServidoresMiSetup() {
         ))}
       </ul>
       <form
-        className="mt-3 flex gap-2"
+        className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           try {
             const u = new URL(nuevo.trim());
             if (u.protocol !== "https:") throw new Error();
-            cambiarServidor(u.origin);
+            ir(u.origin);
           } catch {
             avisarError(new Error("Escribe la dirección completa con https://"));
           }
@@ -1102,61 +1145,222 @@ function ServidoresMiSetup() {
         <Entrada value={nuevo} onChange={(e) => setNuevo(e.target.value)} inputMode="url" placeholder="https://setup.otrodominio.com" />
         <Boton type="submit">Agregar</Boton>
       </form>
-      <p className="mt-2 text-xs text-tenue">Cada servidor guarda su propia sesión en este dispositivo: cambias con un toque sin volver a escribir tu contraseña.</p>
-    </Tarjeta>
+      {cajas}
+      <p className="text-xs text-tenue">Cada servidor guarda su propia sesión en este aparato: cambias con un toque sin volver a escribir tu contraseña.</p>
+    </div>
   );
 }
 
-// ---------------------------------------------------------------- página
+function SitioOficial() {
+  const sitios = useQuery({ queryKey: ["sitios"], queryFn: () => api<{ id: string; slug: string }[]>("/api/sitios") });
+  const oficial = sitios.data?.find((x) => x.slug === "misetup");
+  const actualizar = useMutation({
+    mutationFn: () => api<{ publicado: boolean }>(`/api/sitios/${oficial?.id ?? ""}/oficial/actualizar`, { metodo: "POST" }),
+    onSuccess: (r) => avisar(r.publicado ? "Sitio oficial actualizado y publicado" : "Sitio oficial actualizado (sin publicar)"),
+    onError: avisarError,
+  });
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-tenue">{`Pone la wiki, las capturas, el logo y las descargas del sitio oficial al día con esta versión (${__VERSION_APP__}). Si ya está publicado, lo nuevo se publica también.`}</p>
+      {sitios.isLoading ? <Cargando /> : null}
+      {sitios.data && !oficial ? <p className="text-tenue">Todavía no hay sitio oficial en este servidor.</p> : null}
+      <Boton
+        variante="primario"
+        icono={RotateCcw}
+        disabled={!oficial}
+        cargando={actualizar.isPending}
+        onClick={() => void confirmar({ titulo: "Actualizar el sitio oficial", mensaje: "Se reemplazan sus páginas por las de esta versión. Lo que hayas cambiado a mano queda en el historial de versiones." }).then((ok) => ok && actualizar.mutate())}
+      >
+        Actualizar con esta versión
+      </Boton>
+    </div>
+  );
+}
 
-const PESTANAS = ["cuenta", "apariencia", "terminal", "voz", "seguridad", "apps", "claves", "servicios"] as const;
+function MiCuenta() {
+  const navegar = useNavigate();
+  return (
+    <div className="space-y-4">
+      <Cuenta />
+      <button type="button" onClick={() => navegar("/equipos")} className="flex w-full items-center gap-3 rounded-2xl border border-borde bg-tarjeta p-4 text-left transition hover:border-acento">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl text-white" style={{ background: "#3a7bd5" }}>
+          <MonitorSmartphone className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <b className="block">Equipos</b>
+          <small className="text-tenue">Dónde tienes la sesión abierta, historial y cerrar las demás</small>
+        </span>
+        <ChevronRight className="h-4 w-4 text-tenue" />
+      </button>
+      <Boton variante="peligro" icono={LogOut} className="w-full sm:w-auto" onClick={() => void cerrarSesion().then(() => navegar("/login"))}>
+        Cerrar sesión
+      </Boton>
+    </div>
+  );
+}
+
+const PESTANAS = ["cuenta", "servidor", "apariencia", "terminal", "voz", "seguridad", "claves", "servicios", "apps", "actualizaciones", "oficial"] as const;
 type Pestana = (typeof PESTANAS)[number];
 
+interface FilaAjuste {
+  id: Pestana;
+  titulo: string;
+  icono: LucideIcon;
+  color: string;
+  valor?: string;
+  globo?: boolean;
+}
+
+function Fila({ f, activa, alTocar }: { f: FilaAjuste; activa: boolean; alTocar: () => void }) {
+  const Icono = f.icono;
+  return (
+    <button
+      type="button"
+      onClick={alTocar}
+      aria-current={activa ? "page" : undefined}
+      className="flex w-full items-center gap-3 border-b border-borde px-3 py-2.5 text-left text-sm transition last:border-b-0 hover:bg-fondo"
+      style={activa ? { background: "color-mix(in srgb, var(--acento) 14%, transparent)" } : undefined}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white" style={{ background: f.color }}>
+        <Icono className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1 truncate font-medium">{f.titulo}</span>
+      {f.globo ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-peligro" aria-label="Hay algo nuevo" /> : null}
+      {f.valor ? <span className="max-w-[40%] truncate text-xs text-tenue">{f.valor}</span> : null}
+      <ChevronRight className="h-4 w-4 shrink-0 text-tenue" />
+    </button>
+  );
+}
+
 export default function Ajustes() {
-  const [pestana, setPestana] = useState<Pestana>(() => {
+  const forma = useForma();
+  const ancho = forma === "pc";
+  const [pestana, setPestana] = useState<Pestana | null>(() => {
     const pedida = new URLSearchParams(window.location.search).get("pestana");
-    return PESTANAS.find((x) => x === pedida) ?? "cuenta";
+    const encontrada = PESTANAS.find((x) => x === pedida);
+    return encontrada ?? null;
   });
   const { data: me } = useMe();
+  const { data: apariencia } = useApariencia();
+  const prefs = usePreferencias();
   const esMaestra = me?.usuario.role === "maestra";
+  const hayNueva = useHayVersionNueva();
   const misClaves = useQuery({
     queryKey: ["mis-claves"],
     queryFn: () => api<RespuestaMisClaves>("/api/mis-claves"),
     staleTime: 60_000,
   });
   const verServicios = esMaestra || Boolean(misClaves.data?.politica.verServicios);
+  const grupos: FilaAjuste[][] = [
+    [
+      { id: "cuenta", titulo: "Mi cuenta", icono: UserRound, color: "#7c5cff", valor: "Equipos y sesión" },
+      { id: "servidor", titulo: "Servidor", icono: Server, color: "#2e9e6b", valor: new URL(API_BASE || window.location.origin).host },
+    ],
+    [
+      { id: "apariencia", titulo: "Apariencia", icono: Palette, color: "#ec4899", valor: TEMAS_APP[prefs.tema] },
+      { id: "terminal", titulo: "Terminal", icono: SquareTerminal, color: "#334155", valor: TEMAS_TERMINAL[prefs.terminal.tema] },
+      { id: "voz", titulo: "Voz e IA", icono: Volume2, color: "#a855f7" },
+    ],
+    [
+      { id: "seguridad", titulo: "Seguridad", icono: ShieldCheck, color: "#3a7bd5", valor: "PIN, huella y 2 pasos" },
+      { id: "claves", titulo: "Mis claves", icono: KeyRound, color: "#f59e0b" },
+      ...(verServicios ? [{ id: "servicios" as const, titulo: "Servicios y claves", icono: Plug, color: "#0ea5e9" }] : []),
+    ],
+    [
+      { id: "apps", titulo: "Descargar apps", icono: Download, color: "#14b8a6", valor: "PC, Android, iPhone" },
+      { id: "actualizaciones", titulo: "Actualizaciones", icono: RefreshCw, color: "#6366f1", valor: __VERSION_APP__, globo: hayNueva },
+      ...(esMaestra && !PUBLICA ? [{ id: "oficial" as const, titulo: "Sitio oficial", icono: Globe2, color: "#8b5cf6" }] : []),
+    ],
+  ];
+  const filas = grupos.flat();
+  const actual = filas.find((f) => f.id === pestana) ?? (ancho ? filas[0] : undefined);
+  const elegir = (id: Pestana) => {
+    setPestana(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("pestana", id);
+    window.history.replaceState(window.history.state, "", url);
+  };
+  const volver = () => {
+    setPestana(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("pestana");
+    window.history.replaceState(window.history.state, "", url);
+  };
+
+  const lista = (
+    <div className="space-y-4">
+      <button type="button" onClick={() => elegir("cuenta")} className="flex w-full items-center gap-3 rounded-2xl border border-borde bg-tarjeta p-4 text-left transition hover:border-acento">
+        {apariencia?.avatar ? (
+          <img src={apariencia.avatar} alt="" className="h-14 w-14 rounded-full object-cover" />
+        ) : (
+          <span className="flex h-14 w-14 items-center justify-center rounded-full text-xl font-semibold text-white" style={{ background: "#7c5cff" }}>
+            {me?.usuario.displayName.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <b className="block truncate text-base">{me?.usuario.displayName}</b>
+          <small className="block truncate text-tenue">{me?.usuario.email}</small>
+        </span>
+        <ChevronRight className="h-4 w-4 text-tenue" />
+      </button>
+      {grupos.map((g, i) =>
+        g.length ? (
+          <div key={i} className="overflow-hidden rounded-2xl border border-borde bg-tarjeta">
+            {g.map((f) => (
+              <Fila key={f.id} f={f} activa={ancho && actual?.id === f.id} alTocar={() => elegir(f.id)} />
+            ))}
+          </div>
+        ) : null,
+      )}
+      <button
+        type="button"
+        onClick={() => void cerrarSesion().then(() => window.location.assign("/login"))}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-borde bg-tarjeta p-3 text-sm font-semibold text-peligro transition hover:bg-fondo"
+      >
+        <LogOut className="h-4 w-4" />
+        Cerrar sesión
+      </button>
+    </div>
+  );
+
+  const detalle = actual ? (
+    <div className="min-w-0">
+      {ancho ? null : (
+        <button type="button" onClick={volver} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-acento">
+          <ChevronLeft className="h-4 w-4" />
+          Ajustes
+        </button>
+      )}
+      <h2 className="mb-4 text-xl font-semibold">{actual.titulo}</h2>
+      {actual.id === "cuenta" ? <MiCuenta /> : null}
+      {actual.id === "servidor" ? <ServidoresMiSetup /> : null}
+      {actual.id === "apariencia" ? <Apariencia /> : null}
+      {actual.id === "terminal" ? <TerminalAjustes /> : null}
+      {actual.id === "voz" ? <VozIa /> : null}
+      {actual.id === "seguridad" ? <Seguridad /> : null}
+      {actual.id === "claves" ? <MisClaves /> : null}
+      {actual.id === "servicios" && verServicios ? <Servicios /> : null}
+      {actual.id === "apps" ? <DescargasApps /> : null}
+      {actual.id === "actualizaciones" ? <SeccionActualizaciones /> : null}
+      {actual.id === "oficial" ? <SitioOficial /> : null}
+    </div>
+  ) : null;
+
+  if (!ancho) {
+    return (
+      <>
+        {detalle ? null : <Encabezado titulo="Ajustes" descripcion="Tus cambios se guardan en tu cuenta y se aplican en la PC y el celular." />}
+        {detalle ?? lista}
+      </>
+    );
+  }
   return (
     <>
       <Encabezado titulo="Ajustes" descripcion="Tus cambios se guardan en tu cuenta y se aplican en la PC y el celular." />
-      <Pestanas
-        valor={pestana}
-        alCambiar={setPestana}
-        opciones={[
-          { id: "cuenta", texto: "Cuenta" },
-          { id: "apariencia", texto: "Apariencia" },
-          { id: "terminal", texto: "Terminal" },
-          { id: "voz", texto: "Voz e IA" },
-          { id: "seguridad", texto: "Seguridad" },
-          { id: "apps", texto: "Descargar apps" },
-          { id: "claves", texto: "Mis claves" },
-          ...(verServicios ? [{ id: "servicios" as const, texto: "Servicios y claves" }] : []),
-        ]}
-      />
-      {pestana === "cuenta" ? (
-        <>
-          <Cuenta />
-          <div className="mt-4">
-            <ServidoresMiSetup />
-          </div>
-        </>
-      ) : null}
-      {pestana === "apariencia" ? <Apariencia /> : null}
-      {pestana === "terminal" ? <TerminalAjustes /> : null}
-      {pestana === "voz" ? <VozIa /> : null}
-      {pestana === "seguridad" ? <Seguridad /> : null}
-      {pestana === "apps" ? <DescargasApps /> : null}
-      {pestana === "claves" ? <MisClaves /> : null}
-      {pestana === "servicios" && verServicios ? <Servicios /> : null}
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr)" }}>
+        <div className="sticky top-4">{lista}</div>
+        {detalle}
+      </div>
     </>
   );
 }

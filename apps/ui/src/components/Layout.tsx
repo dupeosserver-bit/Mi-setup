@@ -27,6 +27,7 @@ import { Buscador } from "./Buscador";
 import { ErrorPantalla } from "./ErrorPantalla";
 import { Tutorial } from "./Tutorial";
 import { AvisoActualizacion } from "./Actualizaciones";
+import { useAplicarBasicasPendientes, useModoActualizacion } from "../lib/actualizaciones";
 import { Logo } from "./Logo";
 import { Cargando, Modal, Punto, cx } from "./ui";
 
@@ -379,6 +380,8 @@ export function Layout() {
   const { data: me } = useMe();
   const { data: apariencia } = useApariencia();
   const prefs = usePreferencias();
+  useModoActualizacion();
+  useAplicarBasicasPendientes();
   const conexion = useEstadoConexion();
   const visibles = useVisibles();
   const esDueno = me?.usuario.role === "maestra";

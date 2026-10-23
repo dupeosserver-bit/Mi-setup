@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld("miSetup", {
   abrirExterno: (url: string) => ipcRenderer.send("externo", url),
   notificar: (titulo: string, cuerpo: string) => ipcRenderer.send("notificar", titulo, cuerpo),
   ventana: (accion: AccionVentana) => ipcRenderer.send("ventana", accion),
+  actualizaciones: {
+    modo: (modo: string) => ipcRenderer.send("act:modo", modo),
+    buscar: () => ipcRenderer.send("act:buscar"),
+  },
   /** Archivos de esta PC para el editor de código (solo carpetas que elijas). */
   archivosLocales: {
     carpetas: () => ipcRenderer.invoke("fs:carpetas"),

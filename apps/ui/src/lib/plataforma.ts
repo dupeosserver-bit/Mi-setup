@@ -27,6 +27,7 @@ export interface PuenteEscritorio {
   readonly archivosLocales?: ArchivosLocales;
   /** Host local (versión 0.8 o más nueva). */
   readonly servidoresLocales?: ServidoresLocales;
+  readonly actualizaciones?: { modo(modo: "auto" | "preguntar" | "no"): void; buscar(): void };
 }
 
 export type TipoServidor = "paper" | "purpur" | "folia" | "fabric" | "quilt" | "forge" | "neoforge" | "mohist" | "arclight" | "vanilla" | "velocity" | "personalizado";

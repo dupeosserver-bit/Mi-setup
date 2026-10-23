@@ -4,14 +4,17 @@
  * en las preferencias de la cuenta (y en este equipo) y se puede repetir desde
  * Ajustes → Cuenta.
  */
-import { MODULES, can, type ModuleId } from "@mi-setup/shared";
+import { MODULES, can, pantallaBienvenida, type ModuleId } from "@mi-setup/shared";
 import { ChevronLeft, ChevronRight, Gift, HelpCircle, Sparkles, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { AYUDA } from "../lib/ayuda";
 import { useMe } from "../lib/consultas";
 import { useGuardarPreferencias, usePreferencias } from "../lib/preferencias";
 import type { ModuloUi } from "../modulos";
+import { NOVEDADES, QueHayDeNuevo, VERSION_NOVEDADES } from "./QueHayDeNuevo";
 import { Boton, Modal, cx } from "./ui";
+
+export { VERSION_NOVEDADES };
 
 export interface GrupoTutorial {
   id: string;
@@ -21,20 +24,6 @@ export interface GrupoTutorial {
 }
 
 const EVENTO = "mi-setup:tutorial";
-
-/** Versión de las novedades de abajo: al subirla, el tutorial se vuelve a abrir solo con lo nuevo. */
-export const VERSION_NOVEDADES = "0.11.3b";
-
-/** Lo nuevo de esta versión; cada línea sale solo si la cuenta puede usar ese apartado. */
-const NOVEDADES: readonly { modulo: ModuleId; texto: string }[] = [
-  { modulo: "ajustes", texto: "Letras más legibles: sube el contraste, cambia el color de las letras o ponles sombra (Ajustes → Apariencia). Las barras de transparencia ya se mueven fluidas." },
-  { modulo: "ajustes", texto: "Logo nuevo de Mi Setup, y en iPhone ya se instala desde Safari (Ajustes → Descargar apps → iPhone y iPad)." },
-  { modulo: "notas", texto: "Bloc de notas: «En vivo» también en el celular vertical, y la nota de voz ya no pide permiso de más." },
-  { modulo: "ia", texto: "IA: crear o editar un proyecto en el celular ya no se esconde detrás de la lista de chats." },
-  { modulo: "novedades", texto: "Vigilar precios: ya funciona con páginas grandes como Amazon." },
-  { modulo: "host_local", texto: "Semillas: ver el Nether ya no da error." },
-  { modulo: "vps_seguridad", texto: "Encendido y servicios: el buscador se ve también con el celular vertical." },
-];
 
 /** Vuelve a abrir el tutorial (botón en Ajustes). */
 export function abrirTutorial(): void {
@@ -66,7 +55,9 @@ function pasoNovedades(puede: (m: ModuleId) => boolean): Paso | null {
     contenido: (
       <ul className="list-disc space-y-2 pl-5 text-sm">
         {lista.map((n) => (
-          <li key={n.texto}>{n.texto}</li>
+          <li key={n.titulo}>
+            <b>{n.titulo}:</b> {n.texto}
+          </li>
         ))}
       </ul>
     ),
@@ -138,16 +129,16 @@ export function Tutorial({ grupos }: { grupos: GrupoTutorial[] }) {
   // Primera vez de la cuenta: se abre solo (cuando ya cargaron la cuenta y el menú).
   useEffect(() => {
     if (!usuarioId || !grupos.length) return;
-    if (!prefs.tutorialVisto && !leerVisto(usuarioId)) {
-      setIndice(0);
-      setSoloNovedades(false);
-      setAbierto(true);
-    } else if (prefs.novedadesVistas !== VERSION_NOVEDADES && !leerVisto(usuarioId, VERSION_NOVEDADES)) {
-      // Ya conoce la app: solo le enseñamos lo nuevo de esta versión.
-      setIndice(0);
-      setSoloNovedades(true);
-      setAbierto(true);
-    }
+    const pantalla = pantallaBienvenida({
+      tutorialVisto: prefs.tutorialVisto || leerVisto(usuarioId),
+      novedadesVistas: prefs.novedadesVistas,
+      version: VERSION_NOVEDADES,
+      vistaEnEsteEquipo: leerVisto(usuarioId, VERSION_NOVEDADES),
+    });
+    if (!pantalla) return;
+    setIndice(0);
+    setSoloNovedades(pantalla === "novedades");
+    setAbierto(true);
   }, [usuarioId, grupos.length, prefs.tutorialVisto, prefs.novedadesVistas]);
 
   useEffect(() => {
@@ -179,8 +170,10 @@ export function Tutorial({ grupos }: { grupos: GrupoTutorial[] }) {
     if (!prefs.tutorialVisto || prefs.novedadesVistas !== VERSION_NOVEDADES) guardar((p) => ({ ...p, tutorialVisto: true, novedadesVistas: VERSION_NOVEDADES }));
   };
 
+  if (soloNovedades) return abierto ? <QueHayDeNuevo puede={puede} alTerminar={terminar} /> : null;
+
   return (
-    <Modal abierto={abierto} titulo={soloNovedades ? "Novedades" : "Tutorial"} alCerrar={terminar}>
+    <Modal abierto={abierto} titulo="Tutorial" alCerrar={terminar}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Icono className="h-6 w-6 text-acento" />

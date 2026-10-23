@@ -322,6 +322,13 @@ function registrarIpc(): void {
     e.returnValue = deLaApp(e) ? huellaEquipo() : "";
   });
   ipcMain.handle("metricas", (e) => (deLaApp(e) ? leerMetricas() : null));
+  ipcMain.on("act:modo", (e, modo: unknown) => {
+    if (!deLaApp(e) || (modo !== "auto" && modo !== "preguntar" && modo !== "no") || modo === modoActualizacion) return;
+    ponerModoActualizacion(modo);
+  });
+  ipcMain.on("act:buscar", (e) => {
+    if (deLaApp(e) && !DEV) revisarActualizacion();
+  });
   ipcMain.handle("sistema", (e) => (deLaApp(e) ? leerSistema() : null));
   ipcMain.on("notificar", (e, titulo: unknown, cuerpo: unknown) => {
     if (!deLaApp(e) || !Notification.isSupported()) return;
@@ -388,22 +395,57 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-/**
- * Actualizaciones automáticas: la app busca latest.yml en las descargas de tu
- * servidor (el mismo que abre la app), baja la versión nueva en segundo plano
- * y la instala al cerrarse; también se puede reiniciar al momento.
- */
+const ARCHIVO_ACTUALIZACIONES = join(app.getPath("userData"), "actualizaciones.json");
+type ModoActualizacion = "auto" | "preguntar" | "no";
+
+function leerModoActualizacion(): ModoActualizacion {
+  try {
+    const m = (JSON.parse(readFileSync(ARCHIVO_ACTUALIZACIONES, "utf8")) as { modo?: unknown }).modo;
+    return m === "preguntar" || m === "no" ? m : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+let modoActualizacion: ModoActualizacion = "auto";
+const revisarActualizacion = () => void autoUpdater.checkForUpdates().catch(() => undefined);
+
+function ponerModoActualizacion(modo: ModoActualizacion): void {
+  modoActualizacion = modo;
+  autoUpdater.autoDownload = modo === "auto";
+  autoUpdater.autoInstallOnAppQuit = modo !== "no";
+  try {
+    writeFileSync(ARCHIVO_ACTUALIZACIONES, JSON.stringify({ modo }));
+  } catch {
+    return;
+  }
+}
+
 function iniciarActualizaciones(): void {
   autoUpdater.setFeedURL({ provider: "generic", url: `${ORIGEN}/api/descargas/` });
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  ponerModoActualizacion(leerModoActualizacion());
+  autoUpdater.on("update-available", (info) => {
+    if (modoActualizacion !== "preguntar") return;
+    void dialog
+      .showMessageBox({
+        type: "question",
+        title: "Hay una versión nueva",
+        message: `Mi Setup ${info.version} está lista para bajar.`,
+        detail: "¿La descargo ahora? Se instala al cerrar la app.",
+        buttons: ["Descargar", "Ahora no"],
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) void autoUpdater.downloadUpdate().catch(() => undefined);
+      });
+  });
   autoUpdater.on("update-downloaded", (info) => {
     void dialog
       .showMessageBox({
         type: "info",
         title: "Actualización lista",
         message: `Mi Setup ${info.version} ya se descargó.`,
-        detail: "Se instalará al cerrar la app. ¿Quieres reiniciar ahora?",
+        detail: "Se instalará al cerrar la app. Al abrirla verás qué hay de nuevo. ¿Quieres reiniciar ahora?",
         buttons: ["Reiniciar ahora", "Después"],
         cancelId: 1,
       })
@@ -414,9 +456,10 @@ function iniciarActualizaciones(): void {
         }
       });
   });
-  // Sin conexión o sin latest.yml en el servidor: se intenta más tarde, sin molestar.
   autoUpdater.on("error", () => undefined);
-  const revisar = () => void autoUpdater.checkForUpdates().catch(() => undefined);
+  const revisar = () => {
+    if (modoActualizacion !== "no") revisarActualizacion();
+  };
   revisar();
   setInterval(revisar, 6 * 60 * 60_000);
 }

@@ -1,17 +1,11 @@
-/**
- * Actualizaciones de las apps.
- * - Celular: compara su versión con la del servidor; si hay una más nueva
- *   muestra un aviso para bajar el APK (Android siempre pide tocar "Instalar").
- * - PC: la app de Windows se actualiza sola (electron-updater) y sus pantallas
- *   vienen del servidor, así que siempre están al día.
- */
-import { compararVersiones } from "@mi-setup/shared";
+import { compararVersiones, type ModoActualizacion } from "@mi-setup/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Download, RefreshCw, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE, api } from "../lib/api";
+import { marcarDescargada, useModoActualizacion, yaSeDescargo } from "../lib/actualizaciones";
 import { abrirExterno, escritorio, esMovil } from "../lib/plataforma";
-import { Boton, Insignia, Tarjeta } from "./ui";
+import { Boton, Insignia, cx } from "./ui";
 
 interface InfoActualizacion {
   version: string;
@@ -31,20 +25,38 @@ function useActualizacion() {
 
 const absoluta = (url: string) => `${API_BASE || window.location.origin}${url}`;
 
-/** Aviso arriba de la pantalla (solo en el celular) cuando hay una versión más nueva. */
+export function useHayVersionNueva(): boolean {
+  const q = useActualizacion();
+  return Boolean(q.data && esMovil() && q.data.apk && compararVersiones(q.data.version, __VERSION_APP__) > 0);
+}
+
 export function AvisoActualizacion() {
   const q = useActualizacion();
+  const { efectivo } = useModoActualizacion();
   const [cerrado, setCerrado] = useState(false);
   const apk = q.data?.apk;
-  const nueva = Boolean(apk) && q.data !== undefined && compararVersiones(q.data.version, __VERSION_APP__) > 0;
-  if (!esMovil() || !nueva || cerrado || !apk || !q.data) return null;
+  const version = q.data?.version ?? "";
+  const nueva = Boolean(apk) && q.data !== undefined && compararVersiones(version, __VERSION_APP__) > 0;
+  useEffect(() => {
+    if (!esMovil() || !nueva || !apk || efectivo !== "auto" || yaSeDescargo(version)) return;
+    marcarDescargada(version);
+    abrirExterno(absoluta(apk.url));
+  }, [nueva, apk, efectivo, version]);
+  if (!esMovil() || !nueva || cerrado || !apk || !q.data || efectivo === "no") return null;
   return (
-    <div className="flex items-center gap-2 border-b border-acento/40 bg-acento/10 px-4 py-2 text-sm">
+    <div className="flex items-center gap-2 border-b px-4 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--acento) 40%, transparent)", background: "color-mix(in srgb, var(--acento) 10%, transparent)" }}>
       <Download className="h-4 w-4 shrink-0 text-acento" />
       <p className="min-w-0 flex-1">
-        Hay una versión nueva de la app ({q.data.version}). Tienes la {__VERSION_APP__}.
+        {efectivo === "auto" && yaSeDescargo(version) ? `Se está bajando la versión ${version}. Toca «Instalar» cuando Android te pregunte.` : `Hay una versión nueva de la app (${version}). Tienes la ${__VERSION_APP__}.`}
       </p>
-      <Boton tamano="sm" variante="primario" onClick={() => abrirExterno(absoluta(apk.url))}>
+      <Boton
+        tamano="sm"
+        variante="primario"
+        onClick={() => {
+          marcarDescargada(version);
+          abrirExterno(absoluta(apk.url));
+        }}
+      >
         Actualizar
       </Boton>
       <button type="button" aria-label="Cerrar aviso" className="p-1 text-tenue" onClick={() => setCerrado(true)}>
@@ -54,37 +66,76 @@ export function AvisoActualizacion() {
   );
 }
 
-/** Sección "Actualizaciones" en Ajustes → Descargar apps. */
+const OPCIONES: { id: ModoActualizacion; titulo: string; texto: string }[] = [
+  { id: "auto", titulo: "Descargar solas", texto: "Se bajan en segundo plano y al abrir verás qué hay de nuevo." },
+  { id: "preguntar", titulo: "Preguntarme", texto: "Te aviso cuando haya una versión nueva y tú decides." },
+  { id: "no", titulo: "No actualizar", texto: "Te quedas con esta versión hasta que la cambies aquí." },
+];
+
 export function SeccionActualizaciones() {
   const q = useActualizacion();
+  const { elegido, efectivo, vinculado, puedeRechazar, poner } = useModoActualizacion();
   const pc = Boolean(escritorio());
   const nueva = q.data ? compararVersiones(q.data.version, __VERSION_APP__) > 0 : false;
   const apk = q.data?.apk;
   return (
-    <Tarjeta titulo="Actualizaciones" icono={RefreshCw}>
-      <div className="space-y-2 text-sm">
-        <p>
-          Esta app: <b>{__VERSION_APP__}</b> · Servidor: <b>{q.data?.version ?? "…"}</b>{" "}
-          {q.data ? nueva && esMovil() ? <Insignia tono="aviso">Hay versión nueva</Insignia> : <Insignia tono="ok">Al día</Insignia> : null}
-        </p>
-        {pc ? (
-          <p className="text-tenue">En la PC la app se actualiza sola: baja la versión nueva en segundo plano y te pregunta si quieres reiniciar.</p>
-        ) : esMovil() ? (
-          <p className="text-tenue">En el celular la app te avisa arriba cuando hay versión nueva. Android siempre pide que toques "Instalar".</p>
-        ) : (
-          <p className="text-tenue">En el navegador siempre ves la versión más nueva.</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Boton tamano="sm" icono={RefreshCw} cargando={q.isFetching} onClick={() => void q.refetch()}>
-            Buscar actualización
-          </Boton>
-          {esMovil() && apk && nueva ? (
-            <Boton tamano="sm" variante="primario" icono={Download} onClick={() => abrirExterno(absoluta(apk.url))}>
-              Descargar {q.data?.version}
-            </Boton>
-          ) : null}
+    <div className="space-y-4 text-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-fondo p-4">
+        <RefreshCw className="h-6 w-6 shrink-0 text-acento" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">
+            Esta app: {__VERSION_APP__} · Servidor: {q.data?.version ?? "…"}
+          </p>
+          <p className="text-tenue">{pc ? "En la PC se instala al cerrar la app." : esMovil() ? "En Android siempre se toca «Instalar» al final." : "En el navegador siempre ves la versión más nueva."}</p>
         </div>
+        {q.data ? nueva && (esMovil() || pc) ? <Insignia tono="aviso">Hay versión nueva</Insignia> : <Insignia tono="ok">Al día</Insignia> : null}
       </div>
-    </Tarjeta>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {OPCIONES.map((o) => {
+          const bloqueada = !puedeRechazar && o.id !== "auto";
+          const activa = (vinculado ? efectivo : elegido) === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={bloqueada}
+              onClick={() => poner(o.id)}
+              className={cx("rounded-2xl border p-3 text-left transition", activa ? "border-acento" : "border-borde", bloqueada ? "cursor-not-allowed opacity-50" : "hover:border-acento")}
+              style={activa ? { background: "color-mix(in srgb, var(--acento) 12%, transparent)" } : undefined}
+            >
+              <p className="font-semibold">{o.titulo}</p>
+              <p className="mt-1 text-xs text-tenue">{o.texto}</p>
+            </button>
+          );
+        })}
+      </div>
+      {vinculado ? <p className="text-xs text-tenue">Tu app está vinculada a tu VPS: se actualiza siempre sola para que la app y el servidor vayan a la par.</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <Boton
+          tamano="sm"
+          icono={RefreshCw}
+          cargando={q.isFetching}
+          onClick={() => {
+            escritorio()?.actualizaciones?.buscar();
+            void q.refetch();
+          }}
+        >
+          Buscar actualización
+        </Boton>
+        {esMovil() && apk && nueva ? (
+          <Boton
+            tamano="sm"
+            variante="primario"
+            icono={Download}
+            onClick={() => {
+              marcarDescargada(q.data?.version ?? "");
+              abrirExterno(absoluta(apk.url));
+            }}
+          >
+            Descargar {q.data?.version}
+          </Boton>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -12,3 +12,4 @@ export * from "./finanzas.js";
 export * from "./rendimientos.js";
 export * from "./edicion.js";
 export * from "./equipos.js";
+export * from "./actualizaciones.js";
