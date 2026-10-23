@@ -1,14 +1,18 @@
 /**
- * Ejercicios para aprender a programar: 10 fáciles, 10 medios y 10 difíciles
- * en JavaScript, Python y HTML/CSS. Cada uno se califica solo con pruebas.
+ * Ejercicios para aprender a programar en JavaScript, Python, HTML, CSS y Java.
+ * Cada uno se califica solo con pruebas.
  */
 
 export type Nivel = "facil" | "medio" | "dificil";
-export type Lenguaje = "javascript" | "python" | "html";
+export type Lenguaje = "javascript" | "python" | "html" | "css" | "java";
 
 export interface Caso {
   args: unknown[];
   esperado: unknown;
+}
+export interface CasoJava {
+  llamada: string;
+  esperado: string;
 }
 export interface PruebaDom {
   texto: string;
@@ -28,10 +32,31 @@ export interface Ejercicio {
   casos?: Caso[];
   /** Pruebas de la página (HTML/CSS). */
   pruebas?: PruebaDom[];
+  /** HTML fijo sobre el que se aplica tu CSS. */
+  htmlBase?: string;
+  /** Llamadas a tu clase Solucion y lo que deben imprimir (Java). */
+  casosJava?: CasoJava[];
+  /** Temas para buscar videos que lo explican. */
+  temas?: string[];
 }
 
 export const NIVELES: Record<Nivel, string> = { facil: "Fácil", medio: "Medio", dificil: "Difícil" };
-export const LENGUAJES: Record<Lenguaje, string> = { javascript: "JavaScript", python: "Python", html: "HTML/CSS" };
+export const LENGUAJES: Record<Lenguaje, string> = { javascript: "JavaScript", python: "Python", html: "HTML", css: "CSS", java: "Java" };
+
+export const esPagina = (l: Lenguaje) => l === "html" || l === "css";
+
+export function videosDe(e: Ejercicio): { texto: string; url: string }[] {
+  const temas = e.temas?.length ? e.temas : [`${LENGUAJES[e.lenguaje]} ${e.titulo}`];
+  return temas.map((t) => ({ texto: t, url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${t} tutorial en español`)}` }));
+}
+
+export function retoDelDia(lista: Ejercicio[], resueltos: Record<string, string>, hoy = new Date()): Ejercicio | null {
+  const pendientes = lista.filter((x) => !resueltos[x.id]);
+  const fuente = pendientes.length ? pendientes : lista;
+  if (!fuente.length) return null;
+  const dia = Math.floor(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()) / 86_400_000);
+  return fuente[dia % fuente.length] ?? null;
+}
 
 /** Compara resultados sin importar el orden de las llaves de los objetos y con margen en decimales. */
 export function igual(a: unknown, b: unknown): boolean {
@@ -496,6 +521,219 @@ export const EJERCICIOS: Ejercicio[] = [
       { args: ["aaabcc"], esperado: "a3b1c2" },
       { args: [""], esperado: "" },
       { args: ["x"], esperado: "x1" },
+    ],
+  },
+
+  {
+    id: "css-color",
+    nivel: "facil",
+    lenguaje: "css",
+    titulo: "Pinta el título",
+    enunciado: "Haz que el `<h1>` sea de color **rojo** (`red`) y que el fondo de la página (`body`) sea **negro** (`black`).",
+    htmlBase: "<h1>Mi pastelería</h1>\n<p>Los mejores pasteles del barrio.</p>",
+    plantilla: "h1 {\n  \n}\n\nbody {\n  \n}\n",
+    pistas: ["El color de las letras es la propiedad `color`.", "El fondo es `background` o `background-color`."],
+    temas: ["CSS color y background"],
+    pruebas: [
+      { texto: "El <h1> es rojo", codigo: "getComputedStyle(document.querySelector('h1')).color === 'rgb(255, 0, 0)'" },
+      { texto: "El fondo es negro", codigo: "getComputedStyle(document.body).backgroundColor === 'rgb(0, 0, 0)'" },
+    ],
+  },
+  {
+    id: "css-centrar",
+    nivel: "medio",
+    lenguaje: "css",
+    titulo: "Centrar con flexbox",
+    enunciado: "La caja `.contenedor` debe usar **flexbox** y centrar a `.tarjeta` a lo ancho y a lo alto.",
+    htmlBase: "<div class=\"contenedor\" style=\"height:300px\">\n  <div class=\"tarjeta\">Hola</div>\n</div>",
+    plantilla: ".contenedor {\n  \n}\n",
+    pistas: ["Empieza con `display: flex;`.", "`justify-content: center;` centra a lo ancho y `align-items: center;` a lo alto."],
+    temas: ["CSS flexbox centrar"],
+    pruebas: [
+      { texto: "Usa display: flex", codigo: "getComputedStyle(document.querySelector('.contenedor')).display === 'flex'" },
+      { texto: "Centra a lo ancho", codigo: "getComputedStyle(document.querySelector('.contenedor')).justifyContent === 'center'" },
+      { texto: "Centra a lo alto", codigo: "getComputedStyle(document.querySelector('.contenedor')).alignItems === 'center'" },
+    ],
+  },
+  {
+    id: "css-boton",
+    nivel: "medio",
+    lenguaje: "css",
+    titulo: "Botón redondo",
+    enunciado: "Dale al `<button>` esquinas redondas de **12px**, relleno (`padding`) de **12px** y letra en **negrita**.",
+    htmlBase: "<button>Comprar</button>",
+    plantilla: "button {\n  \n}\n",
+    pistas: ["Las esquinas se redondean con `border-radius`.", "La negrita es `font-weight: bold;`."],
+    temas: ["CSS border-radius botones"],
+    pruebas: [
+      { texto: "Esquinas de 12px", codigo: "getComputedStyle(document.querySelector('button')).borderTopLeftRadius === '12px'" },
+      { texto: "Relleno de 12px", codigo: "getComputedStyle(document.querySelector('button')).paddingTop === '12px'" },
+      { texto: "Letra en negrita", codigo: "Number(getComputedStyle(document.querySelector('button')).fontWeight) >= 700" },
+    ],
+  },
+  {
+    id: "css-rejilla",
+    nivel: "dificil",
+    lenguaje: "css",
+    titulo: "Rejilla de 3 columnas",
+    enunciado: "`.galeria` debe ser una **rejilla** (`grid`) de **3 columnas iguales** con **16px** de espacio entre fotos.",
+    htmlBase: "<div class=\"galeria\">\n  <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div>\n</div>",
+    plantilla: ".galeria {\n  \n}\n",
+    pistas: ["`display: grid;`", "`grid-template-columns: repeat(3, 1fr);` y `gap: 16px;`."],
+    temas: ["CSS grid columnas"],
+    pruebas: [
+      { texto: "Usa display: grid", codigo: "getComputedStyle(document.querySelector('.galeria')).display === 'grid'" },
+      { texto: "Tiene 3 columnas", codigo: "getComputedStyle(document.querySelector('.galeria')).gridTemplateColumns.split(' ').length === 3" },
+      { texto: "Espacio de 16px", codigo: "getComputedStyle(document.querySelector('.galeria')).columnGap === '16px'" },
+    ],
+  },
+  {
+    id: "html-formulario",
+    nivel: "medio",
+    lenguaje: "html",
+    titulo: "Formulario de contacto",
+    enunciado: "Haz un `<form>` con un campo de texto con `name=\"nombre\"`, un campo de correo (`type=\"email\"`) y un botón que diga **Enviar**.",
+    plantilla: "<!-- Escribe tu HTML aquí -->\n",
+    pistas: ["`<input name=\"nombre\">`", "`<input type=\"email\">` y `<button>Enviar</button>` dentro del `<form>`."],
+    temas: ["HTML formularios input"],
+    pruebas: [
+      { texto: "Hay un <form>", codigo: "!!document.querySelector('form')" },
+      { texto: "Campo «nombre»", codigo: "!!document.querySelector('form input[name=\"nombre\"]')" },
+      { texto: "Campo de correo", codigo: "!!document.querySelector('form input[type=\"email\"]')" },
+      { texto: "Botón «Enviar»", codigo: "[...document.querySelectorAll('form button, form input[type=\"submit\"]')].some((b) => (b.textContent || b.value).trim() === 'Enviar')" },
+    ],
+  },
+  {
+    id: "html-tabla",
+    nivel: "dificil",
+    lenguaje: "html",
+    titulo: "Tabla de precios",
+    enunciado: "Haz una `<table>` con encabezados `<th>` **Producto** y **Precio**, y al menos **3 filas** de productos.",
+    plantilla: "<!-- Escribe tu HTML aquí -->\n",
+    pistas: ["Los encabezados van en `<tr><th>Producto</th><th>Precio</th></tr>`.", "Cada producto es otra fila `<tr>` con dos `<td>`."],
+    temas: ["HTML tablas"],
+    pruebas: [
+      { texto: "Hay una tabla", codigo: "!!document.querySelector('table')" },
+      { texto: "Encabezados Producto y Precio", codigo: "[...document.querySelectorAll('th')].map((t) => t.textContent.trim()).join('|').includes('Producto|Precio')" },
+      { texto: "Al menos 3 productos", codigo: "[...document.querySelectorAll('tr')].filter((r) => r.querySelector('td')).length >= 3" },
+    ],
+  },
+  {
+    id: "java-suma",
+    nivel: "facil",
+    lenguaje: "java",
+    titulo: "Sumar en Java",
+    enunciado: "Completa `suma(a, b)` dentro de la clase `Solucion` para que regrese la suma de los dos números.",
+    plantilla: "class Solucion {\n    static int suma(int a, int b) {\n        return 0;\n    }\n}\n",
+    pistas: ["Usa el operador +.", "`return a + b;`"],
+    temas: ["Java métodos return"],
+    casosJava: [
+      { llamada: "Solucion.suma(2, 3)", esperado: "5" },
+      { llamada: "Solucion.suma(-4, 4)", esperado: "0" },
+      { llamada: "Solucion.suma(100, 250)", esperado: "350" },
+    ],
+  },
+  {
+    id: "java-par",
+    nivel: "facil",
+    lenguaje: "java",
+    titulo: "Par o impar en Java",
+    enunciado: "`esPar(n)` regresa `true` si el número es par y `false` si es impar.",
+    plantilla: "class Solucion {\n    static boolean esPar(int n) {\n        return false;\n    }\n}\n",
+    pistas: ["El residuo se saca con `%`.", "`return n % 2 == 0;`"],
+    temas: ["Java operador módulo"],
+    casosJava: [
+      { llamada: "Solucion.esPar(4)", esperado: "true" },
+      { llamada: "Solucion.esPar(7)", esperado: "false" },
+      { llamada: "Solucion.esPar(0)", esperado: "true" },
+    ],
+  },
+  {
+    id: "java-tabla",
+    nivel: "facil",
+    lenguaje: "java",
+    titulo: "Tabla de multiplicar",
+    enunciado: "`tabla(n)` regresa un texto con los primeros 3 múltiplos separados por coma. Ej. `tabla(2)` → `\"2,4,6\"`.",
+    plantilla: "class Solucion {\n    static String tabla(int n) {\n        return \"\";\n    }\n}\n",
+    pistas: ["Puedes usar un `for` de 1 a 3.", "O directo: `return n + \",\" + n * 2 + \",\" + n * 3;`"],
+    temas: ["Java ciclo for"],
+    casosJava: [
+      { llamada: "Solucion.tabla(2)", esperado: "2,4,6" },
+      { llamada: "Solucion.tabla(5)", esperado: "5,10,15" },
+    ],
+  },
+  {
+    id: "java-mayor",
+    nivel: "medio",
+    lenguaje: "java",
+    titulo: "El mayor de un arreglo",
+    enunciado: "`mayor(numeros)` regresa el número más grande del arreglo.",
+    plantilla: "class Solucion {\n    static int mayor(int[] numeros) {\n        return 0;\n    }\n}\n",
+    pistas: ["Empieza guardando el primero: `int m = numeros[0];`.", "Recorre el arreglo y cambia `m` cuando encuentres uno más grande."],
+    temas: ["Java arreglos recorrer"],
+    casosJava: [
+      { llamada: "Solucion.mayor(new int[]{3, 9, 2})", esperado: "9" },
+      { llamada: "Solucion.mayor(new int[]{-5, -1, -8})", esperado: "-1" },
+    ],
+  },
+  {
+    id: "java-invertir",
+    nivel: "medio",
+    lenguaje: "java",
+    titulo: "Voltear texto",
+    enunciado: "`invertir(texto)` regresa el texto al revés. Ej. `\"hola\"` → `\"aloh\"`.",
+    plantilla: "class Solucion {\n    static String invertir(String texto) {\n        return texto;\n    }\n}\n",
+    pistas: ["`StringBuilder` tiene el método `reverse()`.", "`return new StringBuilder(texto).reverse().toString();`"],
+    temas: ["Java StringBuilder"],
+    casosJava: [
+      { llamada: "Solucion.invertir(\"hola\")", esperado: "aloh" },
+      { llamada: "Solucion.invertir(\"Mi Setup\")", esperado: "puteS iM" },
+    ],
+  },
+  {
+    id: "java-vocales",
+    nivel: "dificil",
+    lenguaje: "java",
+    titulo: "Contar vocales",
+    enunciado: "`vocales(texto)` cuenta cuántas vocales (a, e, i, o, u, sin importar mayúsculas) tiene el texto.",
+    plantilla: "class Solucion {\n    static int vocales(String texto) {\n        return 0;\n    }\n}\n",
+    pistas: ["Pasa el texto a minúsculas con `toLowerCase()`.", "Recorre con `charAt(i)` y revisa si `\"aeiou\".indexOf(letra) >= 0`."],
+    temas: ["Java String charAt"],
+    casosJava: [
+      { llamada: "Solucion.vocales(\"Programar\")", esperado: "3" },
+      { llamada: "Solucion.vocales(\"AEIOU\")", esperado: "5" },
+      { llamada: "Solucion.vocales(\"xyz\")", esperado: "0" },
+    ],
+  },
+  {
+    id: "js-mayusculas",
+    nivel: "facil",
+    lenguaje: "javascript",
+    titulo: "Todo en mayúsculas",
+    enunciado: "`gritar(texto)` regresa el texto en mayúsculas y con un `!` al final.",
+    plantilla: "function gritar(texto) {\n  \n}\n",
+    pistas: ["Los textos tienen `toUpperCase()`.", "`return texto.toUpperCase() + \"!\";`"],
+    temas: ["JavaScript toUpperCase"],
+    funcion: "gritar",
+    casos: [
+      { args: ["hola"], esperado: "HOLA!" },
+      { args: ["mi setup"], esperado: "MI SETUP!" },
+    ],
+  },
+  {
+    id: "py-promedio",
+    nivel: "medio",
+    lenguaje: "python",
+    titulo: "Promedio de calificaciones",
+    enunciado: "`promedio(calificaciones)` regresa el promedio de la lista. Si la lista está vacía regresa `0`.",
+    plantilla: "def promedio(calificaciones):\n    pass\n",
+    pistas: ["`sum(lista)` suma todo y `len(lista)` dice cuántos son.", "Revisa primero si la lista está vacía."],
+    temas: ["Python sum len listas"],
+    funcion: "promedio",
+    casos: [
+      { args: [[10, 8, 9]], esperado: 9 },
+      { args: [[]], esperado: 0 },
+      { args: [[7, 8]], esperado: 7.5 },
     ],
   },
 ];

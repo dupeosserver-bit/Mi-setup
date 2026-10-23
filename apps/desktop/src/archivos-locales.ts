@@ -10,6 +10,7 @@ import { createWriteStream, existsSync, readFileSync, writeFileSync } from "node
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { once } from "node:events";
+import { tmpdir } from "node:os";
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
 import { PLANTILLAS } from "./plantillas";
 
@@ -289,6 +290,24 @@ export function registrarArchivosLocales(deLaApp: (e: IpcMainEvent | IpcMainInvo
       await writeFile(destino, contenido, "utf8");
     }
     return raiz;
+  });
+
+  manejar("herr:java", async (codigo) => {
+    if (typeof codigo !== "string" || codigo.length > 200_000) throw new Error("Código no válido");
+    const java = await asegurarJava(21, (t) => avisar("herr:avance", t));
+    const dir = join(tmpdir(), `mi-setup-java-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "Main.java"), codigo, "utf8");
+    try {
+      return await new Promise<{ salida: string; error: string | null }>((ok) => {
+        execFile(java, ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Xmx256m", "Main.java"], { cwd: dir, timeout: 20_000, maxBuffer: 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+          const tardo = Boolean(err && (err as NodeJS.ErrnoException & { killed?: boolean }).killed);
+          ok({ salida: String(stdout), error: tardo ? "Tardó más de 20 s. ¿Tienes un ciclo que nunca termina?" : err ? String(stderr || err.message).trim() : null });
+        });
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   manejar("herr:estado", async () => {

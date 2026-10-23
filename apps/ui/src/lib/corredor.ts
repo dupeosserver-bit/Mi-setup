@@ -1,7 +1,6 @@
 /**
  * Corre el código de los ejercicios dentro de la página aislada /vista-previa
- * (sin acceso a tu cuenta). Arma un documento por lenguaje que califica las
- * pruebas y avisa el resultado a la app con postMessage.
+ * (sin acceso a tu cuenta). Java corre en la app de PC con su propio Java.
  */
 import { igual, type Ejercicio } from "./ejercicios";
 
@@ -26,12 +25,42 @@ const json = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
 
 const llamada = (funcion: string, args: unknown[]) => `${funcion}(${args.map((a) => JSON.stringify(a)).join(", ")})`;
 
+export function paginaEjercicio(e: Ejercicio, codigo: string): string {
+  return e.lenguaje === "css" ? `<style>${codigo.replace(/<\/style/gi, "<\\/style")}</style>${e.htmlBase ?? ""}` : codigo;
+}
+
+const MARCA = "@@mi-setup@@";
+
+export function programaJava(e: Ejercicio, codigo: string): string {
+  const lineas = (e.casosJava ?? []).map((c, i) => `        try { System.out.println("${MARCA}${i}:" + String.valueOf(${c.llamada})); } catch (Throwable t) { System.out.println("${MARCA}${i}!" + t); }`);
+  const propio = codigo.replace(/\bpublic\s+(?=(?:final\s+|abstract\s+)?class\b)/g, "");
+  return `public class Main {\n    public static void main(String[] args) {\n${lineas.join("\n")}\n    }\n}\n\n${propio}\n`;
+}
+
+export function calificarJava(e: Ejercicio, salida: string, error: string | null): Corrida {
+  const propias: string[] = [];
+  const valores = new Map<number, { ok: boolean; texto: string }>();
+  for (const linea of salida.replace(/\r/g, "").split("\n")) {
+    const m = new RegExp(`^${MARCA}(\\d+)([:!])(.*)$`).exec(linea);
+    if (m) valores.set(Number(m[1]), { ok: m[2] === ":", texto: m[3] ?? "" });
+    else if (linea.trim()) propias.push(linea);
+  }
+  if (error && !valores.size) return { resultados: [], salida: propias, error: error.split("\n").slice(0, 8).join("\n") };
+  const resultados = (e.casosJava ?? []).map((c, i) => {
+    const v = valores.get(i);
+    if (!v) return { ok: false, texto: c.llamada, esperado: c.esperado, error: "No se ejecutó" };
+    if (!v.ok) return { ok: false, texto: c.llamada, esperado: c.esperado, error: v.texto };
+    return { ok: v.texto === c.esperado, texto: c.llamada, esperado: c.esperado, obtenido: v.texto };
+  });
+  return { resultados, salida: propias };
+}
+
 export function documentoEjercicio(e: Ejercicio, codigo: string, id: string): string {
   const enviar = `function enviar(m){top.postMessage(Object.assign({tipo:"mi-setup-ejercicio",id:${json(id)}},m),"*");}`;
   const comparar = `var igual=(${igual.toString()});`;
-  if (e.lenguaje === "html") {
+  if (e.lenguaje === "html" || e.lenguaje === "css") {
     const pruebas = json((e.pruebas ?? []).map((p) => ({ texto: p.texto, codigo: p.codigo })));
-    return `<!doctype html><html><head><meta charset="utf-8"></head><body>${codigo}<script>${enviar}
+    return `<!doctype html><html><head><meta charset="utf-8"></head><body>${paginaEjercicio(e, codigo)}<script>${enviar}
 window.addEventListener("load",function(){setTimeout(function(){var r=${pruebas}.map(function(p){try{return{ok:!!(0,eval)(p.codigo),texto:p.texto};}catch(err){return{ok:false,texto:p.texto,error:String(err&&err.message||err)};}});enviar({resultados:r,salida:[]});},60);});
 </script></body></html>`;
   }

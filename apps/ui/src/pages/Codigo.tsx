@@ -19,6 +19,9 @@ import {
   FolderOpen,
   FolderPlus,
   Upload,
+  Maximize2,
+  Minimize2,
+  Eye,
   Hammer,
   PackageOpen,
   Pencil,
@@ -29,13 +32,18 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { editor } from "monaco-editor";
 import { useSearchParams } from "react-router-dom";
 import { ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
+import { FilaSimbolos } from "../components/FilaSimbolos";
+import { MarcoVista, TAMANOS_VISTA } from "../components/MarcoVista";
+import { armarPaginaWeb, referenciasWeb } from "../lib/paginaWeb";
 import { Boton, Campo, Encabezado, Entrada, Modal, Pestanas, Selector, Tarjeta, Vacio, avisar, avisarError, cx } from "../components/ui";
 import { guardarBlob } from "../lib/guardar";
 import { confirmar } from "../lib/confirmar";
 import { lenguajeDe } from "../lib/monaco";
+import { useForma, useModoPagina, useTactil } from "../lib/marco";
 import { escritorio, type ArchivosLocales, type EntradaLocal, type PlantillaProyecto } from "../lib/plataforma";
 
 interface Abierto {
@@ -65,6 +73,51 @@ function comandoDelProyecto(archivos: EntradaLocal[]): { texto: string; comando:
   if (hay("pack.mcmeta")) return { texto: "Comprimir datapack", comando: null, zip: true };
   if (hay("index.html")) return { texto: "Abrir en el navegador", comando: "start index.html" };
   return null;
+}
+
+
+const ES_HTML = /\.html?$/i;
+
+function VistaEnVivo({ doc, compacta }: { doc: string; compacta?: boolean }) {
+  const [tamano, setTamano] = useState<keyof typeof TAMANOS_VISTA>("celular");
+  const [actualizar, setActualizar] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setActualizar((n) => n + 1), 300);
+    return () => clearTimeout(t);
+  }, [doc]);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-1 border-b border-borde bg-superficie p-1">
+        <Eye className="ml-1 h-3.5 w-3.5 text-acento" />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium">Vista en vivo</span>
+        {(Object.keys(TAMANOS_VISTA) as (keyof typeof TAMANOS_VISTA)[]).map((t) => {
+          const Icono = TAMANOS_VISTA[t].icono;
+          return (
+            <button
+              key={t}
+              type="button"
+              title={t === "celular" ? "Celular" : t === "tableta" ? "Tablet" : "PC"}
+              onClick={() => setTamano(t)}
+              className={cx("rounded-md p-1.5", tamano === t ? "bg-[color-mix(in_srgb,var(--acento)_18%,transparent)] text-acento" : "text-tenue hover:text-texto")}
+            >
+              <Icono className="h-3.5 w-3.5" />
+            </button>
+          );
+        })}
+      </div>
+      <div className={cx("min-h-0 flex-1 bg-fondo", compacta ? "p-1" : "p-2")}>
+        <MarcoVista doc={doc} ancho={TAMANOS_VISTA[tamano].ancho} alto={-1} actualizar={actualizar} />
+      </div>
+    </div>
+  );
+}
+
+function BotonPantalla({ completa, alternar }: { completa: boolean; alternar: () => void }) {
+  return (
+    <Boton tamano="sm" variante="fantasma" icono={completa ? Minimize2 : Maximize2} onClick={alternar} aria-label={completa ? "Salir de pantalla completa" : "Pantalla completa"}>
+      <span className="hidden sm:inline">{completa ? "Salir de pantalla completa" : "Pantalla completa"}</span>
+    </Boton>
+  );
 }
 
 function Arbol({
@@ -260,12 +313,18 @@ type VentanaConArchivos = Window & {
  * abrir, editar y guardar. En la PC (Chrome/Edge y la app de Windows) se
  * guarda en el mismo archivo; si el navegador no deja, se descarga.
  */
-function BlocDeCodigo() {
+function BlocDeCodigo({ completa, alternarCompleta }: { completa: boolean; alternarCompleta: () => void }) {
   const [archivo, setArchivo] = useState<ArchivoSuelto | null>(null);
   const [lenguaje, setLenguaje] = useState("javascript");
+  const [lado, setLado] = useState<"codigo" | "vista">("codigo");
   const entrada = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const w = window as VentanaConArchivos;
-  const chico = window.innerWidth < 640;
+  const forma = useForma();
+  const tactil = useTactil();
+  const chico = forma === "celular";
+  const esWeb = lenguaje === "html";
+  const doc = useMemo(() => (esWeb ? armarPaginaWeb(archivo?.texto ?? "", () => undefined) : ""), [esWeb, archivo?.texto]);
   const cargar = (nombre: string, texto: string, manija: FileSystemFileHandle | null) => {
     if (texto.includes("\u0000")) return avisar("Ese archivo no es de texto", "error");
     setArchivo({ nombre, texto, guardado: texto, manija });
@@ -308,10 +367,12 @@ function BlocDeCodigo() {
   };
   return (
     <Tarjeta
+      className="flex min-h-0 flex-1 flex-col"
       titulo={archivo ? `${archivo.nombre}${archivo.texto !== archivo.guardado ? " ●" : ""}` : "Abrir un archivo"}
       icono={Code2}
       acciones={
         <div className="flex flex-wrap items-center justify-end gap-1">
+          <BotonPantalla completa={completa} alternar={alternarCompleta} />
           <Boton tamano="sm" icono={FolderOpen} onClick={() => void abrir()}>
             Abrir
           </Boton>
@@ -343,25 +404,56 @@ function BlocDeCodigo() {
           void f.text().then((t) => cargar(f.name, t, null));
         }}
       />
-      <div className="h-[calc(100dvh-16rem)] min-h-80 overflow-hidden rounded-xl border border-borde sm:h-[65vh]">
-        <Editor
-          theme="vs-dark"
-          language={lenguaje}
-          value={archivo?.texto ?? ""}
-          onChange={(v) => setArchivo((a) => (a ? { ...a, texto: v ?? "" } : { nombre: "nuevo.txt", texto: v ?? "", guardado: "", manija: null }))}
-          options={{ fontSize: chico ? 13 : 14, minimap: { enabled: !chico }, wordWrap: "on", automaticLayout: true, lineNumbersMinChars: chico ? 2 : 4, folding: !chico, scrollBeyondLastLine: false }}
-        />
+      {esWeb && chico ? (
+        <div className="mb-2">
+          <Pestanas
+            valor={lado}
+            alCambiar={setLado}
+            opciones={[
+              { id: "codigo", texto: "Código" },
+              { id: "vista", texto: "Vista en vivo" },
+            ]}
+          />
+        </div>
+      ) : null}
+      <div className={cx("grid min-h-72 flex-1 overflow-hidden rounded-xl border border-borde", esWeb && !chico ? "grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "grid-cols-1")}>
+        <div className={cx("flex min-h-0 min-w-0 flex-col", esWeb && chico && lado === "vista" && "hidden")}>
+          <div className="min-h-0 flex-1">
+            <Editor
+              theme="vs-dark"
+              language={lenguaje}
+              value={archivo?.texto ?? ""}
+              onMount={(ed) => {
+                editorRef.current = ed;
+              }}
+              onChange={(v) => setArchivo((a) => (a ? { ...a, texto: v ?? "" } : { nombre: lenguaje === "html" ? "index.html" : "nuevo.txt", texto: v ?? "", guardado: "", manija: null }))}
+              options={{ fontSize: chico ? 13 : 14, minimap: { enabled: !chico && !esWeb }, wordWrap: "on", automaticLayout: true, lineNumbersMinChars: chico ? 2 : 4, folding: !chico, scrollBeyondLastLine: false }}
+            />
+          </div>
+          {tactil ? <FilaSimbolos obtener={() => editorRef.current} /> : null}
+        </div>
+        {esWeb ? (
+          <div className={cx("flex min-h-0 min-w-0 flex-col border-borde", chico ? (lado === "vista" ? "flex" : "hidden") : "border-l")}>
+            <VistaEnVivo doc={doc} compacta={chico} />
+          </div>
+        ) : null}
       </div>
-      <p className="mt-2 text-xs text-tenue">
+      <p className="mt-2 shrink-0 text-xs text-tenue">
         {w.showSaveFilePicker ? "Guardar escribe en el mismo archivo de tu equipo (el navegador te pide permiso la primera vez)." : "En el celular, Guardar deja una copia en Documentos/MiSetup (o en Descargas en el navegador)."}
       </p>
     </Tarjeta>
   );
 }
 
-function Ide({ fs }: { fs: ArchivosLocales }) {
-  const chico = typeof window !== "undefined" && window.innerWidth < 768;
-  const [verArbol, setVerArbol] = useState(!chico);
+function Ide({ fs, completa, alternarCompleta }: { fs: ArchivosLocales; completa: boolean; alternarCompleta: () => void }) {
+  const forma = useForma();
+  const tactil = useTactil();
+  const chico = forma === "celular";
+  const [verArbol, setVerArbol] = useState(forma === "pc");
+  const [verVista, setVerVista] = useState(true);
+  const [lado, setLado] = useState<"codigo" | "vista">("codigo");
+  const [web, setWeb] = useState(new Map<string, string>());
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   // ?carpeta=… (p. ej. desde Host local) abre directo esa carpeta si es una de las tuyas.
   const [params] = useSearchParams();
   const pedida = params.get("carpeta");
@@ -532,9 +624,32 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
     if (proyecto.comando) nuevaConsola(`${proyecto.texto} · ${nombreDe(carpetaProyecto)}`, carpetaProyecto, proyecto.comando);
   };
 
-  const montar: OnMount = (editor, monaco) => {
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void guardarRef.current());
+  const montar: OnMount = (ed, monaco) => {
+    editorRef.current = ed;
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void guardarRef.current());
   };
+
+  const htmlAbierto = actual && ES_HTML.test(actual.nombre) ? actual : (archivos.find((a) => ES_HTML.test(a.nombre)) ?? null);
+  const esWeb = Boolean(htmlAbierto) || proyecto?.texto === "Abrir en el navegador";
+  const baseWeb = htmlAbierto ? padreDe(htmlAbierto.ruta) : carpetaProyecto;
+  const rutaWeb = (rel: string) => (baseWeb ? `${baseWeb}\\${rel.replace(/\//g, "\\")}` : rel);
+  const textoWeb = (rel: string) => archivos.find((a) => a.ruta === rutaWeb(rel))?.texto ?? web.get(rutaWeb(rel));
+  const htmlBase = htmlAbierto?.texto ?? web.get(rutaWeb("index.html")) ?? "";
+  const refsWeb = esWeb ? referenciasWeb(htmlBase).join("|") : "";
+  useEffect(() => {
+    if (!esWeb || !baseWeb) return;
+    const pendientes = [...(htmlAbierto ? [] : ["index.html"]), ...refsWeb.split("|").filter(Boolean)].map(rutaWeb).filter((r) => !web.has(r));
+    if (!pendientes.length) return;
+    void Promise.all(pendientes.map((r) => fs.leer(r).then((t) => [r, t] as const, () => [r, ""] as const))).then((leidos) =>
+      setWeb((m) => {
+        const n = new Map(m);
+        leidos.forEach(([r, t]) => n.set(r, t));
+        return n;
+      }),
+    );
+  }, [esWeb, baseWeb, refsWeb, htmlAbierto?.ruta]);
+  const docWeb = useMemo(() => (esWeb ? armarPaginaWeb(htmlBase, textoWeb) : ""), [esWeb, htmlBase, archivos, web]);
+  const mostrarVista = esWeb && (chico ? lado === "vista" : verVista);
 
   if (!carpetas.length) {
     return (
@@ -551,9 +666,9 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Selector className="w-auto max-w-xs" value={raiz ?? ""} onChange={(e) => setRaiz(e.target.value)}>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Selector className="w-auto min-w-0 max-w-[60vw] sm:max-w-xs" value={raiz ?? ""} onChange={(e) => setRaiz(e.target.value)}>
           {carpetas.map((c) => (
             <option key={c} value={c}>
               {nombreDe(c)} — {c}
@@ -577,6 +692,12 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
         <Boton tamano="sm" icono={SquareTerminal} onClick={() => (raiz ? nuevaConsola("Terminal", raiz) : undefined)}>
           Terminal
         </Boton>
+        {esWeb && !chico ? (
+          <Boton tamano="sm" icono={Eye} variante={verVista ? "primario" : "secundario"} onClick={() => setVerVista((v) => !v)}>
+            Vista en vivo
+          </Boton>
+        ) : null}
+        <BotonPantalla completa={completa} alternar={alternarCompleta} />
         {raiz ? (
           <Boton
             tamano="sm"
@@ -618,11 +739,31 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
         </div>
       ) : null}
 
-      <Boton className="md:hidden" tamano="sm" icono={FolderOpen} onClick={() => setVerArbol(!verArbol)}>
-        {verArbol ? "Ocultar archivos" : "Ver archivos"}
-      </Boton>
-      <div className={cx("grid h-[calc(100dvh-15rem)] min-h-96 grid-cols-1 overflow-hidden rounded-tarjeta border border-borde md:h-[72vh] md:grid-cols-[240px_1fr]", verArbol ? "grid-rows-[40%_1fr] md:grid-rows-1" : "")}>
-        <div className={cx("min-h-0 flex-col border-b border-borde bg-superficie md:flex md:border-b-0 md:border-r", verArbol ? "flex" : "hidden")}>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 lg:hidden">
+        <Boton tamano="sm" icono={FolderOpen} onClick={() => setVerArbol(!verArbol)}>
+          {verArbol ? "Ocultar archivos" : "Ver archivos"}
+        </Boton>
+        {esWeb && chico ? (
+          <div className="min-w-0 flex-1 [&>*]:mb-0">
+            <Pestanas
+              valor={lado}
+              alCambiar={setLado}
+              opciones={[
+                { id: "codigo", texto: "Código" },
+                { id: "vista", texto: "Vista en vivo" },
+              ]}
+            />
+          </div>
+        ) : null}
+      </div>
+      <div
+        className={cx(
+          "grid min-h-[22rem] flex-1 grid-cols-1 overflow-hidden rounded-tarjeta border border-borde",
+          verArbol ? "grid-rows-[40%_1fr] lg:grid-rows-1" : "",
+          mostrarVista && !chico ? (verArbol ? "lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]" : "md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]") : verArbol ? "lg:grid-cols-[240px_1fr]" : "",
+        )}
+      >
+        <div className={cx("min-h-0 flex-col border-b border-borde bg-superficie lg:border-b-0 lg:border-r", verArbol ? "flex" : "hidden", mostrarVista && !chico && verArbol && "md:hidden lg:flex")}>
           <div className="flex items-center gap-1 border-b border-borde p-1">
             <span className="min-w-0 flex-1 truncate px-1 text-xs font-medium">{raiz ? nombreDe(raiz) : ""}</span>
             <button type="button" title="Nuevo archivo" className="p-1 hover:text-acento" onClick={() => void crearEn("archivo")}>
@@ -669,7 +810,7 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
             ) : null}
           </div>
         </div>
-        <div className="flex min-h-0 min-w-0 flex-col">
+        <div className={cx("min-h-0 min-w-0 flex-col", esWeb && chico && lado === "vista" ? "hidden" : "flex")}>
           <div className="flex items-center gap-1 overflow-x-auto border-b border-borde bg-superficie p-1">
             {archivos.map((a) => (
               <div key={a.ruta} className={cx("flex shrink-0 items-center gap-1 rounded-lg pl-2 text-xs", a.ruta === activo ? "bg-tarjeta" : "text-tenue")}>
@@ -697,9 +838,10 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
                 options={{ fontSize: chico ? 13 : 14, minimap: { enabled: !chico }, automaticLayout: true, tabSize: 4, wordWrap: "on", lineNumbersMinChars: chico ? 2 : 4 }}
               />
             ) : (
-              <div className="grid h-full place-items-center text-sm text-tenue">Elige un archivo para editarlo.</div>
+              <div className="grid h-full place-items-center p-4 text-center text-sm text-tenue">Elige un archivo para editarlo.</div>
             )}
           </div>
+          {tactil && actual ? <FilaSimbolos obtener={() => editorRef.current} /> : null}
           {consolas.length ? (
             <div className={cx("flex min-h-0 flex-col border-t border-borde", verConsola ? "flex-[2]" : "flex-none")}>
               <div className="flex items-center gap-1 overflow-x-auto bg-superficie p-1">
@@ -742,6 +884,11 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
             </div>
           ) : null}
         </div>
+        {mostrarVista ? (
+          <div className={cx("flex min-h-0 min-w-0 flex-col", !chico && "border-l border-borde")}>
+            <VistaEnVivo doc={docWeb} compacta={chico} />
+          </div>
+        ) : null}
       </div>
       {nuevo ? (
         <NuevoProyecto
@@ -768,23 +915,30 @@ function Ide({ fs }: { fs: ArchivosLocales }) {
 export default function Codigo() {
   const fs = escritorio()?.archivosLocales ?? null;
   const [vista, setVista] = useState<"proyectos" | "archivo">("proyectos");
+  const [completa, setCompleta] = useState(false);
+  useModoPagina(completa ? "completa" : "fijo");
+  const alternarCompleta = () => setCompleta((c) => !c);
   return (
-    <div className="space-y-4">
-      <Encabezado
-        titulo="Código"
-        descripcion={fs ? "Tu editor tipo VS Code: abre carpetas de tu PC, crea plugins, mods y datapacks, compila y comprime sin salir de Mi Setup." : "Abre un archivo de tu equipo, edítalo y guárdalo. Para proyectos completos y compilar usa la app de Windows."}
-      />
-      {fs ? (
-        <Pestanas
-          valor={vista}
-          alCambiar={setVista}
-          opciones={[
-            { id: "proyectos", texto: "Proyectos" },
-            { id: "archivo", texto: "Abrir un archivo" },
-          ]}
+    <div className={cx("flex min-h-0 flex-1 flex-col gap-3", completa && "p-2 safe-top")}>
+      {completa ? null : (
+        <Encabezado
+          titulo="Código"
+          descripcion={fs ? "Tu editor tipo VS Code: abre carpetas de tu PC, crea plugins, mods y datapacks, compila y comprime sin salir de Mi Setup." : "Abre un archivo de tu equipo, edítalo y guárdalo. Si es una página web (HTML), la ves en vivo al lado."}
         />
+      )}
+      {fs && !completa ? (
+        <div className="shrink-0">
+          <Pestanas
+            valor={vista}
+            alCambiar={setVista}
+            opciones={[
+              { id: "proyectos", texto: "Proyectos" },
+              { id: "archivo", texto: "Abrir un archivo" },
+            ]}
+          />
+        </div>
       ) : null}
-      {fs && vista === "proyectos" ? <Ide fs={fs} /> : <BlocDeCodigo />}
+      {fs && vista === "proyectos" ? <Ide fs={fs} completa={completa} alternarCompleta={alternarCompleta} /> : <BlocDeCodigo completa={completa} alternarCompleta={alternarCompleta} />}
     </div>
   );
 }

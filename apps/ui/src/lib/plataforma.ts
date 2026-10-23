@@ -126,6 +126,7 @@ export interface ArchivosLocales {
   crearProyecto(carpeta: string, plantilla: string, nombre: string): Promise<string>;
   herramientas(): Promise<{ java: boolean; gradle: boolean }>;
   instalarHerramientas(): Promise<{ java: boolean; gradle: boolean }>;
+  correrJava(codigo: string): Promise<{ salida: string; error: string | null }>;
   alAvanceHerramientas(cb: (texto: string) => void): () => void;
 }
 

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("miSetup", {
     crearProyecto: (carpeta: string, plantilla: string, nombre: string) => ipcRenderer.invoke("fs:crearProyecto", carpeta, plantilla, nombre),
     herramientas: () => ipcRenderer.invoke("herr:estado"),
     instalarHerramientas: () => ipcRenderer.invoke("herr:instalar"),
+    correrJava: (codigo: string) => ipcRenderer.invoke("herr:java", codigo),
     alAvanceHerramientas: (cb: (texto: string) => void) => {
       const fn = (_e: unknown, texto: string) => cb(texto);
       ipcRenderer.on("herr:avance", fn);
