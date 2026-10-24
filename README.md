@@ -4,7 +4,7 @@
 
 Mi Setup se instala en tu propio VPS y lo usas desde la **PC (Windows)**, el **celular (Android)** o el **navegador**: terminal, archivos, sitios web, finanzas, notas e IA. Tus datos se quedan contigo.
 
-> Versión actual: **0.11.5b** · Código abierto (MIT) · Guía completa en [`docs/USO.md`](docs/USO.md)
+> Versión actual: **0.11.6b** · Código abierto (MIT) · Guía completa en [`docs/USO.md`](docs/USO.md)
 
 <p align="center">
   <img src="apps/core/sitio-oficial/video/recorrido.png" alt="Mi Setup en la PC y en el celular" width="100%">
@@ -66,8 +66,8 @@ Para tenerla encendida **24/7** necesitas un VPS. También puedes instalarla en 
 
 En [Releases](https://github.com/dupeosserver-bit/Mi-setup/releases) están la versión nueva y las 2 anteriores:
 
-- 🪟 **Windows:** `MiSetup-0.11.5.exe` (Windows 10/11)
-- 🤖 **Android:** `MiSetup-0.11.5b.apk` (Android 8 o más nuevo)
+- 🪟 **Windows:** `MiSetup-0.11.6.exe` (Windows 10/11)
+- 🤖 **Android:** `MiSetup-0.11.6b.apk` (Android 8 o más nuevo)
 - 🍎 **iPhone / iPad:** abre tu Mi Setup en Safari → Compartir → **Agregar a inicio** (se usa como app)
 - 🖥️ **Servidor:** este repositorio (Docker)
 

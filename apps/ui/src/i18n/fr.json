@@ -4975,5 +4975,13 @@
 "· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Ressenti {0}° · Humidité {1}% · Vent {2} km/h (14 h)",
 "Escribir en la terminal": "Écrire dans le terminal",
 "Quitar silencio": "Réactiver le son",
-"Este equipo no deja cambiar el volumen desde aquí.": "Cet appareil ne permet pas de changer le volume d'ici."
+"Este equipo no deja cambiar el volumen desde aquí.": "Cet appareil ne permet pas de changer le volume d'ici.",
+"Volumen en Música": "Volume dans Musique",
+"Barra de volumen con silencio en Spotify y en Tu música (también en el celular).": "Barre de volume avec sourdine dans Spotify et Ta musique (aussi sur le téléphone).",
+"Terminal empieza en Hosts": "Le terminal s'ouvre sur Hôtes",
+"Al entrar eliges el host; ya no se abre sola una terminal. Tus sesiones abiertas siguen como pestañas.": "En entrant tu choisis l'hôte ; aucun terminal ne s'ouvre plus tout seul. Tes sessions ouvertes restent en onglets.",
+"Agregar otro servidor": "Ajouter un autre serveur",
+"En Ajustes → Servidor ya no dice «No se pudo conectar» cuando el otro Mi Setup sí está encendido.": "Réglages → Serveur ne dit plus « Impossible de se connecter » quand l'autre Mi Setup est bien allumé.",
+"Ajustes más ordenados": "Réglages mieux rangés",
+"Los interruptores ya no se aplastan y las imágenes se acomodan bien en PC, tablet y celular.": "Les interrupteurs ne sont plus écrasés et les images s'adaptent sur PC, tablette et téléphone."
 }

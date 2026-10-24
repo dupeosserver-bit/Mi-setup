@@ -744,3 +744,14 @@ pnpm al-dia 0.11.6b
 ```
 
 Sube la versión (package.json y Android), compila la demo, saca capturas y video, rehace la wiki de la página oficial y pone al día el README. Sin versión solo regenera. Para ir rápido: `--sin-video` o `--sin-capturas`. Necesita Playwright: `npm i -g @playwright/cli` y `npx playwright install chromium ffmpeg`.
+
+## Versión 0.11.6b
+
+Arreglos después de la 0.11.5b; la lista está en `docs/CAMBIOS-0.11.6b.md`.
+
+- **Música:** barra de volumen con silencio en Spotify y en Tu música.
+- **Terminal:** empieza en Hosts; tocas un host para abrir la sesión.
+- **Ajustes → Servidor:** ya se puede agregar otro Mi Setup (test, la pública…) sin el aviso falso de «No se pudo conectar». El otro servidor necesita esta versión.
+- **Página oficial:** se pone al día sola al arrancar la versión nueva, aunque el número no cambie, y el video ya no sale viejo por la caché del navegador.
+
+Se prueba primero solo en la personal: `bash /root/instalar-version.sh 0.11.6b /home/ubuntu/mi-setup.tar.gz personal`.

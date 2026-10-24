@@ -2,21 +2,23 @@ import type { ModuleId } from "@mi-setup/shared";
 import {
   Check,
   Gift,
-  Globe2,
-  Image,
-  Sparkles,
+  Server,
+  Terminal,
+  ToggleRight,
+  Volume2,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Boton } from "./ui";
 
-export const VERSION_NOVEDADES = "0.11.5b";
+export const VERSION_NOVEDADES = "0.11.6b";
 
 export const NOVEDADES: readonly { modulo: ModuleId; icono: LucideIcon; titulo: string; texto: string }[] = [
-  { modulo: "ajustes", icono: Globe2, titulo: "Mi Setup en el navegador", texto: "En la página oficial, «Usar en el navegador» abre tu Mi Setup sin descargar nada. En el celular, «Agregar a inicio» la deja como app." },
-  { modulo: "ajustes", icono: Sparkles, titulo: "Página oficial nueva", texto: "Capturas nuevas y un video del recorrido en PC y celular, con datos de ejemplo." },
-  { modulo: "sitios", icono: Image, titulo: "Videos en tus sitios", texto: "Los videos MP4 y WebM que subes a tu sitio ya se ven en la página en vez de descargarse." },
+  { modulo: "musica", icono: Volume2, titulo: "Volumen en Música", texto: "Barra de volumen con silencio en Spotify y en Tu música (también en el celular)." },
+  { modulo: "vps_terminal", icono: Terminal, titulo: "Terminal empieza en Hosts", texto: "Al entrar eliges el host; ya no se abre sola una terminal. Tus sesiones abiertas siguen como pestañas." },
+  { modulo: "ajustes", icono: Server, titulo: "Agregar otro servidor", texto: "En Ajustes → Servidor ya no dice «No se pudo conectar» cuando el otro Mi Setup sí está encendido." },
+  { modulo: "ajustes", icono: ToggleRight, titulo: "Ajustes más ordenados", texto: "Los interruptores ya no se aplastan y las imágenes se acomodan bien en PC, tablet y celular." },
 ];
 
 export function QueHayDeNuevo({ puede, alTerminar }: { puede: (m: ModuleId) => boolean; alTerminar: () => void }) {

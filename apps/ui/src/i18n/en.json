@@ -4975,5 +4975,13 @@
 "· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Feels like {0}° · Humidity {1}% · Wind {2} km/h (2 p.m.)",
 "Escribir en la terminal": "Type in the terminal",
 "Quitar silencio": "Unmute",
-"Este equipo no deja cambiar el volumen desde aquí.": "This device doesn't allow changing the volume from here."
+"Este equipo no deja cambiar el volumen desde aquí.": "This device doesn't allow changing the volume from here.",
+"Volumen en Música": "Volume in Music",
+"Barra de volumen con silencio en Spotify y en Tu música (también en el celular).": "Volume bar with mute in Spotify and Your music (on the phone too).",
+"Terminal empieza en Hosts": "Terminal starts in Hosts",
+"Al entrar eliges el host; ya no se abre sola una terminal. Tus sesiones abiertas siguen como pestañas.": "When you open it you pick the host; a terminal no longer opens by itself. Your open sessions stay as tabs.",
+"Agregar otro servidor": "Add another server",
+"En Ajustes → Servidor ya no dice «No se pudo conectar» cuando el otro Mi Setup sí está encendido.": "Settings → Server no longer says “Couldn't connect” when the other Mi Setup is actually running.",
+"Ajustes más ordenados": "Tidier settings",
+"Los interruptores ya no se aplastan y las imágenes se acomodan bien en PC, tablet y celular.": "Switches no longer get squashed and images fit well on PC, tablet and phone."
 }

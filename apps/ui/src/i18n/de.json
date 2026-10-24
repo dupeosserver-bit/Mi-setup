@@ -4975,5 +4975,13 @@
 "· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Gefühlt {0}° · Luftfeuchte {1}% · Wind {2} km/h (14 Uhr)",
 "Escribir en la terminal": "Im Terminal schreiben",
 "Quitar silencio": "Ton an",
-"Este equipo no deja cambiar el volumen desde aquí.": "Dieses Gerät lässt die Lautstärke nicht von hier ändern."
+"Este equipo no deja cambiar el volumen desde aquí.": "Dieses Gerät lässt die Lautstärke nicht von hier ändern.",
+"Volumen en Música": "Lautstärke in Musik",
+"Barra de volumen con silencio en Spotify y en Tu música (también en el celular).": "Lautstärkeregler mit Stummschaltung in Spotify und Deine Musik (auch auf dem Handy).",
+"Terminal empieza en Hosts": "Terminal startet bei Hosts",
+"Al entrar eliges el host; ya no se abre sola una terminal. Tus sesiones abiertas siguen como pestañas.": "Beim Öffnen wählst du den Host; es öffnet sich kein Terminal mehr von selbst. Offene Sitzungen bleiben als Tabs.",
+"Agregar otro servidor": "Weiteren Server hinzufügen",
+"En Ajustes → Servidor ya no dice «No se pudo conectar» cuando el otro Mi Setup sí está encendido.": "Einstellungen → Server meldet nicht mehr „Keine Verbindung“, wenn das andere Mi Setup läuft.",
+"Ajustes más ordenados": "Aufgeräumtere Einstellungen",
+"Los interruptores ya no se aplastan y las imágenes se acomodan bien en PC, tablet y celular.": "Schalter werden nicht mehr gestaucht und Bilder passen auf PC, Tablet und Handy."
 }
