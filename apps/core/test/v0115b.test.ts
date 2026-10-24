@@ -199,3 +199,28 @@ describe("0.11.5b · revisar otro servidor", () => {
     expect(propia.headers["access-control-allow-origin"]).toBe("https://misetup.mexicanland.net");
   });
 });
+
+describe("0.11.5b · página oficial al día con la misma versión", () => {
+  it("se pone al día si cambiaron video o capturas aunque la versión sea igual, y sus direcciones llevan ?v=", async () => {
+    const { eq } = await import("drizzle-orm");
+    const { sites } = await import("../src/db/schema.js");
+    const { firmaOficial, sembrarSitioOficial } = await import("../src/modules/sitios/oficial.js");
+    const { setSetting, getSetting } = await import("../src/modules/settings.js");
+    const { VERSION } = await import("../src/version.js");
+    dir = await mkdtemp(join(tmpdir(), "v0115b-"));
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS, ARCHIVOS_DIR: dir }) });
+    await seedUser(ctx.db, { email: "m@x.test", password: "clave-de-prueba-123", role: "maestra" });
+    await sembrarSitioOficial(ctx.deps);
+    const [s] = await ctx.db.select().from(sites);
+    await ctx.db.update(sites).set({ published: { paginas: [{ ruta: "/", titulo: "", html: "<p>video viejo</p>", css: "" }] } }).where(eq(sites.id, s!.id));
+    const guardado = await getSetting<{ sitio: string; version: string; actualizado: string; firma?: string }>(ctx.db, "sitio_oficial");
+    expect(guardado?.firma).toBe(firmaOficial());
+    // Misma versión, otra firma (se instaló de nuevo con un video nuevo).
+    await setSetting(ctx.db, "sitio_oficial", { ...guardado!, version: VERSION, firma: "vieja" }, new Date());
+    await sembrarSitioOficial(ctx.deps);
+    const [nuevo] = await ctx.db.select().from(sites);
+    const html = (nuevo!.published as { paginas: { html: string }[] }).paginas[0]!.html;
+    expect(html).not.toContain("video viejo");
+    expect(html).toContain(`?v=${firmaOficial()}`);
+  });
+});

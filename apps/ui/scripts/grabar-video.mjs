@@ -35,11 +35,11 @@ const POR_ESCENA_MS = 4800;
 const ESCENARIO = `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}
 body{margin:0;width:${ANCHO}px;height:${ALTO}px;overflow:hidden;background:radial-gradient(1200px 600px at 30% 0%,#2a2350,#0b0d12 70%);font-family:system-ui,"Segoe UI",sans-serif;color:#eceff5}
-.pc{position:absolute;left:44px;top:110px;width:960px;height:600px;border-radius:14px;overflow:hidden;border:1px solid #2b3140;background:#121212;box-shadow:0 30px 80px -20px rgba(124,92,255,.5)}
-.pc iframe{width:1280px;height:800px;border:0;transform:scale(.75);transform-origin:0 0}
-.cel{position:absolute;left:1074px;top:96px;width:322px;height:676px;border:9px solid #222633;border-radius:38px;overflow:hidden;background:#121212;box-shadow:0 30px 70px -10px rgba(0,0,0,.7)}
+.pc{position:absolute;left:56px;top:122px;width:896px;height:560px;border-radius:14px;overflow:hidden;border:1px solid #2b3140;background:#121212;box-shadow:0 30px 80px -20px rgba(124,92,255,.5)}
+.pc iframe{width:1280px;height:800px;border:0;transform:scale(.7);transform-origin:0 0}
+.cel{position:absolute;left:1050px;top:96px;width:322px;height:676px;border:9px solid #222633;border-radius:38px;overflow:hidden;background:#121212;box-shadow:0 30px 70px -10px rgba(0,0,0,.7)}
 .cel iframe{width:390px;height:844px;border:0;transform:scale(.78);transform-origin:0 0}
-.rotulo{position:absolute;left:44px;top:18px;font-size:22px;font-weight:700;letter-spacing:-.01em;transition:opacity .4s}
+.rotulo{position:absolute;left:56px;top:18px;font-size:22px;font-weight:700;letter-spacing:-.01em;transition:opacity .4s}
 .rotulo span{background:linear-gradient(90deg,#b49cff,#7dd3fc);-webkit-background-clip:text;background-clip:text;color:transparent}
 #portada{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background:radial-gradient(1200px 600px at 30% 0%,#2a2350,#0b0d12 70%);transition:opacity .7s;z-index:5}
 #portada h1{font-size:76px;margin:0;letter-spacing:-.03em}

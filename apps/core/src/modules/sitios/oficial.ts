@@ -9,6 +9,7 @@
  * - La wiki sale de la ayuda de la app: scripts/wiki-sitio.ts.
  * - Con cada versión nueva se vuelve a generar, solo si nadie lo editó.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -270,12 +271,13 @@ function leerWiki(): Wiki {
 export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
   if (deps.config.env.EDICION === "publica") return;
   const { db } = deps;
-  const guardado = await getSetting<{ sitio: string; version: string; actualizado: string }>(db, CLAVE);
+  const guardado = await getSetting<{ sitio: string; version: string; actualizado: string; firma?: string }>(db, CLAVE);
   let sitio: typeof sites.$inferSelect | undefined;
   if (guardado) {
     [sitio] = await db.select().from(sites).where(eq(sites.id, guardado.sitio));
     // Lo borraron, ya está en esta versión o apagaron «Actualizar sola con cada versión»: no se toca.
-    if (!sitio || guardado.version === VERSION || (sitio.settings as { actualizarSola?: boolean }).actualizarSola === false) return;
+    // También se pone al día si cambiaron capturas, video o wiki aunque la versión sea la misma.
+    if (!sitio || (guardado.version === VERSION && guardado.firma === firmaOficial()) || (sitio.settings as { actualizarSola?: boolean }).actualizarSola === false) return;
     // Lo de antes (aunque se haya editado a mano) queda en el historial de versiones.
     await db.insert(siteVersions).values({ siteId: sitio.id, draft: sitio.draft as object, published: (sitio.published as object | null) ?? { paginas: [] }, note: `Antes de actualizar a la versión ${VERSION}` });
     await actualizarSitioOficial(deps, sitio);
@@ -310,7 +312,7 @@ export async function sembrarSitioOficial(deps: ModuleDeps): Promise<void> {
   }
   if (!sitio) return;
   const ahora = await generarContenido(deps, sitio, false);
-  await setSetting(db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
+  await setSetting(db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString(), firma: firmaOficial() }, ahora);
 }
 
 const CAPTURAS = ["inicio", "finanzas", "notas", "calendario", "ia", "sitios", "herramientas", "editor-fotos", "finanzas-celular", "notas-celular"];
@@ -330,6 +332,26 @@ const rutaDe = (nombre: string, i: number) =>
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")}`;
+
+let firmaGuardada: string | null = null;
+
+/**
+ * Huella de lo que trae esta imagen para la página oficial (versión, capturas, video y wiki).
+ * Si cambia, la página se pone al día; y va en las direcciones (?v=) para que el
+ * navegador no siga mostrando el video o las capturas viejas que guardó.
+ */
+export function firmaOficial(): string {
+  if (firmaGuardada) return firmaGuardada;
+  const h = createHash("sha1").update(VERSION);
+  for (const [, relativa] of ARCHIVOS) {
+    const ruta = join(CARPETA_OFICIAL, relativa);
+    if (existsSync(ruta)) h.update(relativa).update(readFileSync(ruta));
+  }
+  const wiki = join(CARPETA_OFICIAL, "wiki.json");
+  if (existsSync(wiki)) h.update(readFileSync(wiki));
+  firmaGuardada = h.digest("hex").slice(0, 12);
+  return firmaGuardada;
+}
 
 async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSelect, publicar: boolean): Promise<Date> {
   const { db } = deps;
@@ -355,7 +377,8 @@ async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSele
     }
   }
   const id = sitio.id;
-  const contenido = armarSitioOficial((n) => (ids.has(n) ? `/api/sitios/${id}/archivos/${ids.get(n)}` : null), leerWiki(), VERSION);
+  const v = firmaOficial();
+  const contenido = armarSitioOficial((n) => (ids.has(n) ? `/api/sitios/${id}/archivos/${ids.get(n)}?v=${v}` : null), leerWiki(), VERSION);
   const ahora = deps.now();
   const ajustes = { ...(sitio.settings as Record<string, unknown>), ...(ids.has("logo") ? { icono: ids.get("logo") } : {}) };
   const cambios: Partial<typeof sites.$inferInsert> = { draft: { importado: contenido }, settings: ajustes, updatedAt: ahora };
@@ -373,6 +396,6 @@ async function generarContenido(deps: ModuleDeps, sitio: typeof sites.$inferSele
 export async function actualizarSitioOficial(deps: ModuleDeps, sitio: typeof sites.$inferSelect): Promise<{ publicado: boolean }> {
   const publicar = Boolean(sitio.published);
   const ahora = await generarContenido(deps, sitio, publicar);
-  await setSetting(deps.db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString() }, ahora);
+  await setSetting(deps.db, CLAVE, { sitio: sitio.id, version: VERSION, actualizado: ahora.toISOString(), firma: firmaOficial() }, ahora);
   return { publicado: publicar };
 }
