@@ -148,6 +148,9 @@ importers:
       '@capacitor/app':
         specifier: ^6.0.2
         version: 6.0.3(@capacitor/core@6.2.2)
+      '@capacitor/clipboard':
+        specifier: ^6.0.0
+        version: 6.0.3(@capacitor/core@6.2.2)
       '@capacitor/core':
         specifier: ^6.2.0
         version: 6.2.2
@@ -188,6 +191,9 @@ importers:
       '@capacitor-community/text-to-speech':
         specifier: ^4.1.1
         version: 4.1.1(@capacitor/core@6.2.2)
+      '@capacitor/clipboard':
+        specifier: ^6.0.0
+        version: 6.0.3(@capacitor/core@6.2.2)
       '@capacitor/core':
         specifier: ^6.2.0
         version: 6.2.2
@@ -242,6 +248,9 @@ importers:
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
+      '@xterm/addon-web-links':
+        specifier: ^0.11.0
+        version: 0.11.0(@xterm/xterm@5.5.0)
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
@@ -353,6 +362,7 @@ importers:
         version: 3.25.76
 
 packages:
+
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
 
@@ -480,6 +490,11 @@ packages:
     resolution: {integrity: sha512-5wEYSHBzRKJKZnhD2sVJAP0t0kUT7o2/vlgEGzFE3t2w+inL9qMDN7zxg6pvqveJiPNZT2k93ZvJDdRKIn/w1w==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  '@capacitor/clipboard@6.0.3':
+    resolution: {integrity: sha512-7lUyN2WZE3qPJw5ybvs2PGODOsmiIAjFDkZ1aokSDcWSUgtvdpu7KqMqXs5S+dhfJDU1/oVAtpww5W5cBUzY0g==}
+    peerDependencies:
+      '@capacitor/core': ^6.0.0
 
   '@capacitor/core@3.9.0':
     resolution: {integrity: sha512-j1lL0+/7stY8YhIq1Lm6xixvUqIn89vtyH5ZpJNNmcZ0kwz6K9eLkcG6fvq1UWMDgSVZg9JrRGSFhb4LLoYOsw==}
@@ -2029,6 +2044,11 @@ packages:
 
   '@xterm/addon-fit@0.10.0':
     resolution: {integrity: sha512-UFYkDm4HUahf2lnEyHvio51TNGiLK66mqP2JoATy7hRZeXaGMRDr00JiSF7m63vR5WKATF605yEggJKsw0JpMQ==}
+    peerDependencies:
+      '@xterm/xterm': ^5.0.0
+
+  '@xterm/addon-web-links@0.11.0':
+    resolution: {integrity: sha512-nIHQ38pQI+a5kXnRaTgwqSHnX7KE6+4SVoceompgHL26unAxdfP6IPqUTSYPQgSwM56hsElfoNrrW5V7BUED/Q==}
     peerDependencies:
       '@xterm/xterm': ^5.0.0
 
@@ -5094,6 +5114,7 @@ packages:
         optional: true
 
 snapshots:
+
   7zip-bin@5.2.0: {}
 
   '@alloc/quick-lru@5.3.0': {}
@@ -5257,6 +5278,10 @@ snapshots:
       xml2js: 0.5.0
     transitivePeerDependencies:
       - supports-color
+
+  '@capacitor/clipboard@6.0.3(@capacitor/core@6.2.2)':
+    dependencies:
+      '@capacitor/core': 6.2.2
 
   '@capacitor/core@3.9.0':
     dependencies:
@@ -6669,6 +6694,10 @@ snapshots:
   '@xmldom/xmldom@0.9.12': {}
 
   '@xterm/addon-fit@0.10.0(@xterm/xterm@5.5.0)':
+    dependencies:
+      '@xterm/xterm': 5.5.0
+
+  '@xterm/addon-web-links@0.11.0(@xterm/xterm@5.5.0)':
     dependencies:
       '@xterm/xterm': 5.5.0
 

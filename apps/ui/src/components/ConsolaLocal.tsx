@@ -1,9 +1,11 @@
 /** Terminal de esta PC (PowerShell o CMD) dentro de la app de Windows. Lo usan Terminal y Código. */
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef } from "react";
 import { escritorio } from "../lib/plataforma";
+import { escribirPortapapeles, leerPortapapeles } from "../lib/portapapeles";
 import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { avisar, cx } from "./ui";
 
@@ -13,7 +15,7 @@ import { avisar, cx } from "./ui";
  */
 export function atajosPortapapeles(term: Terminal, contenedor: HTMLElement): () => void {
   const pegar = async () => {
-    const texto = await navigator.clipboard.readText().catch(() => "");
+    const texto = await leerPortapapeles();
     if (texto) term.paste(texto);
     else avisar("No hay texto en el portapapeles (o no se dio permiso para leerlo)", "info");
   };
@@ -26,7 +28,7 @@ export function atajosPortapapeles(term: Terminal, contenedor: HTMLElement): () 
       return false;
     }
     if ((e.ctrlKey || e.metaKey) && tecla === "c" && (e.shiftKey || term.hasSelection())) {
-      void navigator.clipboard.writeText(term.getSelection());
+      void escribirPortapapeles(term.getSelection());
       term.clearSelection();
       return false;
     }
@@ -35,13 +37,103 @@ export function atajosPortapapeles(term: Terminal, contenedor: HTMLElement): () 
   const menu = (e: MouseEvent) => {
     e.preventDefault();
     if (term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection());
+      void escribirPortapapeles(term.getSelection());
       term.clearSelection();
       avisar("Copiado", "info");
     } else void pegar();
   };
   contenedor.addEventListener("contextmenu", menu);
   return () => contenedor.removeEventListener("contextmenu", menu);
+}
+
+/** Avisos de la terminal a su pantalla: tocaste un enlace o seleccionaste texto. */
+export const EVENTO_ENLACE = "mi-setup:terminal-enlace";
+export const EVENTO_SELECCION = "mi-setup:terminal-seleccion";
+
+/**
+ * Enlaces de la terminal (los normales y los de Claude Code, aunque se partan en
+ * varias líneas): en vez del aviso del navegador en inglés, la pantalla de
+ * Terminal muestra su menú «Abrir / Copiar enlace».
+ */
+export function enlacesTerminal(term: Terminal): void {
+  const avisarEnlace = (uri: string) => window.dispatchEvent(new CustomEvent(EVENTO_ENLACE, { detail: uri }));
+  term.options.linkHandler = { activate: (_e, uri) => avisarEnlace(uri), allowNonHttpProtocols: false };
+  term.loadAddon(new WebLinksAddon((_e, uri) => avisarEnlace(uri)));
+}
+
+/**
+ * Celular: mantener presionado selecciona una palabra y, sin soltar, se arrastra para
+ * seleccionar más. Al soltar, la pantalla ofrece «Copiar». Devuelve la función para quitarlo.
+ */
+export function seleccionTactil(term: Terminal, contenedor: HTMLElement): () => void {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  let inicio: { x: number; y: number } | null = null;
+  let ancla: { col: number; fila: number } | null = null;
+  let seleccionando = false;
+  const celda = (x: number, y: number) => {
+    const pantalla = contenedor.querySelector<HTMLElement>(".xterm-screen") ?? contenedor;
+    const r = pantalla.getBoundingClientRect();
+    const col = Math.min(term.cols - 1, Math.max(0, Math.floor(((x - r.left) / r.width) * term.cols)));
+    const fila = Math.min(term.rows - 1, Math.max(0, Math.floor(((y - r.top) / r.height) * term.rows))) + term.buffer.active.viewportY;
+    return { col, fila };
+  };
+  const marcar = (a: { col: number; fila: number }, b: { col: number; fila: number }) => {
+    const [p, q] = a.fila < b.fila || (a.fila === b.fila && a.col <= b.col) ? [a, b] : [b, a];
+    term.select(p.col, p.fila, (q.fila - p.fila) * term.cols + (q.col - p.col) + 1);
+  };
+  const palabra = (c: { col: number; fila: number }) => {
+    const linea = term.buffer.active.getLine(c.fila)?.translateToString(false) ?? "";
+    let desde = c.col;
+    let hasta = c.col;
+    while (desde > 0 && /\S/.test(linea[desde - 1] ?? "")) desde--;
+    while (hasta < linea.length - 1 && /\S/.test(linea[hasta + 1] ?? "")) hasta++;
+    return { desde: { col: desde, fila: c.fila }, hasta: { col: hasta, fila: c.fila } };
+  };
+  const quitar = () => {
+    if (temporizador) clearTimeout(temporizador);
+    temporizador = undefined;
+  };
+  const alTocar = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (e.touches.length !== 1 || !t) return quitar();
+    inicio = { x: t.clientX, y: t.clientY };
+    temporizador = setTimeout(() => {
+      if (!inicio) return;
+      seleccionando = true;
+      const p = palabra(celda(inicio.x, inicio.y));
+      ancla = p.desde;
+      marcar(p.desde, p.hasta);
+      navigator.vibrate?.(15);
+    }, 450);
+  };
+  const alMover = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    if (seleccionando && ancla) {
+      e.preventDefault();
+      marcar(ancla, celda(t.clientX, t.clientY));
+    } else if (inicio && Math.hypot(t.clientX - inicio.x, t.clientY - inicio.y) > 10) quitar();
+  };
+  const alSoltar = (e: TouchEvent) => {
+    quitar();
+    inicio = null;
+    if (!seleccionando) return;
+    seleccionando = false;
+    e.preventDefault();
+    const texto = term.getSelection();
+    if (texto) window.dispatchEvent(new CustomEvent(EVENTO_SELECCION, { detail: texto }));
+  };
+  contenedor.addEventListener("touchstart", alTocar, { passive: true });
+  contenedor.addEventListener("touchmove", alMover, { passive: false });
+  contenedor.addEventListener("touchend", alSoltar, { passive: false });
+  contenedor.addEventListener("touchcancel", quitar);
+  return () => {
+    quitar();
+    contenedor.removeEventListener("touchstart", alTocar);
+    contenedor.removeEventListener("touchmove", alMover);
+    contenedor.removeEventListener("touchend", alSoltar);
+    contenedor.removeEventListener("touchcancel", quitar);
+  };
 }
 
 /** Pestañas locales cerradas con la X: esas terminan PowerShell/CMD; cambiar de pantalla las deja vivas. */
@@ -92,6 +184,7 @@ export function ConsolaLocal({
     term.open(contenedor);
     fit.fit();
     const quitarAtajos = atajosPortapapeles(term, contenedor);
+    enlacesTerminal(term);
 
     let id: string | null = null;
     let vivo = true;

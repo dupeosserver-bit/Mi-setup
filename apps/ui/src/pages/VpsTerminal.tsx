@@ -3,7 +3,7 @@ import { analizarComando } from "@mi-setup/shared";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ClipboardPaste, Columns2, Eye, EyeOff, FolderTree, History, House, KeyRound, Laptop, PanelRight, Plus, Radio, Search, Send, Server, Settings, Sparkles, SquareSplitHorizontal, TerminalSquare, X } from "lucide-react";
+import { ChevronLeft, ClipboardPaste, Columns2, Copy, ExternalLink, Eye, EyeOff, FolderTree, History, House, KeyRound, Laptop, PanelRight, Plus, Radio, Search, Send, Server, Settings, Sparkles, SquareSplitHorizontal, TerminalSquare, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AreaTexto, Boton, Campo, Cargando, Entrada, ErrorCaja, Insignia, Interruptor, Modal, Selector, Vacio, avisar, avisarError, cx } from "../components/ui";
@@ -19,13 +19,14 @@ import { confirmar } from "../lib/confirmar";
 import { queryClient, usePuede } from "../lib/consultas";
 import { haceCuanto } from "../lib/formato";
 import { useAcostado, useForma, useModoPagina, useTactil } from "../lib/marco";
-import { escritorio, esMovil } from "../lib/plataforma";
+import { abrirExterno, escritorio, esMovil } from "../lib/plataforma";
+import { escribirPortapapeles, leerPortapapeles } from "../lib/portapapeles";
 import { opcionesTerminal, usePreferencias } from "../lib/preferencias";
 import { pedirReauth } from "../lib/reauth";
 import { aplicarModificadores, type Modificadores } from "../lib/teclasTerminal";
 import { tiempoReal } from "../lib/tiempo-real";
 import { useServidores, type Servidor } from "../lib/vps";
-import { atajosPortapapeles, ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
+import { atajosPortapapeles, enlacesTerminal, EVENTO_ENLACE, EVENTO_SELECCION, seleccionTactil, ConsolaLocal, cierresLocales } from "../components/ConsolaLocal";
 
 function base64aBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -98,6 +99,8 @@ function Consola({
     const directo = movil ? entradaDirecta(contenedor, clave, (datos) => alDatos(modificarRef.current ? modificarRef.current(datos) : datos)) : null;
     fit.fit();
     const quitarAtajos = atajosPortapapeles(term, contenedor);
+    enlacesTerminal(term);
+    const quitarSeleccion = movil ? seleccionTactil(term, contenedor) : null;
 
     const ref = crypto.randomUUID();
     let id: string | null = null;
@@ -191,6 +194,7 @@ function Consola({
       tamano.dispose();
       observador.disconnect();
       directo?.();
+      quitarSeleccion?.();
       term.dispose();
       terminal.current = null;
     };
@@ -614,6 +618,24 @@ export default function VpsTerminal() {
   const [mods, setMods] = useState<Modificadores>({ ctrl: false, alt: false });
   const [panelBarra, setPanelBarra] = useState<PanelBarra>(null);
   // En el celular se escribe directo en la terminal (como Termius); la caja queda como opción.
+  // Texto seleccionado (celular) y enlace tocado en la terminal: se ofrece copiar o abrir.
+  const [seleccion, setSeleccion] = useState<string | null>(null);
+  const [enlace, setEnlace] = useState<string | null>(null);
+  useEffect(() => {
+    const alEnlace = (e: Event) => setEnlace((e as CustomEvent<string>).detail);
+    const alSeleccion = (e: Event) => setSeleccion((e as CustomEvent<string>).detail);
+    window.addEventListener(EVENTO_ENLACE, alEnlace);
+    window.addEventListener(EVENTO_SELECCION, alSeleccion);
+    return () => {
+      window.removeEventListener(EVENTO_ENLACE, alEnlace);
+      window.removeEventListener(EVENTO_SELECCION, alSeleccion);
+    };
+  }, []);
+  const copiar = (texto: string, aviso = "Copiado") =>
+    void escribirPortapapeles(texto).then(
+      () => avisar(aviso, "info"),
+      () => avisar("No se pudo copiar", "error"),
+    );
   const [cajaVisible, setCajaVisible] = useState(() => !(typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches));
   const caja = useRef<HTMLInputElement>(null);
   const enviadores = useRef(new Map<string, Enviar>());
@@ -755,7 +777,7 @@ export default function VpsTerminal() {
   };
 
   const pegar = async () => {
-    const t = await navigator.clipboard.readText().catch(() => "");
+    const t = await leerPortapapeles();
     if (!t) return avisar("No hay texto en el portapapeles", "info");
     enviarTodas?.(t);
   };
@@ -1013,7 +1035,15 @@ export default function VpsTerminal() {
       ) : null}
       {pestanas.length ? (
         <div className={cx("min-h-0 flex-1 flex-col", vista === "sesion" ? "flex" : "hidden")}>
-          <div className="flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1">
+            {seleccion ? (
+              <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-borde bg-superficie p-1 shadow-2xl">
+                <Boton tamano="sm" variante="primario" icono={Copy} onPointerDown={(e) => e.preventDefault()} onClick={() => (copiar(seleccion), setSeleccion(null))}>
+                  Copiar
+                </Boton>
+                <Boton tamano="sm" variante="fantasma" icono={X} onPointerDown={(e) => e.preventDefault()} onClick={() => setSeleccion(null)} aria-label="Cerrar" />
+              </div>
+            ) : null}
             {paneles}
             {lado && !tactil ? (
               <aside className="flex w-[300px] shrink-0 flex-col border-l border-borde bg-superficie max-md:hidden">
@@ -1064,6 +1094,24 @@ export default function VpsTerminal() {
         </div>
       ) : null}
       <Paleta abierta={paleta} alCerrar={() => setPaleta(false)} opciones={opcionesPaleta} />
+      <Modal abierto={enlace !== null} titulo="Enlace de la terminal" alCerrar={() => setEnlace(null)}>
+        {enlace ? (
+          <div className="space-y-3">
+            <p className="break-all rounded-xl bg-fondo p-3 font-mono text-xs">{enlace}</p>
+            <div className="flex flex-wrap gap-2">
+              <Boton variante="primario" icono={ExternalLink} onClick={() => (abrirExterno(enlace), setEnlace(null))}>
+                Abrir
+              </Boton>
+              <Boton icono={Copy} onClick={() => (copiar(enlace, "Enlace copiado"), setEnlace(null))}>
+                Copiar enlace
+              </Boton>
+              <Boton variante="fantasma" onClick={() => setEnlace(null)}>
+                Cancelar
+              </Boton>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
       <Modal abierto={verCodigos} titulo="Escribir un código 2FA en la terminal" alCerrar={() => setVerCodigos(false)}>
         {verCodigos ? (
           <Desbloqueo>

@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { DialogoConfirmar, DialogoReauth } from "./components/Dialogos";
 import { GuardiaModulo, Layout } from "./components/Layout";
+import { Logo } from "./components/Logo";
 import { Avisos } from "./components/ui";
+import { useMe } from "./lib/consultas";
 import { asegurarDispositivo, iniciarLatidos } from "./lib/dispositivo";
 import { useSesion } from "./lib/sesion";
 import { tiempoReal } from "./lib/tiempo-real";
@@ -13,6 +15,23 @@ import Login from "./pages/Login";
 const BotPublico = lazy(() => import("./pages/BotPublico"));
 const NotaPublica = lazy(() => import("./pages/NotaPublica"));
 const CobroPublico = lazy(() => import("./pages/CobroPublico"));
+
+/**
+ * Mientras llegan tu cuenta y tus permisos se ve el logo con un círculo de carga,
+ * no el inicio vacío («Hola,» sin nombre, menú sin apartados).
+ */
+function ConSesion() {
+  const me = useMe();
+  if (!me.data && !me.error) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center gap-5 bg-fondo" role="status" aria-label="Cargando">
+        <Logo tamano="lg" />
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-borde border-t-acento" />
+      </div>
+    );
+  }
+  return <Layout />;
+}
 
 export function App() {
   const conSesion = useSesion((s) => Boolean(s.refreshToken));
@@ -65,7 +84,7 @@ export function App() {
             </Suspense>
           }
         />
-        <Route element={conSesion ? <Layout /> : <Navigate to="/login" replace />}>
+        <Route element={conSesion ? <ConSesion /> : <Navigate to="/login" replace />}>
           <Route index element={<Inicio />} />
           {RUTAS_MOVIDAS.map((r) => (
             <Route key={r.desde} path={`${r.desde.slice(1)}/*`} element={<Navigate to={r.hasta} replace />} />

@@ -11,6 +11,8 @@ Todo lo que se arregló después de la 0.11.5b que ya está instalada. Se prueba
 | Ajustes | Interruptores de tamaño fijo (ya no se aplastan con textos largos). Subir imagen (logo, fondos, foto de perfil): los botones bajan a su fila cuando no caben. |
 | Terminal | Al entrar se empieza en Hosts; ya no se abre sola una PowerShell. Las sesiones vivas vuelven como pestañas y «Abrir terminal» desde Rendimiento sigue abriendo su sesión. |
 | Página oficial | Video con la PC a la izquierda y el celular a la derecha, sin encimarse. La página se pone al día también cuando cambian video, capturas o wiki con la misma versión, y sus archivos llevan `?v=` para que el navegador no muestre el video viejo. |
+| Terminal (copiar y enlaces) | Celular: mantener presionado selecciona una palabra y, sin soltar, se arrastra para seleccionar más; sale «Copiar». Pegar usa el portapapeles del celular. Enlaces (también los de Claude Code y los partidos en varias líneas): al tocarlos sale un menú en español «Abrir / Copiar enlace» en vez del aviso en inglés. En la PC siguen Ctrl+Shift+C/V y el clic derecho. |
+| Al abrir la app | Logo con círculo de carga mientras llegan tu cuenta y tus permisos, en lugar del inicio vacío («Hola,» sin nombre). |
 | Versión | 0.11.6b (Android `versionCode` 17). |
 
 ## Pendientes conocidos
