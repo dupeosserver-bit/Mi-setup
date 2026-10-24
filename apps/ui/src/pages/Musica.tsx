@@ -17,6 +17,9 @@ import {
   Radio,
   Search,
   Shuffle,
+  Volume1,
+  Volume2,
+  VolumeX,
   SkipBack,
   SkipForward,
   Smartphone,
@@ -106,6 +109,60 @@ function FilaPista({ p, numero, onClick, extra }: { p: PistaSpotify; numero?: nu
       </span>
       {extra}
     </button>
+  );
+}
+
+/** Barra de volumen con silencio. Manda el valor con una pausa corta (no uno por cada pixel). */
+function BarraVolumen({ valor, deshabilitada, nota, alCambiar }: { valor: number; deshabilitada?: boolean; nota?: string | null; alCambiar: (v: number) => void }) {
+  const [local, setLocal] = useState(valor);
+  const antesDeSilencio = useRef(valor || 50);
+  const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moviendo = useRef(false);
+  useEffect(() => {
+    if (!moviendo.current) setLocal(valor);
+  }, [valor]);
+  useEffect(() => () => void (espera.current && clearTimeout(espera.current)), []);
+  const poner = (v: number, ya = false) => {
+    setLocal(v);
+    if (v > 0) antesDeSilencio.current = v;
+    if (espera.current) clearTimeout(espera.current);
+    moviendo.current = true;
+    espera.current = setTimeout(
+      () => {
+        moviendo.current = false;
+        alCambiar(v);
+      },
+      ya ? 0 : 350,
+    );
+  };
+  const Icono = local === 0 ? VolumeX : local < 50 ? Volume1 : Volume2;
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={deshabilitada}
+          onClick={() => poner(local === 0 ? antesDeSilencio.current : 0, true)}
+          aria-label={local === 0 ? "Quitar silencio" : "Silenciar"}
+          title={local === 0 ? "Quitar silencio" : "Silenciar"}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-tenue hover:text-texto disabled:opacity-40"
+        >
+          <Icono className="h-5 w-5" />
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={local}
+          disabled={deshabilitada}
+          onChange={(e) => poner(Number(e.target.value))}
+          aria-label="Volumen"
+          className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[var(--acento)] disabled:cursor-not-allowed disabled:opacity-40"
+        />
+        <span className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-tenue">{local}%</span>
+      </div>
+      {nota ? <p className="mt-1 text-xs text-tenue">{nota}</p> : null}
+    </div>
   );
 }
 
@@ -289,6 +346,19 @@ function AhoraSuena({ sp }: { sp: ReturnType<typeof useSpotify> }) {
               </button>
             </div>
           ) : null}
+          {puede && d.equipo ? (
+            <BarraVolumen
+              valor={d.volumen ?? 50}
+              deshabilitada={!d.volumenCambiable}
+              nota={d.volumenCambiable ? null : "Este equipo no deja cambiar el volumen desde aquí."}
+              alCambiar={(v) =>
+                void api("/api/musica/spotify/volumen", { metodo: "POST", cuerpo: { volumen: v } }).then(
+                  () => queryClient.setQueryData<EstadoSpotify>(["spotify"], (e) => (e ? { ...e, volumen: v } : e)),
+                  avisarError,
+                )
+              }
+            />
+          ) : null}
 
           {verEquipos ? (
             <div className="mt-3 rounded-2xl border border-borde bg-black/25 p-2">
@@ -360,8 +430,29 @@ function AhoraSuena({ sp }: { sp: ReturnType<typeof useSpotify> }) {
   );
 }
 
+const CLAVE_VOLUMEN = "mi-setup.volumen-musica";
+
 function TuMusica() {
   const puede = usePuede("musica", "escritura");
+  // Volumen de tu música (se recuerda en este aparato).
+  const reproductor = useRef<HTMLAudioElement>(null);
+  const [volumen, setVolumen] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(CLAVE_VOLUMEN));
+      return Number.isFinite(v) && localStorage.getItem(CLAVE_VOLUMEN) !== null ? Math.min(100, Math.max(0, v)) : 100;
+    } catch {
+      return 100;
+    }
+  });
+  const ponerVolumen = (v: number) => {
+    setVolumen(v);
+    if (reproductor.current) reproductor.current.volume = v / 100;
+    try {
+      localStorage.setItem(CLAVE_VOLUMEN, String(v));
+    } catch {
+      /* sin almacenamiento: solo por ahora */
+    }
+  };
   const [pagina, setPagina] = useState(1);
   const [actual, setActual] = useState<ArchivoMedia | null>(null);
   const [avance, setAvance] = useState<number | null>(null);
@@ -426,7 +517,13 @@ function TuMusica() {
           <div className="h-full bg-acento transition-all" style={{ width: `${avance}%` }} />
         </div>
       ) : null}
-      {actual ? <audio key={actual.id} src={`${API_BASE}${actual.url}`} controls autoPlay className="mb-3 w-full" onEnded={siguiente} /> : null}
+      {actual ? (
+        <div className="mb-3">
+          <audio ref={reproductor} key={actual.id} src={`${API_BASE}${actual.url}`} controls autoPlay className="w-full" onEnded={siguiente} onLoadedMetadata={(e) => (e.currentTarget.volume = volumen / 100)} />
+          {/* En el celular el reproductor no trae volumen propio: esta barra sí. */}
+          <BarraVolumen valor={volumen} alCambiar={ponerVolumen} />
+        </div>
+      ) : null}
       <ErrorCaja error={q.error} />
       {q.isLoading ? <Cargando /> : null}
       {q.data && q.data.total === 0 ? <p className="py-4 text-center text-sm text-tenue">Sube tus canciones o clips (MP3, M4A, MP4…) y escúchalos desde cualquier equipo.</p> : null}

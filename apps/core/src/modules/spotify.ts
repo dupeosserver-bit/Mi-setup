@@ -66,7 +66,7 @@ export interface ReproductorSp {
   is_playing?: boolean;
   progress_ms?: number;
   shuffle_state?: boolean;
-  device?: { id?: string; name: string; type?: string; volume_percent?: number | null };
+  device?: { id?: string; name: string; type?: string; volume_percent?: number | null; supports_volume?: boolean };
   item?: PistaSp | null;
 }
 
@@ -78,6 +78,9 @@ export function mapearEstado(d: ReproductorSp | null, guardada = false) {
     aleatorio: d?.shuffle_state ?? false,
     equipo: d?.device?.name ?? null,
     equipoTipo: d?.device?.type ?? null,
+    // Volumen del equipo que suena; algunos (bocinas, autos) no dejan cambiarlo desde fuera.
+    volumen: d?.device?.volume_percent ?? null,
+    volumenCambiable: Boolean(d?.device) && d?.device?.supports_volume !== false && d?.device?.volume_percent != null,
     cancion: d?.item ? { ...mapearPista(d.item), progreso: d.progress_ms ?? 0, guardada } : null,
   };
 }

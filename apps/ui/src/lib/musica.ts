@@ -22,6 +22,9 @@ export interface EstadoSpotify {
   aleatorio?: boolean;
   equipo?: string | null;
   equipoTipo?: string | null;
+  /** 0 a 100; null si Spotify no lo dice. */
+  volumen?: number | null;
+  volumenCambiable?: boolean;
   cancion?: CancionSonando | null;
 }
 

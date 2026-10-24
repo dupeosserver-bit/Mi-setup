@@ -4973,5 +4973,7 @@
 "Hora por hora · {0}": "Hour by hour · {0}",
 "{0} (máx. {1})": "{0} (max. {1})",
 "· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Feels like {0}° · Humidity {1}% · Wind {2} km/h (2 p.m.)",
-"Escribir en la terminal": "Type in the terminal"
+"Escribir en la terminal": "Type in the terminal",
+"Quitar silencio": "Unmute",
+"Este equipo no deja cambiar el volumen desde aquí.": "This device doesn't allow changing the volume from here."
 }

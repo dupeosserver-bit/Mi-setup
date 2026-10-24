@@ -4973,5 +4973,7 @@
 "Hora por hora · {0}": "Hora a hora · {0}",
 "{0} (máx. {1})": "{0} (máx. {1})",
 "· Sensación {0}° · Humedad {1}% · Viento {2} km/h (2 p.m.)": "· Sensação {0}° · Umidade {1}% · Vento {2} km/h (14h)",
-"Escribir en la terminal": "Escrever no terminal"
+"Escribir en la terminal": "Escrever no terminal",
+"Quitar silencio": "Tirar o silêncio",
+"Este equipo no deja cambiar el volumen desde aquí.": "Este aparelho não deixa mudar o volume daqui."
 }

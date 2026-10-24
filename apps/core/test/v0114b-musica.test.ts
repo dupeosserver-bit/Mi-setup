@@ -155,3 +155,37 @@ describe("0.11.4b música: tu música del servidor", () => {
     expect((await app.inject({ method: "GET", url: "/api/media/musica", headers: h })).json<unknown[]>()).toHaveLength(8);
   });
 });
+
+describe("0.11.5b música: volumen de Spotify", () => {
+  it("cambia el volumen del equipo que suena y avisa si ese equipo no lo deja", async () => {
+    const h = await preparar({ SPOTIFY_CLIENT_ID: "cliente-prueba" });
+    const app = ctx!.app;
+    let rechazar = false;
+    const volumenes: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entrada, init) => {
+      const url = String(entrada);
+      if (url.startsWith("https://accounts.spotify.com/api/token")) return respuesta({ access_token: "acceso", refresh_token: "refresco", expires_in: 3600 });
+      if (url.includes("/me/player/volume")) {
+        volumenes.push(`${init?.method} ${url}`);
+        return rechazar ? respuesta({ error: { status: 403, message: "Player command failed: Cannot control device volume" } }, 403) : respuesta(null, 204);
+      }
+      if (url.includes("/me/player?market")) return respuesta({ is_playing: true, device: { name: "PC", volume_percent: 40, supports_volume: true }, item: pista("a1") });
+      if (url.includes("/me/library/contains")) return respuesta([false]);
+      return respuesta({}, 500);
+    });
+    const conectar = (await app.inject({ method: "GET", url: "/api/musica/spotify/conectar", headers: h })).json<{ url: string }>();
+    await app.inject({ method: "GET", url: `/api/musica/spotify/callback?code=abc&state=${new URL(conectar.url).searchParams.get("state")}` });
+
+    const estado = (await app.inject({ method: "GET", url: "/api/musica/spotify/estado", headers: h })).json<{ volumen: number; volumenCambiable: boolean }>();
+    expect(estado).toMatchObject({ volumen: 40, volumenCambiable: true });
+    const ok = await app.inject({ method: "POST", url: "/api/musica/spotify/volumen", headers: h, payload: { volumen: 75 } });
+    expect(ok.json()).toEqual({ volumen: 75 });
+    expect(volumenes).toEqual(["PUT https://api.spotify.com/v1/me/player/volume?volume_percent=75"]);
+    expect((await app.inject({ method: "POST", url: "/api/musica/spotify/volumen", headers: h, payload: { volumen: 150 } })).statusCode).toBe(400);
+    rechazar = true;
+    const no = await app.inject({ method: "POST", url: "/api/musica/spotify/volumen", headers: h, payload: { volumen: 20 } });
+    expect(no.statusCode).toBe(400);
+    expect(no.json<{ error: string }>().error).toContain("no deja cambiar el volumen");
+    expect(mapearEstado({ device: { name: "Bocina", volume_percent: 30, supports_volume: false } }).volumenCambiable).toBe(false);
+  });
+});

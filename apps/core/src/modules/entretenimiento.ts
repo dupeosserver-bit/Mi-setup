@@ -441,6 +441,19 @@ export function entretenimientoRoutes(deps: ModuleDeps) {
       return { ok: true };
     });
 
+    app.post("/api/musica/spotify/volumen", musEscribir, async (request) => {
+      const d = z.object({ volumen: z.number().int().min(0).max(100), dispositivo: z.string().max(80).optional() }).parse(request.body);
+      const enEquipo = d.dispositivo ? `&device_id=${encodeURIComponent(d.dispositivo)}` : "";
+      try {
+        await spotify(currentUser(request).id, `/me/player/volume?volume_percent=${d.volumen}${enEquipo}`, { metodo: "PUT" });
+      } catch (err) {
+        // 403/404: ese equipo no deja cambiar el volumen desde fuera (bocinas, autos, algunos celulares).
+        if (err instanceof HttpError && (err.statusCode === 403 || err.statusCode === 404)) throw new HttpError(400, "Este equipo no deja cambiar el volumen desde aquí. Cámbialo en el equipo.", "spotify_volumen");
+        throw err;
+      }
+      return { volumen: d.volumen };
+    });
+
     app.get("/api/musica/spotify/dispositivos", musLeer, async (request) => {
       const d = await spotify<{ devices: DispositivoSp[] }>(currentUser(request).id, "/me/player/devices");
       return mapearDispositivos(d?.devices ?? []);

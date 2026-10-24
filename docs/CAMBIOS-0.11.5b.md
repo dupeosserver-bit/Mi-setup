@@ -17,6 +17,8 @@ Tres instalaciones en el mismo VPS, edición pública sin nada de MexicanLand, p
 
 | 9 | Terminal del celular como Termius: se escribe directo en la terminal (teclado nativo, sin caja aparte), una sola fila delgada de teclas (Esc, Tab, Ctrl, Alt, flechas, \|, /, -, ~…) con «Más», pestañas compactas y la pantalla se ajusta al abrir el teclado. Huella: un solo aviso y una sola línea. Clima: tocar un día enseña su detalle y su hora por hora; «Volver a hoy». |
 
+| 10 | Volumen en Música: barra con silencio en el reproductor de Spotify (si el equipo no deja cambiarlo, se avisa) y en Tu música (se recuerda en el aparato). |
+
 
 ## Memoria (RAM) de cada instalación
 
