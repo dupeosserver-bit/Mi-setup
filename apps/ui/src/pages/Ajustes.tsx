@@ -70,11 +70,12 @@ function SubirImagen({ ruta, etiqueta, actual }: { ruta: string; etiqueta: strin
     onError: avisarError,
   });
   return (
-    <div className="flex items-center gap-4 rounded-xl bg-fondo p-3">
-      <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-lg bg-tarjeta">
+    // Si no cabe todo en una fila, los botones bajan a la suya: el texto nunca queda en una columna angosta.
+    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-fondo p-3">
+      <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-tarjeta">
         {actual ? <img src={actual} alt="" className="max-h-full max-w-full object-contain" /> : <span className="px-2 text-center text-[10px] text-tenue">Predeterminado</span>}
       </div>
-      <div className="flex-1">
+      <div className="min-w-[9rem] flex-1 basis-40">
         <p className="text-sm font-medium">{etiqueta}</p>
         <p className="text-xs text-tenue">PNG, JPG, WEBP o SVG · máx. 5 MB</p>
       </div>
@@ -89,10 +90,12 @@ function SubirImagen({ ruta, etiqueta, actual }: { ruta: string; etiqueta: strin
           e.target.value = "";
         }}
       />
-      <Boton tamano="sm" icono={ImagePlus} cargando={subir.isPending} onClick={() => input.current?.click()}>
-        Subir
-      </Boton>
-      {actual ? <Boton tamano="sm" variante="fantasma" icono={RotateCcw} onClick={() => restablecer.mutate()} aria-label="Restablecer" /> : null}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <Boton tamano="sm" icono={ImagePlus} cargando={subir.isPending} onClick={() => input.current?.click()}>
+          Subir
+        </Boton>
+        {actual ? <Boton tamano="sm" variante="fantasma" icono={RotateCcw} onClick={() => restablecer.mutate()} aria-label="Restablecer" /> : null}
+      </div>
     </div>
   );
 }

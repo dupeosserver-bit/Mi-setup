@@ -182,3 +182,20 @@ describe("0.11.5b · Spotify 2026", () => {
     expect(pistasDePlaylist([{ item: pista("n1") }, { track: pista("v1") }, { item: null }]).map((p) => p.id)).toEqual(["n1", "v1"]);
   });
 });
+
+describe("0.11.5b · revisar otro servidor", () => {
+  it("/api/health responde a cualquier app de Mi Setup; el resto de la API sigue cerrada", async () => {
+    ctx = await createTestContext({ config: loadConfig({ NODE_ENV: "test", ...TEST_SECRETS }) });
+    const ajeno = { origin: "https://setup.otro-dominio.com" };
+    const salud = await ctx.app.inject({ method: "GET", url: "/api/health", headers: ajeno });
+    expect(salud.statusCode).toBe(200);
+    expect(salud.headers["access-control-allow-origin"]).toBe("*");
+    expect(salud.headers["access-control-allow-credentials"]).toBeUndefined();
+    const previa = await ctx.app.inject({ method: "OPTIONS", url: "/api/health", headers: { ...ajeno, "access-control-request-method": "GET" } });
+    expect(previa.headers["access-control-allow-origin"]).toBe("*");
+    const privada = await ctx.app.inject({ method: "OPTIONS", url: "/api/auth/login", headers: { ...ajeno, "access-control-request-method": "POST" } });
+    expect(privada.headers["access-control-allow-origin"]).toBeUndefined();
+    const propia = await ctx.app.inject({ method: "OPTIONS", url: "/api/auth/login", headers: { origin: "https://misetup.mexicanland.net", "access-control-request-method": "POST" } });
+    expect(propia.headers["access-control-allow-origin"]).toBe("https://misetup.mexicanland.net");
+  });
+});

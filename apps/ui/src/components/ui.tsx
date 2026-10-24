@@ -251,11 +251,12 @@ export function Interruptor({
   etiqueta?: string;
 }) {
   return (
-    <button type="button" onClick={() => alCambiar(!activo)} className="inline-flex items-center gap-2 text-sm">
-      <span className={cx("relative h-5 w-9 rounded-full transition-colors", activo ? "bg-ok" : "bg-borde")}>
+    <button type="button" role="switch" aria-checked={activo} onClick={() => alCambiar(!activo)} className="inline-flex max-w-full items-start gap-2 text-left text-sm">
+      {/* Tamaño fijo: con textos largos el interruptor ya no se aplasta. */}
+      <span className={cx("relative mt-px h-5 w-9 shrink-0 rounded-full transition-colors", activo ? "bg-ok" : "bg-borde")}>
         <span className={cx("absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all", activo ? "left-[18px]" : "left-0.5")} />
       </span>
-      {etiqueta}
+      {etiqueta ? <span className="min-w-0 flex-1">{etiqueta}</span> : null}
     </button>
   );
 }

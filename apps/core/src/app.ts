@@ -162,7 +162,12 @@ export async function buildApp(appDeps: AppDeps): Promise<App> {
       },
     },
   });
-  await app.register(cors, { origin: [...config.corsOrigins], credentials: true });
+  // CORS con lista cerrada, salvo /api/health: saber si un Mi Setup está encendido es público,
+  // así la app (PC, celular o web) revisa otro servidor antes de cambiarse a él.
+  const corsCerrado = { origin: [...config.corsOrigins], credentials: true };
+  await app.register(cors, () => (request: { url?: string }, listo: (error: Error | null, opciones: { origin: string | string[]; credentials: boolean }) => void) => {
+    listo(null, request.url?.split("?")[0] === "/api/health" ? { origin: "*", credentials: false } : corsCerrado);
+  });
   await app.register(websocket, { options: { maxPayload: 1024 * 1024 } });
   await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024, files: 1 } });
 
