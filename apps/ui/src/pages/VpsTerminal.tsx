@@ -598,7 +598,6 @@ export default function VpsTerminal() {
   const local = escritorio()?.terminalLocal ?? null;
   const [shells, setShells] = useState<{ id: string; nombre: string }[]>([]);
   const conocidasLocales = useRef(new Set<string>());
-  const yaPorDefecto = useRef(false);
   const conocidas = useRef(new Set<string>());
   const [pestanas, setPestanas] = useState<Pestana[]>([]);
   const [activa, setActiva] = useState<string | null>(null);
@@ -691,15 +690,12 @@ export default function VpsTerminal() {
       if (!vigente) return;
       setShells(disponibles);
       const vivas = lista.filter((s) => s.viva && !conocidasLocales.current.has(s.id));
+      // Las que siguen abiertas vuelven como pestañas; no se abre ninguna sola:
+      // al entrar a Terminal se empieza en Hosts y tú eliges qué abrir.
       vivas.forEach((s) => {
         conocidasLocales.current.add(s.id);
         abrirLocal(s.shell, s.nombre, s.id);
       });
-      if (!lista.some((s) => s.viva) && !yaPorDefecto.current) {
-        yaPorDefecto.current = true;
-        const predeterminada = disponibles.find((s) => s.id === "powershell") ?? disponibles[0];
-        if (predeterminada) abrirLocal(predeterminada.id, predeterminada.nombre);
-      }
     })().catch(() => undefined);
     return () => {
       vigente = false;
